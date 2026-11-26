@@ -395,7 +395,9 @@ assert.deepEqual(Object.keys(hostile).sort(), [
   'description',
   'guided',
   'ingredients',
+  'isCareEstimate',
   'isServingsEstimate',
+  'isTimeEstimate',
   'photoSearch',
   'prepMinutes',
   'servings',
@@ -1106,3 +1108,69 @@ assert.deepEqual(
 );
 
 console.log('pinchIngest: all checks passed');
+
+// A description in amountText ("whatever meat you are cooking") moves to the note; real how-much words stay.
+const meat = normalizeExtractedRecipe({
+  ingredients: [
+    {
+      name: 'Meat',
+      amount: null,
+      unit: null,
+      note: 'your choice',
+      amountText: 'whatever meat that you are cooking',
+    },
+    {
+      name: 'Butter',
+      amount: null,
+      unit: null,
+      note: null,
+      amountText: 'a stick',
+    },
+    {
+      name: 'Parsley',
+      amount: null,
+      unit: null,
+      note: null,
+      amountText: 'a big handful or so',
+    },
+  ],
+  steps: [],
+  unread: [],
+});
+assert.deepEqual(
+  meat.ingredients.map((line) => [line.name, line.note, line.amountText]),
+  [
+    ['Meat', 'your choice, whatever meat that you are cooking', null],
+    ['Butter', null, 'a stick'],
+    ['Parsley', null, 'a big handful or so'],
+  ],
+  'words that describe which meat are a note; how-much words stay the amount in words',
+);
+
+// isTimeEstimate is false when absent, old, or when no time was read
+assert.equal(
+  normalizeExtractedRecipe({ prepMinutes: 10 }).isTimeEstimate,
+  false,
+);
+assert.equal(
+  normalizeExtractedRecipe({ isTimeEstimate: true }).isTimeEstimate,
+  false,
+  'an estimate flag with no time is false',
+);
+assert.equal(
+  normalizeExtractedRecipe({ isTimeEstimate: true, cookMinutes: 45 })
+    .isTimeEstimate,
+  true,
+);
+
+assert.equal(normalizeExtractedRecipe({ fridgeDays: 3 }).isCareEstimate, false);
+assert.equal(
+  normalizeExtractedRecipe({ isCareEstimate: true }).isCareEstimate,
+  false,
+  'an estimate flag with no care is false',
+);
+assert.equal(
+  normalizeExtractedRecipe({ isCareEstimate: true, fridgeDays: 3.9 })
+    .isCareEstimate,
+  true,
+);

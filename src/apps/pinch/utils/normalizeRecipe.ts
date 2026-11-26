@@ -48,6 +48,10 @@ export interface ExtractedRecipe {
   title: string | null;
   servings: number | null;
   isServingsEstimate: boolean;
+  /** True only when the source gave no prep or cook time and either was estimated from the method. */
+  isTimeEstimate: boolean;
+  /** True when the keeping details were estimated from the dish rather than stated. */
+  isCareEstimate: boolean;
   categories: DishCategory[];
   prepMinutes: number | null;
   cookMinutes: number | null;
@@ -58,7 +62,7 @@ export interface ExtractedRecipe {
   steps: string[];
   /** The section each step sits under, index for index with `steps`; the reader groups the steps into sections when the source doesn't. */
   stepSections: (string | null)[];
-  /** Only what the source says, never a guess. */
+  /** What the source says, or an estimate for the dish when `isCareEstimate`. */
   care: RecipeCare | null;
   /** Parts of the recipe the reader could not make out. */
   unread: string[];
@@ -223,14 +227,25 @@ const readUnmeasured = (line: ExtractedIngredient): ExtractedIngredient[] => {
       (SEASONING.test(pair[1].trim()) && SEASONING.test(pair[2].trim())));
   const names = isSplit ? [pair[1], pair[2]] : [name];
 
+  const isMisplaced = amountText !== null && isDescription(amountText);
+
   return names.map((part) => ({
     ...line,
     name: part.trim(),
     alsoCalled: names.length > 1 ? null : line.alsoCalled,
     unit: null,
-    amountText,
+    note: isMisplaced ? joinNotes([line.note, amountText]) : line.note,
+    amountText: isMisplaced ? null : amountText,
   }));
 };
+
+const MAX_AMOUNT_WORDS = 3;
+const HOW_MUCH_WORD =
+  /\b(?:taste|needed|required|garnish|serving|handful|pinch(?:es)?|splash|dash|drizzle|sprinkle|knob|bunch|sprigs?|sticks?|dollop|glug|few|some|little|bit|lot|plenty|enough|couple|half|whole)\b|\d/i;
+
+/** Words that say which or what kind, not how much ("whatever meat that you are cooking"), belong in the note. */
+const isDescription = (text: string) =>
+  text.split(/\s+/).length > MAX_AMOUNT_WORDS && !HOW_MUCH_WORD.test(text);
 
 const SAME_AMOUNT_RATIO = 0.8;
 
@@ -290,12 +305,22 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
     unknown
   >;
   const list = (value: unknown) => (Array.isArray(value) ? value : []);
+  const care = toCare({
+    fridgeDays: asWholeDays(parsed.fridgeDays),
+    freezerDays: asWholeDays(parsed.freezerDays),
+    reheat: parsed.reheat,
+    tip: parsed.tip,
+  });
 
   return {
     title: asString(parsed.title)?.slice(0, MAX_RECIPE_TITLE_LENGTH) ?? null,
     servings: asNumber(parsed.servings),
     isServingsEstimate:
       parsed.servingsEstimated === true && asNumber(parsed.servings) !== null,
+    isTimeEstimate:
+      parsed.isTimeEstimate === true &&
+      (asMinutes(parsed.prepMinutes) !== null ||
+        asMinutes(parsed.cookMinutes) !== null),
     categories: getCategories({
       categories: list(parsed.categories).filter(
         (value): value is string => typeof value === 'string',
@@ -329,7 +354,10 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
               amountText:
                 asString(item.amountText) === null
                   ? null
-                  : clipAtWord(asString(item.amountText)!, MAX_AMOUNT_TEXT_LENGTH),
+                  : clipAtWord(
+                      asString(item.amountText)!,
+                      MAX_AMOUNT_TEXT_LENGTH,
+                    ),
               group: asGroup(item.group),
             })
           : [];
@@ -337,12 +365,8 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
       .reduce<ExtractedIngredient[]>(mergeOtherMeasures, [])
       .slice(0, MAX_RECIPE_INGREDIENTS),
     ...readSteps(list(parsed.steps)),
-    care: toCare({
-      fridgeDays: asWholeDays(parsed.fridgeDays),
-      freezerDays: asWholeDays(parsed.freezerDays),
-      reheat: parsed.reheat,
-      tip: parsed.tip,
-    }),
+    care,
+    isCareEstimate: parsed.isCareEstimate === true && care !== null,
     unread: list(parsed.unread)
       .flatMap((entry) =>
         asString(entry) ? [asString(entry)!.slice(0, 200)] : [],
