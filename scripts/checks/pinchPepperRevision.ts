@@ -387,8 +387,22 @@ assert.deepEqual(
 assert.deepEqual(together.removedIngredientNames, ['Salt']);
 assert.equal(
   describePepperChange(together, ['Butter']),
-  'changed the title and Butter',
+  'changed the title and butter',
 );
 assert.equal(getAllLiveMarks([], base), null);
+
+assert.equal(
+  describePepperChange(
+    {
+      ...together,
+      title: false,
+      changedIngredientIds: ['a', 'b'],
+      changedStepIndices: [1, 2],
+    },
+    ['Chicken breast', 'Olive oil'],
+  ),
+  'changed chicken breast, olive oil, and 2 steps',
+  'named ingredients read as list items in sentence case',
+);
 
 console.log('pinch pepper revision checks passed');

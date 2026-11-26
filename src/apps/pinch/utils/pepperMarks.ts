@@ -117,7 +117,11 @@ export function describePepperChange(
   const stepCount = marks.changedStepIndices.length;
   const namedIngredients =
     ingredientNames.length === ingredientCount && ingredientCount <= 2
-      ? formatList(ingredientNames)
+      ? ingredientNames.map((name) =>
+          /^[A-Z][a-z]/.test(name)
+            ? name[0].toLowerCase() + name.slice(1)
+            : name,
+        )
       : null;
   const changed = [
     marks.title && 'the title',
@@ -128,9 +132,10 @@ export function describePepperChange(
     marks.care && 'how it keeps',
     marks.source && "where it's from",
     marks.collections && 'the collections',
-    ingredientCount > 0 &&
-      (namedIngredients ??
-        countOf(ingredientCount, 'an ingredient', 'ingredients')),
+    ...(namedIngredients ??
+      (ingredientCount > 0
+        ? [countOf(ingredientCount, 'an ingredient', 'ingredients')]
+        : [])),
     stepCount > 0 && countOf(stepCount, 'a step', 'steps'),
   ].filter((part): part is string => part !== false);
   if (changed.length > 0) return `changed ${formatList(changed)}`;
