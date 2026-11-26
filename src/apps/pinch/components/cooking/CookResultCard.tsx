@@ -7,7 +7,7 @@ interface CookResultCardProps {
   caption: string | null;
 }
 
-/** The last panel's card for how the cook turned out: stars and one photo, saved as they are set, shown once the cook is recorded. */
+/** The last panel's card for how the cook turned out: stars and up to three photos, saved as they are set, shown once the cook is recorded. */
 function CookResultCard({ uid, cookId, caption }: CookResultCardProps) {
   return (
     <section

@@ -449,8 +449,10 @@ export interface Cook {
   cookedAt: number;
   /** How it turned out, 0.5 to 5 in half steps, or null. Written by the person after the cook; a cook written before ratings lacks the key, which reads as null. */
   rating: number | null;
-  /** Storage path of the one photo of this cook, `apps/pinch/kitchens/{uid}/cooks/{id}/photo-{time}.webp` (a new name for each upload, so a replaced photo never shows a stale copy), or null. A cook written before photos lacks the key, which reads as null. */
+  /** @deprecated Replaced by `photoPaths`; written as null going forward. A cook from before reads it as a one-item list through `getCookPhotoPaths`. */
   photoPath: string | null;
+  /** Storage paths of this cook's photos, at most three, the first being its cover: `apps/pinch/kitchens/{uid}/cooks/{id}/photo-{time}.webp` (a new name for each upload). `[]` for none; a cook from before lacks the key. */
+  photoPaths: string[];
   /** Immutable. */
   createdAt: number;
   updatedAt: number;
