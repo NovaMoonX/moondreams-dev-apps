@@ -135,7 +135,10 @@ function DictationField({
             dictation.clearCutNote();
             onChange(event.target.value);
           }}
-          onKeyDown={onKeyDown}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') dictation.clearCutNote();
+            onKeyDown?.(event);
+          }}
         />
         {isIdle && dictation.canListen && (
           <Button

@@ -4,11 +4,11 @@ How any app on the site listens to a person and talks back. Listening and speaki
 
 ## Listening: three ways to turn speech into text
 
-| Way | What it is | Needs | Costs | Where the audio goes |
-|---|---|---|---|---|
-| **Cloud** | Deepgram, streamed live | Online, a saved `DEEPGRAM_API_KEY`, under the allowance | Paid, capped | The browser streams to Deepgram with a one-minute token |
-| **On-device model** | sherpa-onnx, a small streaming English model run in a Web Worker | The person downloads it once (about 57 MB) | Free | Nowhere. It never leaves the phone. |
-| **Browser recognition** | The browser's own Web Speech API | A browser that has one | Free | Chrome sends it to Google. Firefox has none. |
+| Way                     | What it is                                                       | Needs                                                   | Costs        | Where the audio goes                                    |
+| ----------------------- | ---------------------------------------------------------------- | ------------------------------------------------------- | ------------ | ------------------------------------------------------- |
+| **Cloud**               | Deepgram, streamed live                                          | Online, a saved `DEEPGRAM_API_KEY`, under the allowance | Paid, capped | The browser streams to Deepgram with a one-minute token |
+| **On-device model**     | sherpa-onnx, a small streaming English model run in a Web Worker | The person downloads it once (about 57 MB)              | Free         | Nowhere. It never leaves the phone.                     |
+| **Browser recognition** | The browser's own Web Speech API                                 | A browser that has one                                  | Free         | Chrome sends it to Google. Firefox has none.            |
 
 Waiting for a wake phrase ("Hey" plus the assistant's name, or a name that sounds like it) is never done by the cloud: the on-device model if it's downloaded, else the browser's. No audio goes to the cloud before the phrase or a tap.
 
@@ -24,11 +24,11 @@ An app that doesn't use the router always uses browser recognition.
 
 ## Speaking: three ways to turn text into sound
 
-| Way | What it is | Needs | Costs |
-|---|---|---|---|
-| **Cloud voice** | A server-chosen provider (Google Chirp 3 HD by default), streamed through the site's `streamSpeech` as raw 16-bit PCM (`audio/L16; rate=24000; channels=1`) and played as it arrives | Online, under the allowance | Paid, capped |
-| **Natural voice** | Piper, a nicer voice that runs on the device | The person downloads it once (about 90 MB) | Free |
-| **System voice** | The browser's `speechSynthesis` | Nothing | Free |
+| Way               | What it is                                                                                                                                                                           | Needs                                      | Costs        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------ |
+| **Cloud voice**   | A server-chosen provider (Google Chirp 3 HD by default), streamed through the site's `streamSpeech` as raw 16-bit PCM (`audio/L16; rate=24000; channels=1`) and played as it arrives | Online, under the allowance                | Paid, capped |
+| **Natural voice** | Piper, a nicer voice that runs on the device                                                                                                                                         | The person downloads it once (about 90 MB) | Free         |
+| **System voice**  | The browser's `speechSynthesis`                                                                                                                                                      | Nothing                                    | Free         |
 
 Every text goes through `toSpokenText` first ("1/2 tsp" becomes "half a teaspoon").
 
@@ -51,14 +51,14 @@ Every text goes through `toSpokenText` first ("1/2 tsp" becomes "half a teaspoon
 
 ## Every environment, side by side
 
-| Situation | Hears you | Speaks to you |
-|---|---|---|
-| Online, within limits | Cloud | Confirmations on the device, replies from the cloud |
-| Online, today's allowance spent | On-device model if downloaded, else browser, with one quiet line | Device |
-| Online, no `DEEPGRAM_API_KEY` saved | On-device model if downloaded, else browser. Nothing fails. | Device |
-| Offline, on-device model downloaded | On-device model | Device |
-| Offline, no model downloaded | Only the browser, and only if it works offline. Otherwise the app says talking needs a connection and points to the download. Typing still works. | Device |
-| This phone can't run the model | The browser's recognition. The model's row says why and offers no button. | Device |
+| Situation                           | Hears you                                                                                                                                         | Speaks to you                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Online, within limits               | Cloud                                                                                                                                             | Confirmations on the device, replies from the cloud |
+| Online, today's allowance spent     | On-device model if downloaded, else browser, with one quiet line                                                                                  | Device                                              |
+| Online, no `DEEPGRAM_API_KEY` saved | On-device model if downloaded, else browser. Nothing fails.                                                                                       | Device                                              |
+| Offline, on-device model downloaded | On-device model                                                                                                                                   | Device                                              |
+| Offline, no model downloaded        | Only the browser, and only if it works offline. Otherwise the app says talking needs a connection and points to the download. Typing still works. | Device                                              |
+| This phone can't run the model      | The browser's recognition. The model's row says why and offers no button.                                                                         | Device                                              |
 
 **A limit never blocks the person.** The router answers "device" and one quiet line appears.
 
@@ -101,7 +101,7 @@ Audio said after a tap, or after a listen opens, always reaches a recognizer tha
 - **The mic is there whenever the box is idle** and the browser can listen, also with text typed, because spoken words are added after what is already there.
 - **No words while speaking.** The row becomes a live wave and Stop. The wave follows the PCM input level, so it moves only with a real voice; on the browser route, which reports no level, it shows calm still bars.
 - **A brief "Writing it down…"** while the words are formatted. Stop before the listen has started returns to the box at once (once listening, Stop may show the "nothing heard" line); a wait past 10 seconds is given up with a quiet line.
-- **The words land once** in the box after what is typed, with the caret at the end, to read, fix and send. They are never sent by themselves. Words past the box's limit are cut at the last word that fits and the box says "Some of what you said didn't fit."
+- **The words land once** in the box after what is typed, with the caret at the end, to read, fix and send. They are never sent by themselves. Words past the box's limit are cut at the last word that fits and the box says "Some of what you said didn't fit." until the box is typed in or sent (by Send or by Enter); the field clears that line itself, so no caller has to.
 
 ## A spoken assistant
 
@@ -188,9 +188,9 @@ Provider prices and ids, how an open stream behaves when its token ends, the off
 
 A snapshot of the code, written to find the source. It does not define the process: the sections above and the code do. If this table disagrees with the code, the code wins and this table is stale.
 
-| App | Listening | Speaking |
-|---|---|---|
-| Helm | Cloud, on-device model, browser (conversation voice) | Cloud voice (a chosen voice and speed), system voice (no natural-voice choice offered) |
-| Pinch (cooking mode) | Browser (command voice) | Natural voice if the person turned it on, else system voice |
+| App                  | Listening                                            | Speaking                                                                               |
+| -------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Helm                 | Cloud, on-device model, browser (conversation voice) | Cloud voice (a chosen voice and speed), system voice (no natural-voice choice offered) |
+| Pinch (cooking mode) | Browser (command voice)                              | Natural voice if the person turned it on, else system voice                            |
 
 Where each is wired: Helm in `src/apps/helm/hooks/useHelmVoice.ts` and `components/voice/VoiceSettings.tsx`; Pinch in `src/apps/pinch/hooks/useCookVoice.ts`. Helm's build log is `src/apps/helm/TECHNICAL.md` section 20.
