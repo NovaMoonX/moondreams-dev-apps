@@ -6,7 +6,10 @@ import {
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { CircleCheck } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -14,11 +17,14 @@ import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { generateUuid } from '@/utils';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort, formatDateTime } from '@/utils/formatUtils';
 import ChangeList from '@apps/pinch/components/notes/ChangeList';
+import ChangeRow from '@apps/pinch/components/notes/ChangeRow';
 import NoteKindPills, {
   type WrittenNoteKind,
 } from '@apps/pinch/components/notes/NoteKindPills';
@@ -26,6 +32,7 @@ import NoteReasonField from '@apps/pinch/components/notes/NoteReasonField';
 import NoteStepPicker from '@apps/pinch/components/notes/NoteStepPicker';
 import {
   MAX_RECIPE_NOTE_LENGTH,
+  RESOLVE_EDIT_CHOICES,
   NOTE_KIND_LABELS,
   NOTE_TEXT_COPY,
   WRITTEN_NOTE_KINDS,
@@ -33,6 +40,8 @@ import {
 import {
   addNote,
   removeNote,
+  reopenChange,
+  resolveChange,
   updateNote,
 } from '@apps/pinch/store/actions/noteActions';
 import {
@@ -43,10 +52,11 @@ import {
   selectNotesLoadError,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type { Cook } from '@apps/pinch/types';
+import type { Cook, RecipeNote } from '@apps/pinch/types';
 import {
   getCookChoiceLabels,
   getNoteCookChoices,
+  getResolveCandidates,
   isNoteHistoryFull,
   isValidNoteText,
   resolveNoteStep,
@@ -56,6 +66,7 @@ const { custom } = FormFactories;
 
 const NO_COOK = 'none';
 const NO_COOKS: Cook[] = [];
+const NO_NOTES: RecipeNote[] = [];
 
 const WHOLE_RECIPE = '';
 const NO_STEPS: string[] = [];
@@ -82,6 +93,57 @@ function parseNoteDraft(stored: unknown): NoteFormData | null {
   return isShaped ? { kind: knownKind, text, reason, step, cook } : null;
 }
 
+interface ResolveEditViewProps {
+  change: RecipeNote;
+  notes: RecipeNote[];
+  error: string | null;
+  isBusy: boolean;
+  onBack: () => void;
+  onPick: (tweakId: string | null) => void;
+}
+
+function ResolveEditView({
+  change,
+  notes,
+  error,
+  isBusy,
+  onBack,
+  onPick,
+}: ResolveEditViewProps) {
+  const candidates = getResolveCandidates(notes, change, RESOLVE_EDIT_CHOICES);
+
+  return (
+    <div className='space-y-3'>
+      <BackLink onBack={onBack} />
+      <p className='font-medium'>Which edit took care of it?</p>
+      {candidates.length === 0 && (
+        <p className='text-muted-foreground text-sm'>
+          No edits since you wrote it.
+        </p>
+      )}
+      <ul className='divide-border divide-y'>
+        {candidates.map((candidate) => (
+          <ChangeRow key={candidate.id} note={candidate} onOpen={onPick} />
+        ))}
+        <li>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='h-auto min-h-12 w-full items-start justify-start gap-3 px-0! py-3 text-left'
+            disabled={isBusy}
+            onClick={() => onPick(null)}
+          >
+            <span className='text-foreground min-w-0 flex-1 text-sm font-medium'>
+              None, it's handled
+            </span>
+          </Button>
+        </li>
+      </ul>
+      {error && <p className='text-destructive text-sm'>{error}</p>}
+    </div>
+  );
+}
+
 interface NoteFormProps {
   uid: string;
   recipeId: string;
@@ -91,31 +153,35 @@ interface NoteFormProps {
   initialCookId: string | null;
   /** What a new entry starts as; null starts as a note. */
   initialKind?: WrittenNoteKind | null;
+  /** Hears each kind the person picks on a new entry, so the next one can start on it. */
+  onKindChange?: (kind: WrittenNoteKind) => void;
   /** The step a new entry starts on (0-based); null starts on the whole recipe. */
   initialStepIndex?: number | null;
   onCancel: () => void;
   onDone: () => void;
 }
 
-/** A tip, a planned change or a note about the whole recipe or one step. Editing saves the words, a change's reason and the step: an entry's kind, cook and date stay as they were. */
+/** A tip, a planned change or a note about the whole recipe, one step or a time it was cooked. Editing saves the words, a change's reason, the step and the cook: an entry's kind and date stay as they were. */
 function NoteForm({
   uid,
   recipeId,
   noteId,
   initialCookId,
   initialKind = null,
+  onKindChange,
   initialStepIndex = null,
   onCancel,
   onDone,
 }: NoteFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { addToast } = useToast();
+  const { addToast, removeToast } = useToast();
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const note = useAppSelector(selectNotesById).get(noteId ?? '') ?? null;
   const noteCount =
     useAppSelector(selectNotesByRecipe).get(recipeId)?.length ?? 0;
   const cooks = useAppSelector(selectCooksByRecipe).get(recipeId) ?? NO_COOKS;
+  const recipeNotes = useAppSelector(selectNotesByRecipe).get(recipeId);
   const noteCook = useAppSelector(selectCooksById).get(note?.cookId ?? '');
   const isCooksReady = useAppSelector(
     (state) =>
@@ -137,7 +203,10 @@ function NoteForm({
       text: note?.text ?? '',
       reason: note?.reason ?? '',
       step: at === null ? WHOLE_RECIPE : String(at),
-      cook: initialCookId ?? cooks.find(isToday)?.id ?? NO_COOK,
+      cook:
+        initialCookId ??
+        (note === null ? cooks.find(isToday)?.id : note.cookId) ??
+        NO_COOK,
     };
   });
   const draftKey = noteId
@@ -175,12 +244,15 @@ function NoteForm({
   const [formKey, setFormKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPickingEdit, setIsPickingEdit] = useState(false);
+  const [isResolveBusy, setIsResolveBusy] = useState(false);
 
   const isEditing = noteId !== null;
+  const noteCookId = note?.cookId ?? null;
   const isTweak = note?.kind === 'TWEAK';
   const choices = useMemo(
-    () => getNoteCookChoices(cooks, initialCookId),
-    [cooks, initialCookId],
+    () => getNoteCookChoices(cooks, initialCookId ?? noteCookId),
+    [cooks, initialCookId, noteCookId],
   );
   const cookOptions = useMemo(() => {
     const labels = getCookChoiceLabels(
@@ -201,12 +273,13 @@ function NoteForm({
     ];
   }, [choices, today]);
   const hasCookQuestion =
-    !isEditing && initialCookId === null && isCooksReady && choices.length > 0;
+    !isTweak && initialCookId === null && isCooksReady && choices.length > 0;
   const isFull = !isEditing && isNoteHistoryFull(noteCount);
   const isDirty = isEditing
     ? data.text !== startData.text ||
       data.reason !== startData.reason ||
-      data.step !== startData.step
+      data.step !== startData.step ||
+      data.cook !== startData.cook
     : data.text.trim() !== '';
   useUnsavedWork(() => isDirty);
   useKeepFormDraft({
@@ -238,6 +311,33 @@ function NoteForm({
   };
   const blocker = getBlocker();
 
+  const handleReopen = async () => {
+    if (!note) {
+      return;
+    }
+    setError(null);
+    setIsResolveBusy(true);
+    try {
+      await dispatch(reopenChange({ uid, id: note.id })).unwrap();
+      addToast({ title: 'Back on your planned changes', type: 'success' });
+      onDone();
+    } catch (reopenError) {
+      setError(getErrorMessage(reopenError, 'Unable to plan this again.'));
+      setIsResolveBusy(false);
+    }
+  };
+
+  const doneEdit =
+    note?.resolvedBy == null
+      ? undefined
+      : (recipeNotes ?? []).find((entry) => entry.id === note.resolvedBy);
+  const doneLine =
+    note?.resolvedAt == null
+      ? ''
+      : doneEdit
+        ? `Done · taken care of in your ${formatDateShort(doneEdit.createdAt)} edit`
+        : `Done on ${formatDateShort(note.resolvedAt)}`;
+
   const fields = useMemo(
     () => [
       ...(note
@@ -267,7 +367,10 @@ function NoteForm({
               renderComponent: (props) => (
                 <NoteKindPills
                   value={String(props.value) as WrittenNoteKind}
-                  onChange={props.onValueChange}
+                  onChange={(next) => {
+                    props.onValueChange(next);
+                    onKindChange?.(next);
+                  }}
                 />
               ),
             }),
@@ -323,7 +426,7 @@ function NoteForm({
             }),
           ]
         : []),
-      ...(hasCookQuestion && kind === 'NOTE'
+      ...(hasCookQuestion
         ? [
             custom({
               name: 'cook',
@@ -345,10 +448,19 @@ function NoteForm({
           ]
         : []),
     ],
-    [note, noteCook, isTweak, kind, steps, hasCookQuestion, cookOptions],
+    [
+      note,
+      noteCook,
+      isTweak,
+      kind,
+      steps,
+      hasCookQuestion,
+      cookOptions,
+      onKindChange,
+    ],
   );
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (isAnother = false) => {
     if (blocker !== null || (isEditing && !isDirty)) {
       return;
     }
@@ -363,6 +475,9 @@ function NoteForm({
             text: data.text,
             ...(note?.kind === 'CHANGE' ? { reason: data.reason } : {}),
             ...(isTweak || data.step === startData.step ? {} : { stepIndex }),
+            ...(isTweak || data.cook === startData.cook
+              ? {}
+              : { cookId: data.cook === NO_COOK ? null : data.cook }),
           }),
         ).unwrap();
       } else {
@@ -373,8 +488,7 @@ function NoteForm({
             kind: data.kind,
             text: data.text,
             reason: data.kind === 'CHANGE' ? data.reason : null,
-            cookId:
-              data.kind === 'NOTE' && data.cook !== NO_COOK ? data.cook : null,
+            cookId: data.cook === NO_COOK ? null : data.cook,
             stepIndex,
           }),
         ).unwrap();
@@ -382,11 +496,50 @@ function NoteForm({
           title: `Added a ${NOTE_KIND_LABELS[data.kind].toLowerCase()} to ${recipe?.title ?? 'your recipe'}`,
           type: 'success',
         });
+        if (isAnother) {
+          setData({ ...data, text: '', reason: '' });
+          setFormKey((current) => current + 1);
+          setIsSubmitting(false);
+          return;
+        }
       }
       onDone();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this note.'));
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResolve = async (tweakId: string | null) => {
+    if (!note) {
+      return;
+    }
+    setError(null);
+    setIsResolveBusy(true);
+    try {
+      await dispatch(resolveChange({ uid, id: note.id, tweakId })).unwrap();
+      const toastId = generateUuid();
+      addToast({
+        id: toastId,
+        title: 'Marked the change done',
+        type: 'success',
+        duration: UNDO_WINDOW_MS,
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            removeToast(toastId);
+            dispatch(reopenChange({ uid, id: note.id }))
+              .unwrap()
+              .catch(() =>
+                addToast({ title: "Couldn't undo that", type: 'error' }),
+              );
+          },
+        },
+      });
+      onDone();
+    } catch (resolveError) {
+      setError(getErrorMessage(resolveError, 'Unable to mark this done.'));
+      setIsResolveBusy(false);
     }
   };
 
@@ -440,6 +593,19 @@ function NoteForm({
     );
   }
 
+  if (isPickingEdit && note) {
+    return (
+      <ResolveEditView
+        change={note}
+        notes={recipeNotes ?? NO_NOTES}
+        error={error}
+        isBusy={isResolveBusy}
+        onBack={() => setIsPickingEdit(false)}
+        onPick={(tweakId) => void handleResolve(tweakId)}
+      />
+    );
+  }
+
   return (
     <>
       {draft.isNoticeShown && (
@@ -448,6 +614,32 @@ function NoteForm({
             onStartOver={startOver}
             onDismiss={draft.hideNotice}
           />
+        </div>
+      )}
+      {note?.kind === 'CHANGE' && (
+        <div className='mb-4 space-y-2'>
+          {doneLine !== '' ? (
+            <>
+              <p className='text-muted-foreground text-sm'>{doneLine}</p>
+              <ActionRow
+                icon={<CircleCheck className='h-4 w-4' />}
+                label='Plan it again'
+                subtitle='Puts it back on your planned changes'
+                isDisabled={isResolveBusy}
+                onClick={() => void handleReopen()}
+              />
+            </>
+          ) : (
+            <ActionRow
+              icon={<CircleCheck className='h-4 w-4' />}
+              label='Mark done'
+              subtitle="When it's taken care of, with or without an edit"
+              hasChevron
+              isDisabled={isResolveBusy}
+              onClick={() => setIsPickingEdit(true)}
+            />
+          )}
+          {error && <p className='text-destructive text-sm'>{error}</p>}
         </div>
       )}
       <Form
@@ -489,16 +681,28 @@ function NoteForm({
               </Button>
             }
             rightActions={
-              <Button
-                type='submit'
-                formNoValidate
-                loading={isSubmitting}
-                disabled={
-                  isSubmitting || blocker !== null || (isEditing && !isDirty)
-                }
-              >
-                Save
-              </Button>
+              <>
+                {!isEditing && (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    disabled={isSubmitting || blocker !== null}
+                    onClick={() => void handleSubmit(true)}
+                  >
+                    Add another
+                  </Button>
+                )}
+                <Button
+                  type='submit'
+                  formNoValidate
+                  loading={isSubmitting}
+                  disabled={
+                    isSubmitting || blocker !== null || (isEditing && !isDirty)
+                  }
+                >
+                  Save
+                </Button>
+              </>
             }
           />
         }

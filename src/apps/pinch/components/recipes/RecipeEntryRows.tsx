@@ -5,10 +5,7 @@ import FormSection from '@/components/FormSection';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
-import {
-  NOTE_KIND_EMOJIS,
-  SOFT_MAX_RECIPE_NOTES,
-} from '@apps/pinch/constants';
+import { NOTE_KIND_EMOJIS, SOFT_MAX_RECIPE_NOTES } from '@apps/pinch/constants';
 import {
   selectNotesByRecipe,
   selectRecipesById,
@@ -21,7 +18,10 @@ const NO_STEPS: string[] = [];
 
 type EntryKind = 'TIP' | 'NOTE' | 'CHANGE';
 
-const KIND_TEXT: Record<EntryKind, { title: string; one: string; add: string }> = {
+const KIND_TEXT: Record<
+  EntryKind,
+  { title: string; one: string; add: string }
+> = {
   TIP: { title: 'Tips', one: 'Tip', add: 'Add a tip' },
   NOTE: { title: 'Notes', one: 'Note', add: 'Add a note' },
   CHANGE: {
@@ -107,7 +107,7 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
       <FormSection key={kind} title={text.title}>
         <ul
           aria-label={`Your ${text.title.toLowerCase()}`}
-          className='-mx-1 flex snap-x snap-mandatory scroll-px-1 items-stretch gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+          className='-mx-1 flex snap-x snap-mandatory scroll-px-1 [scrollbar-width:none] items-stretch gap-3 overflow-x-auto px-1 pb-1 [&::-webkit-scrollbar]:hidden'
         >
           {entries.map(({ note, step }) => {
             const isChange = kind === 'CHANGE';
