@@ -69,6 +69,13 @@ const SPEECH_START_TIMEOUT_MS = 1500;
 const MAX_NO_STARTS = 2;
 const REPEATED_FINAL_MS = 700;
 
+/** What a custom `speak` reports back about the line it says: it started sounding, it ended (also when cut or failed), or it never started. */
+export interface SpeakHandlers {
+  onStart: () => void;
+  onEnd: () => void;
+  onNoStart: () => void;
+}
+
 export type SpeechCommandsStatus =
   'off' | 'starting' | 'listening' | 'speaking';
 
@@ -88,8 +95,11 @@ interface Session {
 interface ListenerOptions {
   lang: string;
   speechLang: string;
-  /** Gets each finished phrase's guesses, best first; returns true when it used the phrase. */
-  onFinalTranscript: (alternatives: string[]) => boolean | void;
+  /** Gets each finished phrase's guesses, best first, with the recognizer's confidence in each (null when it gave none); returns true when it used the phrase. */
+  onFinalTranscript: (
+    alternatives: string[],
+    confidences: (number | null)[],
+  ) => boolean | void;
   /** Gets the words of the phrase being said before it is finished, so a screen can show what is being picked up. */
   onInterimTranscript?: (text: string) => void;
   /** Stops listening after this long with no phrase used; never when left out. */
@@ -98,6 +108,10 @@ interface ListenerOptions {
   onHalt?: (error: SpeechCommandsError) => void;
   /** Read with the natural voice (see `useNaturalVoice`) whenever it is ready; the browser's voice otherwise. */
   isNaturalVoice?: boolean;
+  /** Says each line in place of `readAloud` (a cloud voice, say), returning a function that stops it; the listening around it works as it does for any reading. Fire `onEnd` asynchronously, never before this returns. */
+  speak?: (text: string, handlers: SpeakHandlers) => () => void;
+  /** Says which voice reads a line (a reading that falls back to the browser's voice reports twice), for a debug log. */
+  onVoice?: (voice: 'natural' | 'system', text: string) => void;
   phrases?: string[] | null;
   onPhrasesRefused?: () => void;
 }
@@ -129,6 +143,7 @@ export const createSpeechListener = (
     isWanted: false,
     isSpeaking: false,
     isHidden: false,
+    isTornDown: false,
     failures: 0,
     restartId: 0,
     idleId: 0,
@@ -208,9 +223,14 @@ export const createSpeechListener = (
       .forEach((index) => {
         session.handled.add(index);
         const result = event.results[index];
-        const alternatives = Array.from({ length: result.length }, (_, at) =>
-          result[at].transcript.trim(),
-        ).filter((transcript) => transcript !== '');
+        const guesses = Array.from({ length: result.length }, (_, at) => ({
+          text: result[at].transcript.trim(),
+          confidence:
+            typeof result[at].confidence === 'number'
+              ? result[at].confidence
+              : null,
+        })).filter((guess) => guess.text !== '');
+        const alternatives = guesses.map((guess) => guess.text);
         const now = Date.now();
         const last = session.lastFinal;
         // Some browsers re-send a finished phrase under a new index once interim results are on.
@@ -226,7 +246,10 @@ export const createSpeechListener = (
         }
         if (
           alternatives.length > 0 &&
-          state.options?.onFinalTranscript(alternatives)
+          state.options?.onFinalTranscript(
+            alternatives,
+            guesses.map((guess) => guess.confidence),
+          )
         ) {
           armIdle();
         }
@@ -421,15 +444,12 @@ export const createSpeechListener = (
       setStatus('off');
     },
     say: (text: string) => {
-      if (text.trim() === '' || !state.canSpeak) return;
+      if (text.trim() === '' || !state.canSpeak || state.isTornDown) return;
       stopReading();
       const token = state.speechToken;
       state.isSpeaking = true;
       abortSession();
-      state.stopReading = readAloud(text, {
-        lang: state.options?.speechLang ?? '',
-        isNatural: state.options?.isNaturalVoice === true,
-        startTimeoutMs: SPEECH_START_TIMEOUT_MS,
+      const handlers: SpeakHandlers = {
         onNoStart: () => {
           state.noStarts += 1;
           if (state.noStarts >= MAX_NO_STARTS) state.canSpeak = false;
@@ -448,7 +468,19 @@ export const createSpeechListener = (
           setStatus(state.isHidden ? 'starting' : 'listening');
           beginSession();
         },
-      });
+      };
+      const speakLine = state.options?.speak;
+      // A custom voice may take seconds to give a sound, and the recognizer is already closed: the status says so.
+      if (speakLine && state.isWanted) setStatus('speaking');
+      state.stopReading = speakLine
+        ? speakLine(text, handlers)
+        : readAloud(text, {
+            lang: state.options?.speechLang ?? '',
+            isNatural: state.options?.isNaturalVoice === true,
+            onVoice: (voice) => state.options?.onVoice?.(voice, text),
+            startTimeoutMs: SPEECH_START_TIMEOUT_MS,
+            ...handlers,
+          });
     },
     mute,
     cue: (kind: ListeningCue) => {
@@ -472,7 +504,11 @@ export const createSpeechListener = (
       state.isHidden = false;
       beginSession();
     },
+    mount: () => {
+      state.isTornDown = false;
+    },
     teardown: () => {
+      state.isTornDown = true;
       state.isWanted = false;
       clearRestart();
       clearIdle();
@@ -519,6 +555,8 @@ export function useSpeechCommands({
   idleStopMs,
   onHalt,
   isNaturalVoice,
+  onVoice,
+  speak,
 }: ListenerOptions) {
   const [isSupported] = useState(canUseSpeechCommands);
   const [status, setStatus] = useState<SpeechCommandsStatus>('off');
@@ -534,6 +572,8 @@ export function useSpeechCommands({
       idleStopMs,
       onHalt,
       isNaturalVoice,
+      onVoice,
+      speak,
     });
   });
 
@@ -542,6 +582,7 @@ export function useSpeechCommands({
   }, [isSupported]);
 
   useEffect(() => {
+    listener.mount();
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') listener.suspend();
     };

@@ -13,6 +13,9 @@ export type AssistantTurnEvent =
       searches: number;
       usage: ModelUsageCounts;
       ms: number;
+      /** The model id that answered; null for a canned reply. Absent from a server that predates it. */
+      model?: string | null;
+      isStandIn?: boolean;
     }
   | { type: 'error'; code: string };
 

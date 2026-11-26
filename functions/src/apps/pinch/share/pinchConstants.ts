@@ -12,6 +12,7 @@ import type {
   NoteKind,
   PackageEventKind,
   PackagePlace,
+  PepperLook,
   PinchStartTab,
   PinchTab,
   ReminderKind,
@@ -932,7 +933,22 @@ export const REMINDER_KINDS: {
 /** A timer's push goes out this long after its end, so a page that is awake can cancel it first and ring on its own. */
 export const TIMER_PUSH_GRACE_MS = 3000;
 
-/** What wakes cooking voice, as shown. `COOK_WAKE_SPELLINGS` are the ways a recognizer writes it, in plain text and in one place. Matching is only at the start of what was heard, so a step that says "pepper" or "a pepper mill" never wakes it. */
+/** Pepper's looks in the order the picker shows them, each with its name. A stored value that is not one of them (a look removed since) reads as the default. */
+export const PEPPER_LOOKS: { value: PepperLook; label: string }[] = [
+  { value: 'CALM', label: 'Calm eyes' },
+  { value: 'BRIGHT', label: 'Bright eyes' },
+  { value: 'WARM', label: 'Warm smile' },
+  { value: 'BROWS', label: 'Soft brows' },
+  { value: 'LINE', label: 'Line mark' },
+  { value: 'GLANCE', label: 'Knowing glance' },
+  { value: 'ORB', label: 'Just the orb' },
+];
+export const DEFAULT_PEPPER_LOOK: PepperLook = 'CALM';
+export const toPepperLook = (value: unknown): PepperLook =>
+  PEPPER_LOOKS.find((look) => look.value === value)?.value ??
+  DEFAULT_PEPPER_LOOK;
+
+/** What wakes cooking voice, as shown, with the ways a recognizer writes it and the greetings people use for a name, in one place. Matching is only at the start of what was heard, so a step that says "pepper" or "a pepper mill" never wakes it. */
 export const COOK_WAKE_PHRASE = 'Hey Pepper';
 export const COOK_WAKE_SPELLINGS = [
   'hey pepper',
@@ -945,6 +961,12 @@ export const COOK_WAKE_SPELLINGS = [
   'hey papper',
   'hey peppa',
   'hey pepa',
+  'oh pepper',
+  'okay pepper',
+  'ok pepper',
+  'hi pepper',
+  'hello pepper',
+  'yo pepper',
 ];
 /** How long a command window stays open after the last thing it understood. */
 export const COOK_WINDOW_MS = 10_000;

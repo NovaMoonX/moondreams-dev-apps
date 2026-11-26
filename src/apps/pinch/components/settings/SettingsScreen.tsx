@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import GatesClosedNote from '@/components/GatesClosedNote';
 import IntroCard from '@/components/IntroCard';
 import LogoCredit from '@/components/LogoCredit';
 import SectionHeader from '@/components/SectionHeader';
@@ -65,6 +66,7 @@ function SettingsScreen({ uid }: SettingsScreenProps) {
           <SharedLinksSection />
         </div>
       </div>
+      <GatesClosedNote appId='pinch' />
       <p className='text-muted-foreground px-1 pt-1 text-xs text-pretty'>
         <span className='font-medium'>About the numbers:</span> nutrition values
         are approximate, based on USDA FoodData Central.

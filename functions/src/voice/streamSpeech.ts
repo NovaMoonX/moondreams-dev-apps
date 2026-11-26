@@ -137,6 +137,16 @@ const getProvider = async (
     : createGeminiTts({ apiKey });
 };
 
+// Locally the default voice needs the developer's own Google sign-in, so a local Gemini key speaks the same voice instead.
+const pickProviderId = (): typeof VOICE_PROVIDER_DEFAULT | 'geminiTts' =>
+  isRunningInEmulator() &&
+  process.env.VOICE_REAL_SPEECH !== '1' &&
+  !isForcedFixture('google-tts') &&
+  !isForcedFixture('gemini') &&
+  (process.env[SECRET_NAMES.geminiTts] ?? '').trim() !== ''
+    ? 'geminiTts'
+    : VOICE_PROVIDER_DEFAULT;
+
 const TONE_CHUNKS = 4;
 
 const makeTone = () => {
@@ -221,7 +231,7 @@ export const streamSpeech = onRequest(
     ) {
       return fail(403, 'gate');
     }
-    const providerId = VOICE_PROVIDER_DEFAULT;
+    const providerId = pickProviderId();
     const provider = await getProvider(providerId);
     if (provider === null && !isRunningInEmulator()) {
       if (!keyState.isMissingLogged) {
@@ -299,13 +309,14 @@ export const streamSpeech = onRequest(
           ? name
           : `en-US-Chirp3-HD-${name}`
         : limits.voices[providerId];
-    // A whispered line names its own voice, so only an ordinary line tries the app's stand-ins.
-    const voicesToTry = isWhisper
-      ? [voiceName]
-      : [
-          voiceName,
-          ...limits.fallbackVoices.filter((name) => name !== voiceName),
-        ];
+    // A whispered line names its own voice, and only Google has a voice per stand-in name.
+    const voicesToTry =
+      isWhisper || providerId !== 'googleTts'
+        ? [voiceName]
+        : [
+            voiceName,
+            ...limits.fallbackVoices.filter((name) => name !== voiceName),
+          ];
     const speakWith = async (
       names: string[],
     ): Promise<{

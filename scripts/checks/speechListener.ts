@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   createSpeechListener,
+  type SpeakHandlers,
   type SpeechCommandsError,
   type SpeechCommandsStatus,
 } from '../../src/hooks/useSpeechCommands.ts';
@@ -339,6 +340,77 @@ const entries = (name: string) =>
     ['listening', 2],
     'listening starts again once the reading has ended',
   );
+}
+
+{
+  const { listener, seen } = setUp();
+  const said: string[] = [];
+  const line = { stops: 0, handlers: null as SpeakHandlers | null };
+  listener.setOptions({
+    lang: 'en-US',
+    speechLang: 'en-US',
+    idleStopMs: IDLE_MS,
+    onFinalTranscript: () => true,
+    speak: (text, handlers) => {
+      said.push(text);
+      line.handlers = handlers;
+      return () => {
+        line.stops += 1;
+      };
+    },
+  });
+  listener.start();
+  advance(30);
+  listener.say('Garlic, 6.');
+  advance(5000);
+  assert.deepEqual(
+    [said, env.log.filter((entry) => entry.includes('speak:')).length],
+    [['Garlic, 6.'], 1],
+    'a custom speaker says the line in place of the browser voice (only start()’s silent priming reaches it)',
+  );
+  assert.equal(
+    seen.status,
+    'speaking',
+    'the status says so while a custom speaker is still getting its sound, since the recognizer is already closed',
+  );
+  line.handlers?.onStart();
+  assert.equal(seen.status, 'speaking', 'the speaker starting ends listening');
+  assert.equal(hear('next'), false, 'nothing is heard while it speaks');
+  line.handlers?.onEnd();
+  advance(40);
+  assert.deepEqual(
+    [seen.status, entries('start').length],
+    ['listening', 2],
+    'listening starts again when the speaker ends the line',
+  );
+  listener.say('Peppers.');
+  line.handlers?.onStart();
+  listener.quiet();
+  line.handlers?.onEnd();
+  advance(40);
+  assert.deepEqual(
+    [line.stops, seen.status],
+    [1, 'listening'],
+    'quieting a line stops the speaker, and its late end changes nothing',
+  );
+  listener.say('Basil.');
+  listener.stop();
+  assert.deepEqual(
+    [line.stops, seen.status],
+    [2, 'off'],
+    'stopping the mic stops the speaker too',
+  );
+  listener.say('One.');
+  line.handlers?.onNoStart();
+  listener.say('Two.');
+  line.handlers?.onNoStart();
+  listener.say('Three.');
+  assert.equal(
+    said.filter((text) => text === 'Three.').length,
+    0,
+    'a custom speaker that never starts twice in a row is given up on like the browser voice',
+  );
+  listener.teardown();
 }
 
 {
