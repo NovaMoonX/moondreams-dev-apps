@@ -240,6 +240,7 @@ const COOK_FIELDS = {
   cookedAt: 'shared',
   rating: 'never',
   photoPath: 'never',
+  photoPaths: 'never',
   createdAt: 'never',
   updatedAt: 'never',
 } satisfies Record<keyof Cook, ShareDecision>;
