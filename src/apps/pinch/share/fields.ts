@@ -31,6 +31,7 @@ import type {
   RecipeLink,
   Recipe,
   CookingResume,
+  CookStepTimes,
   PinchShare,
 } from '@apps/pinch/types';
 
@@ -241,9 +242,16 @@ const COOK_FIELDS = {
   rating: 'never',
   photoPath: 'never',
   photoPaths: 'never',
+  durationSeconds: 'never',
+  stepTimes: 'never',
   createdAt: 'never',
   updatedAt: 'never',
 } satisfies Record<keyof Cook, ShareDecision>;
+
+const COOK_STEP_TIMES_FIELDS = {
+  gatherSeconds: 'never',
+  steps: 'never',
+} satisfies Record<keyof CookStepTimes, ShareDecision>;
 
 const CONTAINER_EVENT_FIELDS = {
   kind: 'notUseful',
@@ -367,6 +375,7 @@ const COOKING_RESUME_FIELDS = {
   timers: 'notUseful',
   captured: 'notUseful',
   startedAt: 'notUseful',
+  stepClock: 'notUseful',
 } satisfies Record<keyof CookingResume, ShareDecision>;
 
 const PINCH_SHARE_FIELDS = {
@@ -405,6 +414,7 @@ export const SHARE_FIELDS = {
   ShoppingItem: SHOPPING_ITEM_FIELDS,
   Idea: IDEA_FIELDS,
   Cook: COOK_FIELDS,
+  CookStepTimes: COOK_STEP_TIMES_FIELDS,
   ContainerEvent: CONTAINER_EVENT_FIELDS,
   Container: CONTAINER_FIELDS,
   PackageEvent: PACKAGE_EVENT_FIELDS,

@@ -5,6 +5,7 @@ import {
   KITCHEN_TIMER_NAME,
   MAX_ALERT_REPEATS,
   MAX_COOK_TIMERS,
+  MAX_COOK_DURATION_HOURS,
   MAX_COOKED_SERVINGS,
   MAX_KITCHEN_TIMER_NAME,
   MAX_KITCHEN_TIMER_SECONDS,
@@ -143,7 +144,16 @@ export const getMissingCookFields = (existing: Partial<Cook>) => ({
   ...('photoPaths' in existing
     ? {}
     : { photoPaths: getCookPhotoPaths(existing) }),
+  ...('durationSeconds' in existing ? {} : { durationSeconds: null }),
+  ...('stepTimes' in existing ? {} : { stepTimes: null }),
 });
+
+/** How long a cook took, in whole seconds above zero and under the cap, or null for not known. */
+export const isValidCookDuration = (seconds: number | null) =>
+  seconds === null ||
+  (Number.isInteger(seconds) &&
+    seconds > 0 &&
+    seconds <= MAX_COOK_DURATION_HOURS * 3_600 + 59 * 60);
 
 /** A rating the person can give: half a star to five, in half steps. */
 export const isValidCookRating = (rating: number) =>

@@ -61,6 +61,7 @@ export function useCookActions(uid: string) {
         recipeId: recipe.id,
         servings,
         cookedAt: Date.now(),
+        durationSeconds: null,
       }),
     ).unwrap();
     if (isToasted) {

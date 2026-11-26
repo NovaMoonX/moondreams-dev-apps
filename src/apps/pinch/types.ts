@@ -453,9 +453,21 @@ export interface Cook {
   photoPath: string | null;
   /** Storage paths of this cook's photos, at most three, the first being its cover: `apps/pinch/kitchens/{uid}/cooks/{id}/photo-{time}.webp` (a new name for each upload). `[]` for none; a cook from before lacks the key. */
   photoPaths: string[];
+  /** How long cooking took, in whole seconds: timed by cooking mode from its start to Finish, or typed by the person. Null when nobody knows; a cook written before it lacks the key, which reads as null. */
+  durationSeconds: number | null;
+  /** Where cooking mode's time went, written once at Finish and never edited; null for a cook marked or added by hand, and a cook written before it lacks the key. */
+  stepTimes: CookStepTimes | null;
   /** Immutable. */
   createdAt: number;
   updatedAt: number;
+}
+
+/** The time cooking mode spent on each part of one recipe, every visit to a step added together. */
+export interface CookStepTimes {
+  /** On "Get your ingredients out" before the first step; 0 when it was skipped (a picked-up cook, a recipe with no ingredients). */
+  gatherSeconds: number;
+  /** One per step of the recipe as it was cooked, in order; `text` is the step's opening words (`getStepAnchor`), so the breakdown still reads after the recipe changes. 0 seconds means the step was never shown; a shown step reads at least 1. */
+  steps: { text: string; seconds: number }[];
 }
 
 /** What an entry in a recipe's journal is. A NOTE is a personal reflection on a cook, a TIP is timeless advice for making the dish, a CHANGE is an edit the person means to make (with why), and a TWEAK is the dated record of an edit that was made. Applying a CHANGE turns that same entry into the TWEAK. */
@@ -790,6 +802,8 @@ export interface CookingResume {
   captured?: string[];
   /** When this cook began, for the stopwatch. A session saved before it lacks the key and counts from when it was picked up. */
   startedAt?: number;
+  /** Milliseconds spent on the gather screen and on each recipe's step so far. A session saved before it lacks the key, which reads as none. */
+  stepClock?: Record<string, number>;
 }
 
 export type ShareKind = 'RECIPE' | 'MEAL';
