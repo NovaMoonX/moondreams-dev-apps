@@ -435,6 +435,7 @@ function RecipeForm({
     onTitleChange(initialData.title);
     isDirtyRef.current = false;
     draft.hideNotice();
+    setPepper({ rounds: [], asks: [], sent: 0, unchangedReply: null });
   };
   const seedForm = (data: RecipeFormData) => {
     latestData.current = data;
@@ -445,8 +446,9 @@ function RecipeForm({
     setFormKey((current) => current + 1);
     onTitleChange(data.title);
     isDirtyRef.current =
-      JSON.stringify(data) !== JSON.stringify(initialData) ||
-      isDirtyRef.current === true;
+      webCover !== null ||
+      isCoverRemoved ||
+      JSON.stringify(data) !== JSON.stringify(initialData);
   };
   const [isNoteClosed, setIsNoteClosed] = useState(false);
   const [isAllChangesShown, setIsAllChangesShown] = useState(false);
@@ -1244,8 +1246,16 @@ function RecipeForm({
       context,
       { ask: askText, earlierAsks: pepper.asks },
     );
-    const revision = await reviseRecipe(input);
     const before = latestData.current;
+    const revision = await reviseRecipe(input);
+    if (JSON.stringify(latestData.current) !== JSON.stringify(before)) {
+      setPepper((current) => ({
+        ...current,
+        unchangedReply:
+          'You changed the recipe while Pepper was working, so nothing was changed. Ask again.',
+      }));
+      return;
+    }
     const { data, marks } = applyRevision(
       before,
       revision,
@@ -1280,14 +1290,26 @@ function RecipeForm({
     }));
   };
 
-  const undoPepper = () => {
+  const undoPepper = async () => {
     if (pepperRound === null) return;
-    seedForm(pepperRound.previousData);
+    const round = pepperRound;
+    if (JSON.stringify(latestData.current) !== JSON.stringify(round.data)) {
+      const isConfirmed = await confirm({
+        title: "Undo Pepper's change?",
+        message:
+          "You've edited the recipe since. Undoing puts it back as it was before Pepper's change, so those edits go too.",
+        confirmText: 'Undo both',
+        cancelText: 'Keep it',
+        destructive: true,
+      });
+      if (!isConfirmed || pepper.rounds.at(-1) !== round) return;
+    }
+    seedForm(round.previousData);
     setPepper((current) => ({
       ...current,
       rounds: current.rounds.slice(0, -1),
       asks: current.asks.filter(
-        (_, at) => at !== current.asks.lastIndexOf(pepperRound.ask),
+        (_, at) => at !== current.asks.lastIndexOf(round.ask),
       ),
       unchangedReply: null,
     }));
@@ -1365,14 +1387,14 @@ function RecipeForm({
             isStartOpen={autoFocusPepper}
             onSend={sendToPepper}
           />
-          {pepperRound !== null && pepper.unchangedReply === null && (
+          {pepperRound !== null && (
             <AiChangeNotice
               className='mb-4'
               who='Pepper'
               summary={describePepperChange(pepperRound.marks)}
               reply={pepperRound.reply}
               removed={pepperRound.marks.removedIngredientNames}
-              onUndo={undoPepper}
+              onUndo={() => void undoPepper()}
             />
           )}
           {pepper.unchangedReply !== null && (

@@ -15,7 +15,8 @@ Pinch's "Change with Pepper" lets a person tell an assistant what to change in a
 
 - One shared summary, `AiChangeNotice`: the muted sparkle, who changed it and how much, the assistant's reply line, what was taken out by name, and Undo. It is a live region.
 - One shared mark, the `ai-changed` class: a tint of `--ai-mark` (an app sets it; default its accent) and a 3px leading edge, with one fade-in of about 600 ms that doesn't run under reduced motion.
-- The mark lasts until save, the person's own edit of that item, or the next change.
+- The mark lasts until save, the person's own edit of that item, or the next change (a newer round's marks replace an earlier round's).
+- A change is applied only to the content it was made from: if the person edited while the AI worked, the answer is dropped with a line saying so, and an Undo that would also take back the person's later edits asks first.
 - Review first for the person's own content; apply with Undo only for small, easily reversed changes.
 
 ## Why

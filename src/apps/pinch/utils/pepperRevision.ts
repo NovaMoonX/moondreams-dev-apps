@@ -121,10 +121,20 @@ export function toRevisionInput(
   };
 }
 
-const sameAmount = (row: IngredientRow, amount: number | null) =>
+/* A model repeats ⅓ as 0.33, so an unchanged amount is matched within 2%. */
+const sameAmount = (row: IngredientRow, amount: number | null) => {
+  const current = row.isAmountless ? null : parseAmountText(row.amount);
+  return (
+    current !== null &&
+    amount !== null &&
+    Math.abs(current - amount) <= Math.max(0.02 * current, 0.001)
+  );
+};
+
+const hasUnreadAmount = (row: IngredientRow) =>
   !row.isAmountless &&
-  amount !== null &&
-  Math.abs((parseAmountText(row.amount) ?? NaN) - amount) < 1e-9;
+  row.amount.trim() !== '' &&
+  parseAmountText(row.amount) === null;
 
 const toRead = (line: RevisedLine) => ({
   name: line.name,
@@ -199,6 +209,13 @@ export function applyRevision(
   ingredients: ResolvedIngredient[],
   context: RevisionContext,
 ): { data: RecipeFormData; marks: RevisionMarks } {
+  if (
+    (formData.ingredients.length > 0 && revision.ingredients.length === 0) ||
+    (formData.steps.some((step) => step.trim() !== '') &&
+      revision.steps.length === 0)
+  ) {
+    throw new Error('Pepper returned a recipe with a whole section missing.');
+  }
   const byId = new Map(ingredients.map((entry) => [entry.id, entry]));
   const oldRows = new Map(formData.ingredients.map((row) => [row.id, row]));
   const oldNames = new Map(
@@ -227,11 +244,48 @@ export function applyRevision(
       normalizeName(line.name) !== normalizeName(oldNames.get(previous.id)!)
     ) {
       const { row } = getRowFromRead(toRead(line), ingredients, rows);
-      return [...acc, { row: { ...row, id: previous.id }, previous }];
+      return [
+        ...acc,
+        {
+          row:
+            previous.freeText === null
+              ? { ...row, id: previous.id }
+              : {
+                  ...row,
+                  id: previous.id,
+                  ingredientId: '',
+                  freeText: line.name,
+                  newName: null,
+                  proposedName: null,
+                },
+          previous,
+        },
+      ];
+    }
+    if (line.amount === null && hasUnreadAmount(previous)) {
+      return [
+        ...acc,
+        {
+          previous,
+          row: {
+            ...previous,
+            note: line.note,
+            group:
+              getGroupKey(line.group) === getGroupKey(previous.group)
+                ? previous.group
+                : line.group,
+          },
+        },
+      ];
     }
     const isAmountless = line.amount === null;
     const isSame = sameAmount(previous, line.amount);
-    const unit = isAmountless ? previous.unit : (line.unit ?? 'EACH');
+    const getUnit = () => {
+      if (isAmountless) return previous.unit;
+      if (line.unit === null && isSame) return previous.unit;
+      return line.unit ?? 'EACH';
+    };
+    const unit = getUnit();
     return [
       ...acc,
       {

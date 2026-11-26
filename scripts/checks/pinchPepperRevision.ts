@@ -264,4 +264,91 @@ assert.ok(
   'the same collection in other case is no change',
 );
 
+const odd: RecipeFormData = {
+  ...base,
+  ingredients: [
+    {
+      ...row('r1', 'butter', '1/3', 'CUP'),
+      adaptedFrom: { amount: 75, unit: 'G' },
+    },
+    row('r2', 'salt', '2-3', 'TSP'),
+    {
+      ...row('r3', '', '', 'EACH'),
+      freeText: 'A pinch of love',
+      isAmountless: true,
+    },
+  ],
+} as RecipeFormData;
+const oddIn = toRevisionInput(odd, byId, context, {
+  ask: 'x',
+  earlierAsks: [],
+});
+const oddKeep = (
+  ref: string,
+  over: Partial<RecipeRevision['ingredients'][0]> = {},
+) => {
+  const line = oddIn.input.ingredients.find((entry) => entry.ref === ref)!;
+  return {
+    ref,
+    name: line.name,
+    amount: line.amount,
+    unit: line.unit,
+    amountText: line.amountText,
+    note: line.note,
+    group: line.group,
+    ...over,
+  };
+};
+const oddSame: RecipeRevision = {
+  ...same,
+  ingredients: oddIn.input.ingredients.map((line) => oddKeep(line.ref)),
+};
+const oddApply = (over: Partial<RecipeRevision>) =>
+  applyRevision(odd, { ...oddSame, ...over }, oddIn.refMap, catalog, context);
+const rounded = oddApply({
+  ingredients: [oddKeep('i1', { amount: 0.33 }), oddKeep('i2'), oddKeep('i3')],
+});
+assert.equal(
+  rounded.data.ingredients[0].amount,
+  '1/3',
+  'a model-rounded ⅓ keeps its typed text',
+);
+assert.ok(rounded.data.ingredients[0].adaptedFrom !== null, 'and its original');
+assert.equal(
+  rounded.data.ingredients[1].amount,
+  '2-3',
+  'an amount the app cannot read is kept',
+);
+assert.equal(rounded.data.ingredients[1].unit, 'TSP');
+assert.ok(rounded.marks.isEmpty, 'so nothing is marked');
+const unitless = oddApply({
+  ingredients: [oddKeep('i1', { unit: null }), oddKeep('i2'), oddKeep('i3')],
+});
+assert.equal(
+  unitless.data.ingredients[0].unit,
+  'CUP',
+  'a dropped unit on an unchanged amount keeps the unit',
+);
+const reworded = oddApply({
+  ingredients: [
+    oddKeep('i1'),
+    oddKeep('i2'),
+    oddKeep('i3', { name: 'A pinch of joy' }),
+  ],
+});
+assert.equal(
+  reworded.data.ingredients[2].freeText,
+  'A pinch of joy',
+  'a reworded free line stays free',
+);
+assert.equal(reworded.data.ingredients[2].ingredientId, '');
+assert.throws(
+  () => apply({ isChanged: true, ingredients: [] }),
+  'a revision with no ingredients is refused',
+);
+assert.throws(
+  () => apply({ isChanged: true, steps: [] }),
+  'a revision with no steps is refused',
+);
+
 console.log('pinch pepper revision checks passed');
