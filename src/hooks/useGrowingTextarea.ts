@@ -69,6 +69,20 @@ export function useGrowingTextarea(
     fit(field, maxLines);
   });
 
+  const settled = useRef<HTMLTextAreaElement | null>(null);
+  // The library's Textarea resets its height in an effect that can run after ours (and again in a
+  // development double run), so a new field is fitted once more on the next frame.
+  useEffect(() => {
+    const { field, maxLines: lines } = fitted.current;
+    if (!field || settled.current === field) return;
+    settled.current = field;
+    const id = requestAnimationFrame(() => fit(field, lines));
+    return () => {
+      cancelAnimationFrame(id);
+      settled.current = null;
+    };
+  });
+
   useEffect(() => {
     const refit = () => {
       const { field, maxLines: lines } = fitted.current;
