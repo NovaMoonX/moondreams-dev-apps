@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 
 import {
   Button,
-  Select,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { ClipboardCopy, Plus } from 'lucide-react';
@@ -705,7 +705,7 @@ export function TimelineSection({
           </div>
         </div>
         <SearchInput value={query} onChange={setQuery} placeholder='Search the itinerary' />
-        <Select
+        <AppSelect
           className='sm:hidden'
           options={tabs.map((tab) => ({ value: tab.value, text: tab.label }))}
           value={selectedTab}

@@ -16,6 +16,7 @@ import AppEnteredMark from '@/components/AppEnteredMark';
 import DoneForYouSheet from '@/components/DoneForYouSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useDoneForYouToast } from '@/hooks/useDoneForYouToast';
+import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useAppSelector } from '@/store';
@@ -266,6 +267,7 @@ function Pinch() {
 
   usePinchTheme();
   useTrackAppUsage('pinch', user?.uid ?? null);
+  useLoadFeatureGates('pinch', user?.uid ?? null);
   usePinchSync(user?.uid ?? null, shownMonth);
   useFreezePastDays(user?.uid ?? null);
 

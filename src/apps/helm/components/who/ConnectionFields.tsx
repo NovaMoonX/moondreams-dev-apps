@@ -1,4 +1,4 @@
-import { Select } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 
 import DateInput from '@/components/DateInput';
 import { PillGroup } from '@/components/PillGroup';
@@ -47,7 +47,7 @@ function ConnectionFields({
           <span className='block text-sm font-medium break-words'>
             {HELM_COPY.connectionFamilyField(otherName, name)}
           </span>
-          <Select
+          <AppSelect
             options={FAMILY_OPTIONS}
             value={word ?? NOT_SURE}
             onChange={(value) =>

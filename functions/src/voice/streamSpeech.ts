@@ -1,11 +1,12 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { isForcedFixture, isRunningInEmulator } from '../emulator.js';
-import { getAppCheck } from 'firebase-admin/app-check';
-import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { onRequest } from 'firebase-functions/v2/https';
 
+import { verifyCaller } from '../assistant/verifyCaller.js';
+import { isGateOpenForToken } from '../gates/assertGateOpen.js';
+import { isServedOrigin, SERVED_ORIGINS } from '../servedOrigins.js';
 import { createOptionalSecretReader } from '../imageSearch/optionalSecret.js';
 import { createDeepgramAura } from './providers/deepgramAura.js';
 import { createGeminiTts } from './providers/geminiTts.js';
@@ -38,15 +39,6 @@ export type SpeechRequest =
     }
   | { ok: false; status: number; error: string };
 
-const ALLOWED_ORIGINS: (string | RegExp)[] = [
-  'https://apps.moondreams.dev',
-  /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
-];
-const isEmulator = isRunningInEmulator;
-// The dev server and a phone on the LAN load the page over plain HTTP from any host.
-const SERVED_ORIGINS: (string | RegExp)[] = isEmulator()
-  ? [...ALLOWED_ORIGINS, /^http:\/\/[^/]+:\d+$/]
-  : ALLOWED_ORIGINS;
 const PRIORITIES: readonly string[] = ['ack', 'reply', 'summary'];
 const PROVIDER_TIMEOUT_MS = 10_000;
 const TONE_RATE = 24_000;
@@ -56,15 +48,6 @@ const refuse = (status: number, error: string): SpeechRequest => ({
   status,
   error,
 });
-
-export const isServedOrigin = (
-  origin: string | undefined,
-  allowedOrigins: readonly (string | RegExp)[],
-) =>
-  origin !== undefined &&
-  allowedOrigins.some((entry) =>
-    typeof entry === 'string' ? entry === origin : entry.test(origin),
-  );
 
 /** The method, origin and body checks; the person's tokens are checked by the handler. */
 export function readSpeechRequest({
@@ -133,7 +116,9 @@ const getProvider = async (
   id: typeof VOICE_PROVIDER_DEFAULT | keyof typeof SECRET_NAMES,
 ): Promise<TtsProvider | null> => {
   if (id === 'googleTts') {
-    if (isEmulator()) return null;
+    // Locally the emulator answers a tone, unless the developer opts into real speech through their own Google sign-in.
+    if (isRunningInEmulator() && process.env.VOICE_REAL_SPEECH !== '1')
+      return null;
     kept.googleTts ??= createGoogleTts({
       projectId: process.env.GCLOUD_PROJECT ?? '',
     });
@@ -151,6 +136,16 @@ const getProvider = async (
     ? createDeepgramAura({ apiKey })
     : createGeminiTts({ apiKey });
 };
+
+// Locally the default voice needs the developer's own Google sign-in, so a local Gemini key speaks the same voice instead.
+const pickProviderId = (): typeof VOICE_PROVIDER_DEFAULT | 'geminiTts' =>
+  isRunningInEmulator() &&
+  process.env.VOICE_REAL_SPEECH !== '1' &&
+  !isForcedFixture('google-tts') &&
+  !isForcedFixture('gemini') &&
+  (process.env[SECRET_NAMES.geminiTts] ?? '').trim() !== ''
+    ? 'geminiTts'
+    : VOICE_PROVIDER_DEFAULT;
 
 const TONE_CHUNKS = 4;
 
@@ -178,9 +173,6 @@ const makeTone = () => {
 
 const toStatus = (error: unknown) =>
   Number(/answered (\d{3})/.exec(String(error))?.[1]) || null;
-
-const bearerOf = (header: string | undefined) =>
-  /^Bearer (.+)$/.exec(header ?? '')?.[1] ?? null;
 
 export const streamSpeech = onRequest(
   {
@@ -216,25 +208,9 @@ export const streamSpeech = onRequest(
       return fail(403, 'origin');
     }
 
-    const idToken = bearerOf(req.headers.authorization);
-    const uid = await (idToken === null
-      ? Promise.resolve(null)
-      : getAuth()
-          .verifyIdToken(idToken)
-          .then((decoded) => decoded.uid)
-          .catch(() => null));
-    if (uid === null) return fail(401, 'unauthenticated');
-
-    const appCheckToken = req.header('X-Firebase-AppCheck');
-    // The emulator cannot reach App Check, so a present header is taken as is there.
-    const isAppCheckOk =
-      !!appCheckToken &&
-      (isEmulator() ||
-        (await getAppCheck()
-          .verifyToken(appCheckToken)
-          .then(() => true)
-          .catch(() => false)));
-    if (!isAppCheckOk) return fail(401, 'app-check');
+    const caller = await verifyCaller(req);
+    if ('error' in caller) return fail(401, caller.error);
+    const { uid } = caller;
     if (request === null) {
       await getProvider(VOICE_PROVIDER_DEFAULT);
       res.status(204).end();
@@ -244,9 +220,20 @@ export const streamSpeech = onRequest(
     const { appId, text, timeZone, voiceName, speed, delivery } = request;
     const isWhisper = delivery === 'whisper';
     const limits = VOICE_APPS[appId];
-    const providerId = VOICE_PROVIDER_DEFAULT;
+    if (
+      limits.gate !== null &&
+      !(await isGateOpenForToken(
+        caller.token,
+        appId,
+        limits.gate.id,
+        limits.gate.defaultRollout,
+      ).catch(() => false))
+    ) {
+      return fail(403, 'gate');
+    }
+    const providerId = pickProviderId();
     const provider = await getProvider(providerId);
-    if (provider === null && !isEmulator()) {
+    if (provider === null && !isRunningInEmulator()) {
       if (!keyState.isMissingLogged) {
         keyState.isMissingLogged = true;
         logger.error('voice.speechKeyMissing', {
@@ -288,7 +275,10 @@ export const streamSpeech = onRequest(
       });
 
     res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Access-Control-Expose-Headers', 'X-Voice-Provider');
+    res.setHeader(
+      'Access-Control-Expose-Headers',
+      'X-Voice-Provider, X-Voice-Name',
+    );
     if (provider === null) {
       res.setHeader('Content-Type', `audio/L16; rate=${TONE_RATE}; channels=1`);
       res.setHeader('X-Voice-Provider', 'emulator');
@@ -313,66 +303,100 @@ export const streamSpeech = onRequest(
     );
     const signal = aborter.signal;
 
-    const speech = await provider
-      .speak({
-        text,
-        voiceId:
-          providerId === 'googleTts'
-            ? isWhisper
-              ? voiceName
-              : `en-US-Chirp3-HD-${voiceName}`
-            : limits.voices[providerId],
-        format: 'mp3',
-        speed,
-        ...(isWhisper && { delivery }),
-        signal,
-      })
-      .catch(async (error: unknown) => {
-        await release();
-        if (isClientGone.value) return null;
-        const status = toStatus(error);
-        // A stale channel after a long idle answers UNAVAILABLE; the next request builds a fresh client.
-        if (status === 503) kept.googleTts = null;
+    const voiceIdOf = (name: string) =>
+      providerId === 'googleTts'
+        ? isWhisper
+          ? name
+          : `en-US-Chirp3-HD-${name}`
+        : limits.voices[providerId];
+    // A whispered line names its own voice, and only Google has a voice per stand-in name.
+    const voicesToTry =
+      isWhisper || providerId !== 'googleTts'
+        ? [voiceName]
+        : [
+            voiceName,
+            ...limits.fallbackVoices.filter((name) => name !== voiceName),
+          ];
+    const speakWith = async (
+      names: string[],
+    ): Promise<{
+      name: string;
+      contentType: string;
+      reader: ReadableStreamDefaultReader<Uint8Array>;
+      first: Uint8Array;
+    } | null> => {
+      const [name, ...rest] = names;
+      if (name === undefined || isClientGone.value) return null;
+      const speech = await provider
+        .speak({
+          text,
+          voiceId: voiceIdOf(name),
+          format: 'mp3',
+          speed,
+          ...(isWhisper && { delivery }),
+          signal,
+        })
+        .catch((error: unknown) => {
+          if (isClientGone.value) return null;
+          const status = toStatus(error);
+          // A stale channel after a long idle answers UNAVAILABLE; the next request builds a fresh client.
+          if (status === 503) kept.googleTts = null;
+          logger.error('voice.speechFailed', {
+            event: 'voice.speechFailed',
+            status,
+            delivery,
+            voiceName: name,
+          });
+          if (
+            (status === 401 || status === 403) &&
+            providerId !== 'googleTts'
+          ) {
+            secretReader.forget(SECRET_NAMES[providerId]);
+          }
+          return null;
+        });
+      const reader = speech?.stream.getReader() ?? null;
+      const first = reader ? await reader.read().catch(() => null) : null;
+      if (speech && reader && first && !first.done && first.value.length > 0) {
+        return {
+          name,
+          contentType: speech.contentType,
+          reader,
+          first: first.value,
+        };
+      }
+      await reader?.cancel().catch(() => undefined);
+      if (speech && !isClientGone.value) {
+        kept.googleTts = null;
         logger.error('voice.speechFailed', {
           event: 'voice.speechFailed',
-          status,
+          status: null,
           delivery,
+          voiceName: name,
         });
-        if ((status === 401 || status === 403) && providerId !== 'googleTts') {
-          secretReader.forget(SECRET_NAMES[providerId]);
-        }
-        return null;
-      });
-    if (speech === null) {
-      clearTimeout(firstAudioTimer);
-      return fail(502, 'unavailable');
-    }
-
-    const reader = speech.stream.getReader();
-    const first = await reader.read().catch(() => null);
+      }
+      return aborter.signal.aborted ? null : speakWith(rest);
+    };
+    const spoken = await speakWith(voicesToTry);
     clearTimeout(firstAudioTimer);
-    if (first === null || first.done || first.value.length === 0) {
+    if (spoken === null) {
       await release();
       if (isClientGone.value) return;
-      kept.googleTts = null;
-      logger.error('voice.speechFailed', {
-        event: 'voice.speechFailed',
-        status: null,
-        delivery,
-      });
       return fail(502, 'unavailable');
     }
+    const { reader } = spoken;
 
     logger.info('voice.speechStarted', {
       event: 'voice.speechStarted',
       providerId,
-      voiceName,
+      voiceName: spoken.name,
       speed,
       delivery,
     });
     res.status(200);
-    res.setHeader('Content-Type', speech.contentType);
+    res.setHeader('Content-Type', spoken.contentType);
     res.setHeader('X-Voice-Provider', providerId);
+    res.setHeader('X-Voice-Name', spoken.name);
     const write = async (bytes: Uint8Array) => {
       if (res.destroyed) throw new Error('The client left');
       if (res.write(bytes)) return;
@@ -388,7 +412,7 @@ export const streamSpeech = onRequest(
       return pump();
     };
     try {
-      await write(first.value);
+      await write(spoken.first);
       await pump();
     } catch (error) {
       if (aborter.signal.aborted) {

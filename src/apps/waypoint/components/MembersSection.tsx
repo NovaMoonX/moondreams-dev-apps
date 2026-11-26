@@ -3,8 +3,8 @@ import { useState } from 'react';
 import {
   Badge,
   Button,
-  Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
 import { Mail, X } from 'lucide-react';
@@ -290,7 +290,7 @@ function MembersSection({ trip, currentUserId }: MembersSectionProps) {
                 </div>
                 <div className='flex items-center gap-2'>
                   {canChangeRole(trip, currentUserId, memberId) ? (
-                    <Select
+                    <AppSelect
                       size='sm'
                       options={roleOptions}
                       value={trip.members[memberId].role}

@@ -5,8 +5,8 @@ import {
   Button,
   Input,
   Pagination,
-  Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { ChevronDown, ChevronUp } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -167,7 +167,7 @@ function VisitTimeline({
           <div className='flex flex-wrap items-center gap-2'>
             <span className='text-muted-foreground text-sm'>Filter by:</span>
             <div className='max-w-40 flex-1'>
-              <Select
+              <AppSelect
                 options={STATUS_FILTER_OPTIONS}
                 value={statusFilter}
                 onChange={(value) => setStatusFilter(value as StatusFilter)}
@@ -176,7 +176,7 @@ function VisitTimeline({
             </div>
             {cats.length > 1 && (
               <div className='max-w-36 flex-1'>
-                <Select
+                <AppSelect
                   options={catFilterOptions}
                   value={catFilter}
                   onChange={setCatFilter}

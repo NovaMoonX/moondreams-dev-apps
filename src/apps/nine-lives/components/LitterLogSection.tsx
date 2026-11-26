@@ -8,12 +8,12 @@ import {
   Input,
   Modal,
   Pagination,
-  Select,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { shallowEqual } from 'react-redux';
@@ -131,7 +131,7 @@ function LitterTypeField({
 
   return (
     <div className='space-y-2'>
-      <Select
+      <AppSelect
         options={options}
         value={selectedValue}
         placeholder='Select a litter type'
@@ -198,7 +198,7 @@ function LocationField({
 
   return (
     <div className='space-y-2'>
-      <Select
+      <AppSelect
         options={options}
         value={value.value}
         placeholder='Select a location (optional)'
@@ -1187,7 +1187,7 @@ function SelectedLitterBoxPanel({
               <div className='flex items-center gap-2'>
                 <span className='text-muted-foreground text-sm'>Sort by:</span>
                 <div className='max-w-40 flex-1'>
-                  <Select
+                  <AppSelect
                     options={sortOptions}
                     value={sortOption}
                     onChange={(value) => setSortOption(value as 'newest' | 'oldest')}

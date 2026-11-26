@@ -10,6 +10,8 @@ import {
 } from 'react';
 import { useStore } from 'react-redux';
 
+import type { AssistantOrbState } from '@/components/AssistantOrb';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -17,6 +19,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronLeft, ListChecks, Pause, Play, Timer } from 'lucide-react';
 
+import { useTurnLogRecording } from '@/hooks/useTurnLog';
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import Subview from '@/components/Subview';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -64,6 +67,7 @@ import {
   CookVoiceButton,
   CookVoiceExplainer,
   CookVoiceLine,
+  PepperHeaderOrb,
 } from '@apps/pinch/components/cooking/CookVoice';
 import {
   COOK_CHOICE_MS,
@@ -83,9 +87,12 @@ import {
   runCookCommand,
   useCookVoice,
   type CookActionCommand,
+  type CookPepperRoute,
   type CookVoiceActions,
   type CookVoiceResult,
 } from '@apps/pinch/hooks/useCookVoice';
+import { usePepper } from '@apps/pinch/hooks/usePepper';
+import { usePepperActions } from '@apps/pinch/hooks/usePepperActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { usePantryTake } from '@apps/pinch/hooks/usePantryTake';
 import { usePutAway } from '@apps/pinch/hooks/usePutAway';
@@ -179,7 +186,14 @@ import {
 import { adaptAmount } from '@apps/pinch/utils/units';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { formatServings, getAmountWords } from '@apps/pinch/utils/recipeFormat';
-import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import { getLeftoversLine, getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import {
+  buildPepperScreen,
+  buildPepperStanding,
+  getPepperProblemLine,
+  PEPPER_BODY_LIMITS,
+  type PepperView,
+} from '@apps/pinch/utils/pepperContext';
 import { getRecipeLines } from '@apps/pinch/utils/shopping';
 import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
 import {
@@ -212,6 +226,10 @@ interface ChangeTarget {
 const DONE_GUARD_MS = 600;
 /** A spoken command lands up to a couple of seconds after the words, so "next" or "dismiss" this soon after a Time's up was meant before it. */
 const VOICE_DONE_GUARD_MS = 2000;
+// A server left idle about 15 minutes starts cold, so both of Pepper's are woken on arrival and kept warm while cooking is open.
+const PEPPER_WARM_MS = 10 * 60_000;
+/** How long after Pepper moves a step the change still counts as Pepper's, not a tap's. */
+const PEPPER_MOVE_MS = 2000;
 
 type PendingTimerVerb = 'PAUSE' | 'RESUME' | 'STOP' | 'EXTEND' | 'RENAME';
 
@@ -548,6 +566,8 @@ function CookingSession({
   const voiceGuardedUntil = useRef(0);
   const hasCoachedNext = useRef(false);
   const hasCoachedUndo = useRef(false);
+  const isPepperRun = useRef(false);
+  const pepperMovedAt = useRef(0);
   const lastDictated = useRef<{
     id: string;
     at: number;
@@ -1815,18 +1835,23 @@ function CookingSession({
             plate[voiceStep.recipe.id]?.servings ?? voiceStep.recipe.servings,
           );
 
+  /** A question from a Pepper turn is a line to say, never a pending voice question: the person's answer goes back to Pepper as the next turn. */
+  const askAloud = (show: string, speak: string): CookVoiceResult =>
+    isPepperRun.current ? refuse(show, speak) : done(show, speak);
   const askWhich = (
     verb: PendingTimerVerb,
     asked: VoiceTimer[],
     arg: TimerArg,
     missed: string | null = null,
   ): CookVoiceResult => {
-    setPending({
-      kind: 'TIMER',
-      ids: asked.map((timer) => timer.id),
-      verb,
-      ...arg,
-    });
+    if (!isPepperRun.current) {
+      setPending({
+        kind: 'TIMER',
+        ids: asked.map((timer) => timer.id),
+        verb,
+        ...arg,
+      });
+    }
     const { show, speak } = describeTimerQuestion(
       asked.map((timer) => ({
         name:
@@ -1838,7 +1863,7 @@ function CookingSession({
       TIMER_VERB_WORDS[verb],
       missed,
     );
-    return done(show, speak);
+    return askAloud(show, speak);
   };
   const askGuess = (
     verb: PendingTimerVerb,
@@ -1846,19 +1871,21 @@ function CookingSession({
     arg: TimerArg,
     missed: string,
   ): CookVoiceResult => {
-    setPending({
-      kind: 'TIMER',
-      ids: [guess.id],
-      verb,
-      isConfirm: true,
-      ...arg,
-    });
+    if (!isPepperRun.current) {
+      setPending({
+        kind: 'TIMER',
+        ids: [guess.id],
+        verb,
+        isConfirm: true,
+        ...arg,
+      });
+    }
     const { show, speak } = describeTimerGuess(guess.stepName, missed);
-    return done(show, speak);
+    return askAloud(show, speak);
   };
   const askLength = (name: string | null): CookVoiceResult => {
-    setPending({ kind: 'LENGTH', name });
-    return done(
+    if (!isPepperRun.current) setPending({ kind: 'LENGTH', name });
+    return askAloud(
       name === null ? 'How long?' : `How long for ${name}?`,
       name === null
         ? 'How long should the timer run?'
@@ -2052,6 +2079,18 @@ function CookingSession({
       `${lead}Now ${formatServings(next)}, ${was}`,
       `${lead}Okay, ${formatServings(next)}, ${was}. The amounts are updated.`,
     );
+  };
+
+  /** Why a tip, note or change can't be written from the step on screen right now, or null. */
+  const getEntryBlock = () => {
+    if (focused !== null || !isStepsView || !hasSteps || isFinishShown) {
+      return 'Go to a step to add that.';
+    }
+    if (capture.isOpen) return 'Finish writing this one first.';
+    if (!capture.isAvailable(recipe.id) || isRemoved) {
+      return "Your notes aren't ready, or this recipe's are full.";
+    }
+    return null;
   };
 
   const makeVoiceActions = (): CookVoiceActions => ({
@@ -2469,13 +2508,8 @@ function CookingSession({
       return done('Closed');
     },
     addEntry: (kind) => {
-      if (focused !== null || !isStepsView || !hasSteps || isFinishShown) {
-        return refuse('Go to a step to add that.');
-      }
-      if (capture.isOpen) return refuse('Finish writing this one first.');
-      if (!capture.isAvailable(recipe.id) || isRemoved) {
-        return refuse("Your notes aren't ready, or this recipe's are full.");
-      }
+      const block = getEntryBlock();
+      if (block !== null) return refuse(block);
       showDockView(null);
       setPending({
         kind: 'DICTATE',
@@ -2800,12 +2834,264 @@ function CookingSession({
     })),
   };
   const { connect: connectVoice } = voice;
-  const runVoiceCommand = useEffectEvent((command: CookActionCommand) =>
+  const runCookAction = (command: CookActionCommand) =>
     capture.isOpen && !VOICE_WHILE_WRITING.has(command.kind)
       ? refuse('Finish writing this one first.')
-      : runCookCommand(command, makeVoiceActions()),
-  );
+      : runCookCommand(command, makeVoiceActions());
+  const runVoiceCommand = useEffectEvent(runCookAction);
   useEffect(() => connectVoice(runVoiceCommand, voiceContext));
+  const goToStepForPepper = (step: number): CookVoiceResult => {
+    if (focused !== null) {
+      return refuse(
+        "Time's up: dismiss it first.",
+        'The timer is ringing. Dismiss it first.',
+      );
+    }
+    if (isGatherView) {
+      return refuse("You haven't started yet. Say “next” to start cooking.");
+    }
+    if (isFinishShown) {
+      return refuse('Cooking is finished. Tap Back to return to a step.');
+    }
+    if (!hasSteps) return refuse('This recipe has no steps yet.');
+    if (step > recipe.steps.length) {
+      return refuse(`This recipe has ${recipe.steps.length} steps.`);
+    }
+    showStepsView();
+    setStepIndex(step - 1);
+    pepperMovedAt.current = Date.now();
+    scrollToTop();
+    return done();
+  };
+  const runCookForPepper = (command: CookActionCommand) => {
+    isPepperRun.current = true;
+    try {
+      const result = runCookAction(command);
+      if (result.ok && (command.kind === 'NEXT' || command.kind === 'BACK')) {
+        pepperMovedAt.current = Date.now();
+      }
+      return result;
+    } finally {
+      isPepperRun.current = false;
+    }
+  };
+  const getTickChanges = (queries: string[], isOut: boolean) => {
+    if (!isGatherView) return [];
+    const dishes = getGatherDishes();
+    const plan = planGatherTick(
+      queries,
+      getGatherItems(dishes),
+      isOut,
+      isPlate,
+    );
+    return plan.ok
+      ? plan.sources.filter(
+          ({ recipeId, lineId }) =>
+            (dishes.find((dish) => dish.recipe.id === recipeId)?.gotOut[
+              lineId
+            ] ===
+              true) !==
+            isOut,
+        )
+      : [];
+  };
+  const pepperActions = usePepperActions({
+    uid,
+    runCook: runCookForPepper,
+    getTickChanges,
+    setTicks: (lines, isOut) =>
+      lines.forEach(({ recipeId, lineId }) =>
+        toggleGotOutFor(recipeId, lineId, isOut),
+      ),
+    goToStep: goToStepForPepper,
+    say: (text) => voice.speak(text),
+    capture,
+    shown: {
+      recipeId: voiceStep.recipe.id,
+      servings: getVoiceServings(voiceStep.recipe.id),
+      stepCount: voiceStep.recipe.steps.length,
+    },
+    recipeIds: entries.map((candidate) => candidate.recipe.id),
+    entryBlock: getEntryBlock(),
+    isWriting: capture.isOpen,
+    isDishAmbiguous: isGatherView && isPlate,
+  });
+  const isPepperOn = useIsGateOpen('pinch', 'pepper');
+  useTurnLogRecording();
+  const pepper = usePepper({
+    speak: (text, { canAnswer }) => voice.speakInOrder(text, { canAnswer }),
+    onAction: (action) => {
+      const result = pepperActions.run(action);
+      if (result.isEnding === true) voice.endAfterReply();
+      if (result.said === undefined) return;
+      void voice.speakInOrder(result.said, {
+        canAnswer: pepperActions.hasPending(),
+      });
+    },
+    onProblem: (held) => {
+      void voice.speakInOrder(getPepperProblemLine(held), {
+        canAnswer: false,
+      });
+    },
+  });
+  const pepperStatus = useRef(pepper.status);
+  useEffect(() => {
+    pepperStatus.current = pepper.status;
+  });
+  const getPepperView = (): PepperView => {
+    if (isFinishShown) return 'finish';
+    if (isGatherView) return 'gather';
+    if (isTimersView || focused !== null) return 'timers';
+    return view === 'ingredients' && !isWide ? 'ingredients' : 'steps';
+  };
+  const askPepper = (heard: string, alternatives: string[]) => {
+    const pepperView = getPepperView();
+    const isStepShown = pepperView === 'steps' && hasSteps;
+    const shownSteps = voiceStep.recipe.steps;
+    const sectionName = isStepShown
+      ? getStepSectionPlace(
+          shownSteps,
+          getStepSections(voiceStep.recipe),
+          voiceStep.stepNumber - 1,
+        )?.name
+      : null;
+    const now = Date.now();
+    const standing = buildPepperStanding(
+      entries.map((candidate) => ({
+        title: candidate.recipe.title,
+        servings: candidate.recipe.servings,
+        lines: getRows(candidate.recipe, candidate.recipe.servings),
+        steps: candidate.recipe.steps,
+        sections: getStepSections(candidate.recipe),
+        keeping: getLeftoversLine(getRecipeCare(candidate.recipe)),
+      })),
+    );
+    const screen = buildPepperScreen({
+      view: pepperView,
+      recipeTitle: voiceStep.recipe.title,
+      step: isStepShown
+        ? {
+            number: voiceStep.stepNumber,
+            count: shownSteps.length,
+            text: voiceStep.text,
+            section: sectionName ?? null,
+          }
+        : null,
+      servings: entries.map((candidate) => ({
+        title: candidate.recipe.title,
+        servings: getVoiceServings(candidate.recipe.id),
+      })),
+      timers: timers.timers.map((timer) => ({
+        name: isNamedKitchenTimer(timer)
+          ? timer.stepName
+          : `${timer.label}, ${timer.stepName}`,
+        status: timer.status,
+        leftMs: getRemainingMs(timer, now),
+      })),
+      stepLines: isStepShown
+        ? stepRows.map((row) => ({
+            name: row.name,
+            amountText: row.amountText,
+          }))
+        : [],
+      gather: isGatherView
+        ? getGatherDishes().map((dish) => ({
+            dish: isPlate ? dish.recipe.title : null,
+            lines: dish.rows.map((row) => ({
+              name: row.name,
+              amountText: row.amountText,
+              isOut: dish.gotOut[row.id] === true,
+            })),
+          }))
+        : null,
+      entries: (notesByRecipe.get(voiceStep.recipe.id) ?? NO_RECIPE_NOTES)
+        .filter((note) => note.kind !== 'TWEAK')
+        .map((note) => {
+          const at = resolveNoteStep(note, shownSteps);
+          return {
+            id: note.id,
+            kind:
+              note.kind === 'TIP'
+                ? 'tip'
+                : note.kind === 'CHANGE'
+                  ? 'change'
+                  : 'note',
+            text: note.text ?? '',
+            reason: note.reason,
+            step: at === null ? null : at + 1,
+          };
+        }),
+    });
+    void pepper.ask({
+      standing,
+      screen,
+      heard: heard.slice(0, PEPPER_BODY_LIMITS.heard),
+      alternatives: alternatives
+        .slice(0, PEPPER_BODY_LIMITS.alternatives)
+        .map((guess) => guess.slice(0, PEPPER_BODY_LIMITS.heard)),
+    });
+  };
+  const pepperRoute: CookPepperRoute = {
+    isBusy: () =>
+      pepperStatus.current === 'thinking' ||
+      pepperStatus.current === 'speaking',
+    takeMove: () => {
+      const isMove = Date.now() - pepperMovedAt.current < PEPPER_MOVE_MS;
+      pepperMovedAt.current = 0;
+      return isMove;
+    },
+    hasPending: pepperActions.hasPending,
+    answerPending: pepperActions.answerPending,
+    clearPending: pepperActions.clearPending,
+    ask: askPepper,
+    cancel: pepper.cancel,
+  };
+  const { connectPepper } = voice;
+  useEffect(() => connectPepper(isPepperOn ? pepperRoute : null));
+  const warmers = useRef({ pepper: pepper.warm, speech: voice.warmSpeech });
+  useEffect(() => {
+    warmers.current = { pepper: pepper.warm, speech: voice.warmSpeech };
+  });
+  const warmedAt = useRef(0);
+  useEffect(() => {
+    if (!isPepperOn) return;
+    const warm = async () => {
+      const isDue = Date.now() - warmedAt.current >= PEPPER_WARM_MS - 5000;
+      if (
+        !isDue ||
+        document.visibilityState !== 'visible' ||
+        !navigator.onLine
+      ) {
+        return;
+      }
+      warmedAt.current = Date.now();
+      void warmers.current.speech?.();
+      const isWarm = await warmers.current.pepper();
+      if (!isWarm) warmedAt.current = 0;
+    };
+    const warmSoon = () => void warm();
+    warmSoon();
+    const id = window.setInterval(warmSoon, PEPPER_WARM_MS);
+    document.addEventListener('visibilitychange', warmSoon);
+    window.addEventListener('online', warmSoon);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', warmSoon);
+      window.removeEventListener('online', warmSoon);
+    };
+  }, [isPepperOn]);
+  const getPepperOrbState = (): AssistantOrbState => {
+    if (!isPepperOn || !voice.isOn) return 'off';
+    if (pepper.status === 'thinking') return 'thinking';
+    if (pepper.status === 'speaking' || voice.status === 'speaking') {
+      return 'speaking';
+    }
+    if (voice.phase !== 'WAITING' && voice.status === 'listening') {
+      return 'listening';
+    }
+    return 'waiting';
+  };
+  const pepperOrbState = getPepperOrbState();
   const namedLines = voiceContext.lines.filter((line) => line.names.length > 0);
   const stepLines = namedLines.filter((line) => line.isInStep);
   const ingredientExample = (
@@ -3224,9 +3510,19 @@ function CookingSession({
         title={isEditing ? editTitle : title}
         headerAction={
           isFinishShown || isEditing ? null : (
-            <div className='flex items-center gap-1'>
+            <div
+              className={join(
+                'flex items-center',
+                isPepperOn && voice.isSupported ? 'gap-3' : 'gap-1',
+              )}
+            >
               <CookStopwatch startedAt={startedAt} />
-              {voice.isSupported && <CookVoiceButton voice={voice} />}
+              {voice.isSupported &&
+                (isPepperOn ? (
+                  <PepperHeaderOrb voice={voice} state={pepperOrbState} />
+                ) : (
+                  <CookVoiceButton voice={voice} />
+                ))}
             </div>
           )
         }
@@ -3473,6 +3769,10 @@ function CookingSession({
               {!isFinishShown && (
                 <CookVoiceLine
                   voice={voice}
+                  isPepperOn={isPepperOn}
+                  isNextShown={
+                    isStepsView && focused === null && next.kind !== 'FINISH'
+                  }
                   ingredientExample={ingredientExample}
                   dishExample={dishExample}
                   className='[@media(max-height:500px)]:max-w-44 [@media(max-height:500px)]:shrink-0'

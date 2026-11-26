@@ -2,12 +2,14 @@ import {
   CONTAINER_FREEZER_DAYS,
   CONTAINER_FRIDGE_DAYS,
   DEFAULT_LEAD_DAYS,
+  DEFAULT_PEPPER_LOOK,
   DEFAULT_PINCH_TAB,
   DEFAULT_REMINDER_HOUR,
   FREEZER_DAYS_RANGE,
   FRIDGE_DAYS_RANGE,
   FRIDGE_GUIDANCE_DAYS,
   LEAD_DAYS_CHOICES,
+  toPepperLook,
 } from '@apps/pinch/constants';
 import type {
   PinchReminderSettings,
@@ -35,6 +37,7 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
     isReadingAloud: null,
     isReadingNotes: null,
     isWaiting: null,
+    look: DEFAULT_PEPPER_LOOK,
   },
   units: AS_WRITTEN_UNITS,
   reminders: {
@@ -61,7 +64,11 @@ export const getSettingsWithDefaults = (
     : {
         ...DEFAULT_PINCH_SETTINGS,
         ...document,
-        voice: { ...DEFAULT_PINCH_SETTINGS.voice, ...document.voice },
+        voice: {
+          ...DEFAULT_PINCH_SETTINGS.voice,
+          ...document.voice,
+          look: toPepperLook(document.voice?.look),
+        },
         units: { ...DEFAULT_PINCH_SETTINGS.units, ...document.units },
         reminders: {
           ...DEFAULT_PINCH_SETTINGS.reminders,

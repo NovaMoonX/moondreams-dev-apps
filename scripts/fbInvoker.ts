@@ -33,6 +33,7 @@ const callables = exported
 const PUBLIC_WEBHOOKS = [
   'runwayPlaidWebhook',
   'streamSpeech',
+  'pepperTurn',
   'helmMcp',
   'ingestRunwayEmail',
   'ingestAListEmail',

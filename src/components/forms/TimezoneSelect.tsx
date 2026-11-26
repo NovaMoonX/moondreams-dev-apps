@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type MouseEvent } from 'react';
 
-import { Select } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Globe } from 'lucide-react';
 
@@ -32,7 +32,7 @@ function TimezoneSelect({ value, onChange, disabled = false, pill = false, at }:
   }, [day, value, query, isPhone]);
 
   const select = (
-    <Select
+    <AppSelect
       searchable
       searchPlaceholder='Search city or zone'
       options={options}

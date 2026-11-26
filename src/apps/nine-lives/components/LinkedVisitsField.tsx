@@ -1,4 +1,5 @@
-import { Badge, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Badge } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
 
 interface VisitOption {
@@ -66,7 +67,7 @@ function LinkedVisitsField({
         </div>
       )}
       {(multiple || selectedVisits.length === 0) && selectableOptions.length > 0 && (
-        <Select
+        <AppSelect
           options={selectableOptions}
           value=''
           onChange={addVisit}

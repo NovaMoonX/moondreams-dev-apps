@@ -40,6 +40,16 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     warning: null,
   },
   {
+    id: 'friend-day-stars',
+    appId: 'a-list',
+    label: "Friends' days as stars",
+    description:
+      "Someone without it sees a small mark in the corner of a day when friends have plans. Someone with it sees that day's number inside a light purple star instead.",
+    defaultRollout: 'off',
+    isServerEnforced: false,
+    warning: null,
+  },
+  {
     id: 'create-trips',
     appId: 'waypoint',
     label: 'Create trips',
@@ -113,6 +123,17 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     isServerEnforced: false,
     warning:
       "Whatever the assistant reads from Helm is sent to that company and handled under its own terms, outside Helm's private storage.",
+  },
+  {
+    id: 'pepper',
+    appId: 'pinch',
+    label: 'Pepper',
+    description:
+      'Someone kept out talks to cooking mode with the set commands as before, heard on their device. Someone with it can say "Hey Pepper" and ask anything while they cook: Pepper answers in a natural voice, keeps notes and the shopping list, and looks up exact facts on the web.',
+    defaultRollout: 'testing',
+    isServerEnforced: false,
+    warning:
+      'Each question is sent to Deepgram to hear, to Claude to answer and to Google to speak, and each costs a little. Web lookups are capped at 50 a day per person.',
   },
 ];
 
