@@ -12,6 +12,7 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowRightLeft,
+  ArrowUpDown,
   ArrowUp,
   Link2,
   NotebookText,
@@ -31,9 +32,11 @@ import DetailSheet from '@/components/DetailSheet';
 import Field from '@/components/forms/Field';
 import LabelChip from '@/components/LabelChip';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import MoveChoices from '@/components/MoveChoices';
+import RearrangeGroupsSheet from '@/components/RearrangeGroupsSheet';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
-import SectionDivider from '@/components/SectionDivider';
+import ReorderList, { type ReorderGroup } from '@/components/ReorderList';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
@@ -91,6 +94,16 @@ import {
 } from '@apps/pinch/utils/ingredientMatch';
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { takeSuggestionIds } from '@apps/pinch/utils/pickerSuggestions';
+import {
+  findLineSlot,
+  getLineNeighbourSlot,
+  getSpanAnchor,
+  moveIngredientGroup,
+  moveIngredientLine,
+  restoreSpanOrder,
+  type MoveDirection,
+  type ReorderSlot,
+} from '@apps/pinch/utils/recipeReorder';
 import { hasUnitPreference } from '@apps/pinch/utils/units';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
@@ -112,6 +125,30 @@ const getUsedInGroup = (rows: IngredientRow[], group: string | null) =>
   rows
     .filter((row) => getGroupKey(row.group) === getGroupKey(group))
     .map((row) => row.ingredientId);
+
+const describeLineMove = (
+  rows: IngredientRow[],
+  id: string,
+  direction: MoveDirection,
+  getName: (row: IngredientRow) => string,
+): { slot: ReorderSlot; subtitle: string } | null => {
+  const slot = getLineNeighbourSlot(rows, id, direction);
+  if (!slot) return null;
+  const groups = groupIngredientLines(rows);
+  const from = findLineSlot(rows, id);
+  if (slot.group !== from.group) {
+    const name = groups[slot.group]?.name ?? null;
+    return {
+      slot,
+      subtitle: name === null ? 'Out of its group' : `Into “${name}”`,
+    };
+  }
+  const neighbour = groups[from.group].lines[from.index + direction];
+  return {
+    slot,
+    subtitle: `${direction === -1 ? 'Before' : 'After'} ${getName(neighbour)}`,
+  };
+};
 
 const UNIT_CHIP_CLASS =
   "relative gap-1.5 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']";
@@ -281,6 +318,8 @@ function GroupField({ group, names, onChange }: GroupFieldProps) {
   const [newText, setNewText] = useState('');
   const [isShown, setIsShown] = useState(group !== null || names.length > 0);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const isNewTyped =
+    choice === NEW_CHOICE && getGroupKey(newText) === getGroupKey(group);
 
   if (!isShown) {
     return (
@@ -304,7 +343,7 @@ function GroupField({ group, names, onChange }: GroupFieldProps) {
       <PickOrCreate
         label='Group'
         options={names.map((name) => ({ value: name, label: name }))}
-        choice={choice}
+        choice={isNewTyped ? NEW_CHOICE : (group ?? '')}
         newText={newText}
         newPillLabel='New group'
         newPlaceholder='For the sauce'
@@ -339,6 +378,8 @@ interface IngredientEditorProps {
   showRemove: boolean;
   onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
   onUseExisting: (fromId: string, toId: string) => void;
+  getName: (row: IngredientRow) => string;
+  onMove: (slot: ReorderSlot) => void;
 }
 
 interface PendingConversion {
@@ -370,6 +411,8 @@ function IngredientEditor({
   showRemove,
   onRename,
   onUseExisting,
+  getName,
+  onMove,
 }: IngredientEditorProps) {
   const [isChoosing, setIsChoosing] = useState(false);
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
@@ -398,6 +441,21 @@ function IngredientEditor({
   const isReadyForAmount = !isUnresolved && !row.isAmountless;
   const typedAmount = parseAmountText(row.amount);
   const conversion = getConversion(pending, row.unit);
+  const moveUp = showRemove
+    ? describeLineMove(rows, row.id, -1, getName)
+    : null;
+  const moveDown = showRemove
+    ? describeLineMove(rows, row.id, 1, getName)
+    : null;
+  const moveChoices = (
+    <MoveChoices
+      itemNoun='ingredient'
+      onMoveUp={moveUp ? () => onMove(moveUp.slot) : undefined}
+      onMoveDown={moveDown ? () => onMove(moveDown.slot) : undefined}
+      upSubtitle={moveUp?.subtitle}
+      downSubtitle={moveDown?.subtitle}
+    />
+  );
   const isRoundRowDrawn = row.adaptedFrom !== null && isMeasureUnit(row.unit);
   const step = (direction: 1 | -1) =>
     isRoundRowDrawn && typedAmount !== null && isMeasureUnit(row.unit)
@@ -514,6 +572,7 @@ function IngredientEditor({
             }}
           />
         )}
+        {moveChoices}
         <FreeLineOffer
           onClick={() =>
             onUpdate({
@@ -735,6 +794,7 @@ function IngredientEditor({
         names={groupNames}
         onChange={(group) => onUpdate({ group })}
       />
+      {moveChoices}
       {isFree ? (
         <ActionRow
           icon={<Link2 className='h-4 w-4' />}
@@ -783,6 +843,7 @@ interface GroupEditorBodyProps {
   onDraftChange: (draft: string) => void;
   onDone: () => void;
   onRemove: () => void;
+  onRearrange?: () => void;
 }
 
 function GroupEditorBody({
@@ -793,6 +854,7 @@ function GroupEditorBody({
   onDraftChange,
   onDone,
   onRemove,
+  onRearrange,
 }: GroupEditorBodyProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const isMerge = otherNames.some(
@@ -833,6 +895,14 @@ function GroupEditorBody({
           Another group has this name, so the two become one.
         </p>
       )}
+      {onRearrange && (
+        <ActionRow
+          icon={<ArrowUpDown className='h-4 w-4' />}
+          label='Rearrange groups'
+          subtitle='Change the order the groups come in.'
+          onClick={onRearrange}
+        />
+      )}
       <ActionRow
         isDestructive
         icon={<Ungroup className='h-4 w-4' />}
@@ -854,6 +924,8 @@ interface GroupHeadingProps {
   lineCount: number;
   onRename: (name: string) => void;
   onRemove: () => void;
+  /** Left out while the recipe has fewer than two groups to order. */
+  onRearrange?: () => void;
 }
 
 /** Closing the editor keeps the typed name. */
@@ -863,6 +935,7 @@ function GroupHeading({
   lineCount,
   onRename,
   onRemove,
+  onRearrange,
 }: GroupHeadingProps) {
   const isPhone = useMediaQuery().isBelow('sm');
   const [isOpen, setIsOpen] = useState(false);
@@ -889,6 +962,13 @@ function GroupHeading({
       onDraftChange={setDraft}
       onDone={close}
       onRemove={remove}
+      onRearrange={
+        onRearrange &&
+        (() => {
+          close();
+          onRearrange();
+        })
+      }
     />
   );
   const trigger = (
@@ -918,7 +998,7 @@ function GroupHeading({
   if (isPhone) {
     return (
       <>
-        <SectionDivider label={trigger} className='pt-2' />
+        {trigger}
         {isOpen && (
           <DetailSheet
             isOpen
@@ -940,30 +1020,31 @@ function GroupHeading({
   }
 
   return (
-    <SectionDivider
-      className='pt-2'
-      label={
-        <Popover
-          trigger={trigger}
-          isOpen={isOpen}
-          onOpenChange={(next) => (next ? setIsOpen(true) : close())}
-          placement='bottom'
-          alignment='center'
-          className='w-[min(22rem,calc(100vw-2rem))] p-4'
-        >
-          {isOpen && (
-            <div className='space-y-3'>
-              <h3 className='text-sm font-semibold'>Group</h3>
-              {body}
-              <Button type='button' className='w-full' onClick={close}>
-                Done
-              </Button>
-            </div>
-          )}
-        </Popover>
-      }
-    />
+    <Popover
+      trigger={trigger}
+      isOpen={isOpen}
+      onOpenChange={(next) => (next ? setIsOpen(true) : close())}
+      placement='bottom'
+      alignment='center'
+      className='w-[min(22rem,calc(100vw-2rem))] p-4'
+    >
+      {isOpen && (
+        <div className='space-y-3'>
+          <h3 className='text-sm font-semibold'>Group</h3>
+          {body}
+          <Button type='button' className='w-full' onClick={close}>
+            Done
+          </Button>
+        </div>
+      )}
+    </Popover>
   );
+}
+
+interface LineItem {
+  id: string;
+  row: IngredientRow;
+  isFirst: boolean;
 }
 
 type SheetMode =
@@ -998,6 +1079,7 @@ function RecipeIngredients({
   });
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [sheet, setSheet] = useState<SheetMode | null>(null);
+  const [isRearranging, setIsRearranging] = useState(false);
   const [isAdaptReviewOpen, setIsAdaptReviewOpen] = useState(false);
   const oftenUsedIds = useAppSelector(selectOftenUsedIngredientIds);
   const usedKey = rows.map((row) => row.ingredientId).join(',');
@@ -1079,6 +1161,99 @@ function RecipeIngredients({
       ),
     );
   };
+
+  const applyMove = (
+    next: IngredientRow[],
+    message: string,
+    spanIds: string[],
+    restoredGroup?: { id: string; group: string | null },
+  ) => {
+    const before = rows;
+    const isChanged = next.some(
+      (row, at) => row.id !== before[at].id || row.group !== before[at].group,
+    );
+    if (!isChanged) return;
+    const anchor = getSpanAnchor(
+      before.map((row) => row.id),
+      spanIds,
+    );
+    onChange(next);
+    onRemoved(message, () => {
+      const current = latest.current.rows;
+      const order = restoreSpanOrder(
+        current.map((row) => row.id),
+        anchor,
+      );
+      if (!order) return;
+      latest.current.onChange(
+        orderIngredientLines(
+          order.flatMap((id) => {
+            const row = current.find((candidate) => candidate.id === id);
+            if (!row) return [];
+            return [
+              restoredGroup?.id === id
+                ? { ...row, group: restoredGroup.group }
+                : row,
+            ];
+          }),
+        ),
+      );
+    });
+  };
+  const moveLine = (id: string, slot: ReorderSlot) => {
+    const row = rows.find((candidate) => candidate.id === id);
+    if (!row) return;
+    const next = moveIngredientLine(rows, id, slot);
+    const landed = next.find((candidate) => candidate.id === id);
+    const name = getName(row);
+    const isNewGroup =
+      landed !== undefined &&
+      getGroupKey(landed.group) !== getGroupKey(row.group);
+    const message = !isNewGroup
+      ? `Moved ${name}`
+      : landed.group === null
+        ? `Moved ${name} out of “${cleanGroupName(row.group) ?? ''}”`
+        : `Moved ${name} into “${landed.group}”`;
+    applyMove(next, message, [id], { id, group: row.group });
+  };
+  const moveGroup = (from: number, to: number) =>
+    applyMove(
+      moveIngredientGroup(rows, from, to),
+      `Moved “${groups[from]?.name ?? ''}”`,
+      groups[from]?.lines.map((line) => line.id) ?? [],
+    );
+  const pinnedGroups = groups[0]?.name === null ? 1 : 0;
+  const reorderGroups: ReorderGroup<LineItem>[] = groups.map((group) => ({
+    id: group.key,
+    label: group.name,
+    heading:
+      group.name === null ? undefined : (
+        <GroupHeading
+          name={group.name}
+          otherNames={groupNames.filter((name) => name !== group.name)}
+          lineCount={group.lines.length}
+          onRename={(name) => {
+            const renamed = renameLineGroup(rows, group.name ?? '', name);
+            onChange(renamed);
+            focusGroupHeading(
+              renamed.find(
+                (row) => getGroupKey(row.group) === getGroupKey(name),
+              )?.group ?? name,
+            );
+          }}
+          onRemove={() => removeGroup(group.name ?? '')}
+          onRearrange={
+            groupNames.length > 1 ? () => setIsRearranging(true) : undefined
+          }
+        />
+      ),
+    items: group.lines.map((row, index) => ({
+      id: row.id,
+      row,
+      isFirst: index === 0,
+    })),
+    isOrdered: true,
+  }));
 
   const addRow = (
     ingredientId: string,
@@ -1230,119 +1405,125 @@ function RecipeIngredients({
         />
       )}
       {rows.length > 0 && (
-        <div>
-          {groups.map((group) => (
-            <div key={group.key}>
-              {group.name !== null && (
-                <GroupHeading
-                  key={group.name}
-                  name={group.name}
-                  otherNames={groupNames.filter((name) => name !== group.name)}
-                  lineCount={group.lines.length}
-                  onRename={(name) => {
-                    const renamed = renameLineGroup(
-                      rows,
-                      group.name ?? '',
-                      name,
-                    );
-                    onChange(renamed);
-                    focusGroupHeading(
-                      renamed.find(
-                        (row) => getGroupKey(row.group) === getGroupKey(name),
-                      )?.group ?? name,
-                    );
-                  }}
-                  onRemove={() => removeGroup(group.name ?? '')}
-                />
-              )}
-              <ul className='divide-border divide-y'>
-                {group.lines.map((row) => {
-                  const name = getName(row);
-                  const label = getAmountLabel(row);
-                  const isUnresolved = isRowUnresolved(row);
-                  const isFree = row.freeText !== null;
-                  return (
-                    <li
-                      key={row.id}
-                      className='scroll-mt-16 scroll-mb-28 py-1'
-                      data-ingredient-row={row.id}
-                      data-ingredient-unresolved={isUnresolved || undefined}
-                      data-ingredient-amount-wrong={
-                        (!isUnresolved && !isRowAmountValid(row)) || undefined
-                      }
-                    >
-                      <div className='flex items-center gap-1'>
-                        <Button
-                          type='button'
-                          variant='tertiary'
-                          aria-haspopup='dialog'
-                          aria-label={`${name}, ${isUnresolved ? 'choose an ingredient' : isFree ? `not a kitchen ingredient, ${label || 'no amount'}` : row.newName !== null ? `new ingredient, ${label || 'no amount'}` : label || 'no amount'}${row.adaptedFrom !== null && !row.isAmountless ? `, adapted from ${getOriginalText(row.adaptedFrom)}` : ''}`}
-                          onClick={() => setSheet({ kind: 'edit', id: row.id })}
-                          className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
-                        >
-                          <span className='min-w-0 flex-1'>
-                            <span className='flex min-w-0 items-center gap-2'>
-                              <span className='line-clamp-2 font-medium break-words'>
-                                {name}
-                              </span>
-                              {(isUnresolved || row.newName !== null) && (
-                                <LabelChip isDashed={isUnresolved}>
-                                  {isUnresolved ? 'Choose' : 'New'}
-                                </LabelChip>
-                              )}
-                            </span>
-                            {isFree && (
-                              <span className='text-muted-foreground block text-xs font-normal'>
-                                {FREE_LINE_LABEL}
-                              </span>
-                            )}
-                            {row.note && (
-                              <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
-                                {row.note}
-                              </span>
-                            )}
+        <ReorderList
+          groups={reorderGroups}
+          isPlain
+          handleSide='start'
+          handleLabel='Move ingredient'
+          getItemLabel={(item) => getName(item.row)}
+          renderRow={({ row, isFirst }) => {
+            const name = getName(row);
+            const label = getAmountLabel(row);
+            const isUnresolved = isRowUnresolved(row);
+            const isFree = row.freeText !== null;
+            return (
+              <div
+                className={join(
+                  'border-border scroll-mt-16 scroll-mb-28 py-1',
+                  !isFirst && 'border-t',
+                )}
+                data-ingredient-row={row.id}
+                data-ingredient-unresolved={isUnresolved || undefined}
+                data-ingredient-amount-wrong={
+                  (!isUnresolved && !isRowAmountValid(row)) || undefined
+                }
+              >
+                <div className='flex items-center gap-1'>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    aria-haspopup='dialog'
+                    aria-label={`${name}, ${isUnresolved ? 'choose an ingredient' : isFree ? `not a kitchen ingredient, ${label || 'no amount'}` : row.newName !== null ? `new ingredient, ${label || 'no amount'}` : label || 'no amount'}${row.adaptedFrom !== null && !row.isAmountless ? `, adapted from ${getOriginalText(row.adaptedFrom)}` : ''}`}
+                    onClick={() => setSheet({ kind: 'edit', id: row.id })}
+                    className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
+                  >
+                    <span className='min-w-0 flex-1'>
+                      <span className='flex min-w-0 items-center gap-2'>
+                        <span className='line-clamp-2 font-medium break-words'>
+                          {name}
+                        </span>
+                        {(isUnresolved || row.newName !== null) && (
+                          <LabelChip isDashed={isUnresolved}>
+                            {isUnresolved ? 'Choose' : 'New'}
+                          </LabelChip>
+                        )}
+                      </span>
+                      {isFree && (
+                        <span className='text-muted-foreground block text-xs font-normal'>
+                          {FREE_LINE_LABEL}
+                        </span>
+                      )}
+                      {row.note && (
+                        <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
+                          {row.note}
+                        </span>
+                      )}
+                    </span>
+                    {label !== '' && (
+                      <span
+                        className={join(
+                          'text-sm font-normal',
+                          row.isAmountless
+                            ? 'max-w-[50%] wrap-break-word'
+                            : 'shrink-0 whitespace-nowrap',
+                          isRowAmountValid(row)
+                            ? 'text-muted-foreground'
+                            : 'text-destructive',
+                        )}
+                      >
+                        {label}
+                        {row.adaptedFrom !== null && !row.isAmountless && (
+                          <span className='text-muted-foreground ml-1 text-xs'>
+                            from {getOriginalText(row.adaptedFrom)}
                           </span>
-                          {label !== '' && (
-                            <span
-                              className={join(
-                                'text-sm font-normal',
-                                row.isAmountless
-                                  ? 'max-w-[50%] wrap-break-word'
-                                  : 'shrink-0 whitespace-nowrap',
-                                isRowAmountValid(row)
-                                  ? 'text-muted-foreground'
-                                  : 'text-destructive',
-                              )}
-                            >
-                              {label}
-                              {row.adaptedFrom !== null &&
-                                !row.isAmountless && (
-                                  <span className='text-muted-foreground ml-1 text-xs'>
-                                    from {getOriginalText(row.adaptedFrom)}
-                                  </span>
-                                )}
-                            </span>
-                          )}
-                        </Button>
-                        <Button
-                          type='button'
-                          variant='tertiary'
-                          size='icon'
-                          aria-label={`Remove ${name}`}
-                          className='size-10 shrink-0'
-                          onClick={() => remove(row.id)}
-                        >
-                          <X className='h-4 w-4' aria-hidden='true' />
-                        </Button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+                        )}
+                      </span>
+                    )}
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='icon'
+                    aria-label={`Remove ${name}`}
+                    className='size-10 shrink-0'
+                    onClick={() => remove(row.id)}
+                  >
+                    <X className='h-4 w-4' aria-hidden='true' />
+                  </Button>
+                </div>
+              </div>
+            );
+          }}
+          onMove={({ itemId, toGroupId, toIndex }) =>
+            moveLine(itemId, {
+              group: groups.findIndex((group) => group.key === toGroupId),
+              index: toIndex,
+            })
+          }
+        />
       )}
+      <RearrangeGroupsSheet
+        isOpen={isRearranging && groupNames.length > 1}
+        onClose={() => setIsRearranging(false)}
+        title='Rearrange groups'
+        handleLabel='Move group'
+        note={
+          pinnedGroups === 1
+            ? 'Ingredients with no group stay first.'
+            : undefined
+        }
+        groups={groups.slice(pinnedGroups).map((group) => ({
+          id: group.key,
+          label: group.name ?? '',
+          detail: `${group.lines.length} ${group.lines.length === 1 ? 'ingredient' : 'ingredients'}`,
+        }))}
+        onMove={(groupId, toIndex) =>
+          moveGroup(
+            groups.findIndex((group) => group.key === groupId),
+            toIndex + pinnedGroups,
+          )
+        }
+      />
       {rows.length < MAX_RECIPE_INGREDIENTS && (
         <Button
           type='button'
@@ -1375,6 +1556,7 @@ function RecipeIngredients({
           onRemove={remove}
           onRename={renameNew}
           onUseExisting={useExisting}
+          onMove={moveLine}
           onClose={() => setSheet(null)}
         />
       )}
@@ -1395,6 +1577,7 @@ interface IngredientSheetProps {
   onRemove: (id: string) => void;
   onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
   onUseExisting: (fromId: string, toId: string) => void;
+  onMove: (id: string, slot: ReorderSlot) => void;
   onClose: () => void;
 }
 
@@ -1537,6 +1720,7 @@ function IngredientSheet({
   onRemove,
   onRename,
   onUseExisting,
+  onMove,
   onClose,
 }: IngredientSheetProps) {
   const [activeId, setActiveId] = useState<string | null>(
@@ -1629,6 +1813,8 @@ function IngredientSheet({
           }}
           onRename={onRename}
           onUseExisting={onUseExisting}
+          getName={getName}
+          onMove={(slot) => onMove(row.id, slot)}
         />
       ) : (
         <div className='space-y-3'>
