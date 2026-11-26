@@ -64,6 +64,7 @@ src/
 - Avoid calling `setState` synchronously inside effects or render just to mirror props or derive values from current data.
 - Prefer deriving values directly during render, or move the update into an event handler or computed value.
 - Keep effects focused on async subscriptions or fetching rather than mirroring prop-driven state.
+- **An effect with no dependency list never resets a "done once" mark in its own cleanup.** That cleanup runs before every re-render, so the mark never holds and the work repeats on each render. Set the mark where the change is detected and clear it only once the work has run (technical review, `useGrowingTextarea` fitted after every keystroke).
 - State a parent keeps because a child's field has focus (a dock hidden while typing), and any listener the focus attached, is also undone in the child's unmount cleanup: a field removed while focused gets no `blur` (technical review, Helm's dock stayed hidden after Back from mid-typing).
 
 ```tsx
