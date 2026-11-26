@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ArrowLeft,
@@ -241,6 +242,7 @@ function PhotoSetPicker({
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isChoosing, setIsChoosing] = useState(false);
   const { pending: undoPending, showUndo, undo } = useUndoRemoval();
+  const { confirm } = useActionModal();
   const removal = useRef<{ id: string; timer: number } | null>(null);
   const removeRef = useRef(onRemove);
 
@@ -477,6 +479,16 @@ function PhotoSetPicker({
     );
   };
 
+  const confirmRemoval = async (id: string) => {
+    const isConfirmed = await confirm({
+      title: 'Remove this photo?',
+      message: 'You can undo it for a few seconds after.',
+      confirmText: 'Remove',
+      destructive: true,
+    });
+    if (isConfirmed) startRemoval(id);
+  };
+
   const openPicker = (input: HTMLInputElement | null) => input?.click();
 
   const addTile = (
@@ -484,15 +496,15 @@ function PhotoSetPicker({
       <Button
         type='button'
         variant='tertiary'
-        className='border-border text-muted-foreground! size-(--thumb) flex-col gap-1 rounded-xl border-2 border-dashed px-1! py-1! text-xs font-normal whitespace-normal'
+        className='border-border text-muted-foreground! size-(--thumb) flex-col gap-0.5 rounded-xl border-2 border-dashed px-1! py-1! text-[0.6875rem] font-normal whitespace-normal'
         onClick={() =>
           isTouch ? setIsChoosing(true) : openPicker(libraryRef.current)
         }
       >
         {isTouch ? (
-          <Camera className='size-6' aria-hidden='true' />
+          <Camera className='size-4' aria-hidden='true' />
         ) : (
-          <ImagePlus className='size-6' aria-hidden='true' />
+          <ImagePlus className='size-4' aria-hidden='true' />
         )}
         {count === 0 ? 'Add a photo' : 'Add another'}
       </Button>
@@ -588,7 +600,7 @@ function PhotoSetPicker({
                       HIT_AREA,
                       'bg-background/80 text-foreground! absolute top-1 right-1 size-6 min-w-6 px-0! py-0!',
                     )}
-                    onClick={() => startRemoval(photo.id)}
+                    onClick={() => void confirmRemoval(photo.id)}
                   >
                     <X className='size-3.5' aria-hidden='true' />
                   </Button>
@@ -741,7 +753,7 @@ function PhotoSetPicker({
                 isDestructive
                 icon={<Trash2 />}
                 label='Remove'
-                onClick={() => startRemoval(opened.id)}
+                onClick={() => void confirmRemoval(opened.id)}
               />
             </ActionGroup>
           </div>
