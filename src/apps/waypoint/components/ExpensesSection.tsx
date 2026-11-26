@@ -4,8 +4,8 @@ import {
   Button,
   Clickable,
   Input,
-  Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, HandCoins, ListFilter, Lock, Receipt, Users } from 'lucide-react';
@@ -1263,7 +1263,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             className='h-10'
           />
         </div>
-        <Select
+        <AppSelect
           className='min-w-0 flex-1 sm:w-44 sm:flex-none'
           options={EXPENSE_SORT_OPTIONS}
           value={sortBy}

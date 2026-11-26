@@ -4,9 +4,9 @@ import { shallowEqual } from 'react-redux';
 import {
   Button,
   RadioGroup,
-  Select,
   Separator,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -190,7 +190,7 @@ function PendingMembersPanel({ tripId }: PendingMembersPanelProps) {
                   </div>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-2'>
-                  <Select
+                  <AppSelect
                     size='sm'
                     options={ROLE_OPTIONS}
                     value={selectedRoles[request.uid] ?? 'VIEWER'}

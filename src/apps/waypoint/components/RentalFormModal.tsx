@@ -3,7 +3,8 @@ import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import { rentalToFields } from '@apps/waypoint/utils/bookingImport';
 
-import { Button, Input, Label, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { Car, Globe } from 'lucide-react';
 
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
@@ -138,7 +139,7 @@ function DayTimeField({ trip, label, day, time, onChange }: DayTimeFieldProps) {
     <div className='space-y-1.5'>
       <Label>{label}</Label>
       <div className='grid gap-3 sm:grid-cols-2'>
-        <Select
+        <AppSelect
           options={getDayOptions(trip.startDate, trip.endDate, day, MAX_DAYS_OUTSIDE_TRIP).map(({ value, label }) => ({ value, text: label }))}
           value={String(day)}
           onChange={(value) => onChange(Number(value), time)}

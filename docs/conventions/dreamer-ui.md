@@ -36,7 +36,7 @@ All components are imported from `@moondreamsdev/dreamer-ui/components`.
 - **Input**: Flexible input component with validation states and different types.
 - **Label**: Form label component with proper accessibility attributes.
 - **Radio Group**: Group of radio buttons for single selection from multiple options.
-- **Select**: Dropdown selection component with search and keyboard navigation.
+- **Select**: Dropdown selection component with search and keyboard navigation. Never imported directly: use `@/components/AppSelect`, which takes the same props and floats the list so a drawer or modal never cuts it off.
 - **Slider**: Range input component for selecting numeric values.
 - **Textarea**: Multi-line text input with auto-expand and character limit features.
 - **Toggle**: Switch component for boolean states and settings.

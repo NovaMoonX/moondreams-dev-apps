@@ -1,4 +1,4 @@
-import { Select } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 
 import { UNIT_LABELS, UNITS } from '@apps/pinch/constants';
 import type { Unit } from '@apps/pinch/types';
@@ -23,7 +23,7 @@ function UnitSelect({
   triggerClassName,
 }: UnitSelectProps) {
   return (
-    <Select
+    <AppSelect
       options={UNIT_OPTIONS}
       value={value}
       className={className}

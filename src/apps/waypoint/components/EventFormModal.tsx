@@ -6,8 +6,8 @@ import {
   Button,
   Input,
   Label,
-  Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { Bell, Clock, DoorOpen, Link2, ListChecks, MapPin, Route, Sun, Type, Utensils } from 'lucide-react';
 
@@ -1191,7 +1191,7 @@ function EventFormModal({
   const endFields = (
     <div className='space-y-2'>
       <div className='grid gap-3 sm:grid-cols-2'>
-        <Select
+        <AppSelect
           options={getDayChoices(trip, draft.endDayIndex, false)}
           value={String(draft.endDayIndex ?? draft.dayIndex)}
           onChange={(value) => updateDraft({ endDayIndex: Number(value) })}
@@ -1330,7 +1330,7 @@ function EventFormModal({
         <div className='space-y-2'>
           <Label>{isTravel ? 'Departs' : 'Starts'}</Label>
           <div className='grid gap-3 sm:grid-cols-2'>
-            <Select
+            <AppSelect
               options={getDayChoices(trip, draft.dayIndex, isRelative)}
               value={draft.dayIndex === null ? NO_DAY_VALUE : String(draft.dayIndex)}
               onChange={(value) => updateStart(value === NO_DAY_VALUE ? null : Number(value), draft.time)}
@@ -1621,7 +1621,7 @@ function EventFormModal({
             }
           >
             <div className='flex items-center gap-2'>
-              <Select
+              <AppSelect
                 className='flex-1'
                 options={reminderHourOptions}
                 value={String(Math.floor(draft.reminderMinutesBefore / 60))}
@@ -1634,7 +1634,7 @@ function EventFormModal({
                   })
                 }
               />
-              <Select
+              <AppSelect
                 className='flex-1'
                 options={getReminderMinuteOptions(Math.floor(draft.reminderMinutesBefore / 60))}
                 value={String(draft.reminderMinutesBefore % 60)}

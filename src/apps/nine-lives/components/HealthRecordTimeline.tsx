@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Input, Pagination, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Pagination } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { formatDateTime } from '@/utils/formatUtils';
@@ -147,7 +148,7 @@ function HealthRecordTimeline({
             <div className='flex flex-wrap items-center gap-2'>
               {cats.length > 1 && (
                 <div className='max-w-36 flex-1'>
-                  <Select
+                  <AppSelect
                     options={catFilterOptions}
                     value={catFilter}
                     onChange={setCatFilter}
@@ -156,7 +157,7 @@ function HealthRecordTimeline({
                 </div>
               )}
               <div className='max-w-44 flex-1'>
-                <Select
+                <AppSelect
                   options={typeFilterOptions}
                   value={typeFilter}
                   onChange={setTypeFilter}
@@ -169,7 +170,7 @@ function HealthRecordTimeline({
           <div className='flex items-center gap-2'>
             <span className='text-muted-foreground text-sm'>Sort by:</span>
             <div className='max-w-48 flex-1'>
-              <Select
+              <AppSelect
                 options={SORT_OPTIONS}
                 value={sortOption}
                 onChange={(value) => setSortOption(value as SortOption)}

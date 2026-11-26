@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Form, FormFactories, Input, Label, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { shallowEqual } from 'react-redux';
 
@@ -69,7 +70,7 @@ function AdditionalDetailsFields({
         </div>
         <div className='space-y-1'>
           <Label className='text-sm'>Clinic</Label>
-          <Select
+          <AppSelect
             options={clinicOptions.map((option) => ({ text: option.label, value: option.value }))}
             value={value.clinicId}
             disabled={disabled}
@@ -78,7 +79,7 @@ function AdditionalDetailsFields({
         </div>
         <div className='space-y-1'>
           <Label className='text-sm'>Doctor</Label>
-          <Select
+          <AppSelect
             options={doctorOptions.map((option) => ({ text: option.label, value: option.value }))}
             value={value.doctorId}
             disabled={disabled}
