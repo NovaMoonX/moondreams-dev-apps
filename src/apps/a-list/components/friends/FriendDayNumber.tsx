@@ -17,19 +17,19 @@ function FriendDayNumber({ day, count }: FriendDayNumberProps) {
     count === 1 ? '1 friend has plans' : `${count} friends have plans`;
 
   return (
-    <span className='absolute top-0 left-0 flex size-7 items-center justify-center'>
+    <span className='absolute top-0 left-0 flex size-6 items-center justify-center'>
       <Star
         aria-hidden='true'
-        className='absolute inset-0 size-7 fill-white stroke-white stroke-[4] dark:fill-neutral-950 dark:stroke-neutral-950'
+        className='absolute inset-0 size-6 fill-white stroke-white stroke-[4] dark:fill-neutral-950 dark:stroke-neutral-950'
       />
       <Star
         aria-hidden='true'
-        className={join('absolute inset-0 size-7 stroke-[1.5]', STAR_COLOR)}
+        className={join('absolute inset-0 size-6 stroke-[1.5]', STAR_COLOR)}
       />
-      <span className='relative mt-0.5 text-[10px] leading-none font-bold text-neutral-900 tabular-nums'>
+      <span aria-hidden='true' className='relative mt-0.5 text-[10px] leading-none font-bold text-neutral-900 tabular-nums'>
         {day}
       </span>
-      <span className='sr-only'>{label}</span>
+      <span className='sr-only'>{`${day}, ${label}`}</span>
     </span>
   );
 }
