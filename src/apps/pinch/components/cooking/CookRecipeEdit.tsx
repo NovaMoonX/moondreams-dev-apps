@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useAppSelector } from '@/store';
 import RecipeForm from '@apps/pinch/components/recipes/RecipeForm';
 import { selectNotesById } from '@apps/pinch/store/selectors';
+import { isOpenChange } from '@apps/pinch/utils/notes';
 
 interface CookRecipeEditProps {
   uid: string;
@@ -33,7 +34,7 @@ function CookRecipeEdit({
     changeIds.flatMap((id) => {
       const found = notesById.get(id);
       return found !== undefined &&
-        found.kind === 'CHANGE' &&
+        isOpenChange(found) &&
         found.recipeId === recipeId
         ? [found]
         : [];

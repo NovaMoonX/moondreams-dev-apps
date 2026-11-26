@@ -555,7 +555,7 @@ function CookingHistorySheet({
                         {
                           key: 'note',
                           icon: <NotebookPen className='h-4 w-4' />,
-                          label: 'Write something down',
+                          label: 'Add a tip, note or change',
                           description: `Write a tip, a note or a change from the cook on ${day}`,
                           onClick: () => openNote(cook.id),
                         },

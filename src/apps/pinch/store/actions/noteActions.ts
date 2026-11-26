@@ -155,7 +155,9 @@ export const addNote = createAsyncThunk<
     ]);
     write.catch((error) => console.error('Pinch note write failed', error));
   } catch (error) {
-    return rejectWithValue(getWriteMessage(error, 'Unable to save this entry.'));
+    return rejectWithValue(
+      getWriteMessage(error, 'Unable to save this entry.'),
+    );
   }
 
   return note.id;
@@ -187,7 +189,9 @@ export const updateNote = createAsyncThunk<
     const state = getState();
     const existing = state.pinch.notes.items.find((note) => note.id === id);
     if (!existing) {
-      return rejectWithValue('This entry is gone, so there is nothing to save.');
+      return rejectWithValue(
+        'This entry is gone, so there is nothing to save.',
+      );
     }
     const isTweak = existing.kind === 'TWEAK';
     if (text.trim().length > MAX_RECIPE_NOTE_LENGTH) {
@@ -198,8 +202,9 @@ export const updateNote = createAsyncThunk<
       return rejectWithValue(BAD_TEXT);
     }
     const steps =
-      state.pinch.recipes.items.find((recipe) => recipe.id === existing.recipeId)
-        ?.steps ?? [];
+      state.pinch.recipes.items.find(
+        (recipe) => recipe.id === existing.recipeId,
+      )?.steps ?? [];
     if (
       !isTweak &&
       stepIndex !== undefined &&
@@ -216,7 +221,9 @@ export const updateNote = createAsyncThunk<
         (cook) => cook.id === cookId && cook.recipeId === existing.recipeId,
       )
     ) {
-      return rejectWithValue("That cook is gone, so the entry can't follow it.");
+      return rejectWithValue(
+        "That cook is gone, so the entry can't follow it.",
+      );
     }
 
     try {
@@ -254,30 +261,68 @@ export const attachNotesToCook = createAsyncThunk<
   number,
   AttachNotesInput,
   { state: RootState }
->('pinch/notes/attachToCook', async ({ uid, recipeId, cookId, noteIds }, { getState }) => {
-  const ids = new Set(noteIds);
-  const state = getState().pinch;
-  const targets = state.notes.items.filter(
-    (note) =>
-      ids.has(note.id) &&
-      note.recipeId === recipeId &&
-      note.kind !== 'TWEAK' &&
-      (note.cookId == null ||
-        !state.cooks.items.some((cook) => cook.id === note.cookId)),
-  );
-  if (targets.length === 0) return 0;
+>(
+  'pinch/notes/attachToCook',
+  async ({ uid, recipeId, cookId, noteIds }, { getState }) => {
+    const ids = new Set(noteIds);
+    const state = getState().pinch;
+    const targets = state.notes.items.filter(
+      (note) =>
+        ids.has(note.id) &&
+        note.recipeId === recipeId &&
+        note.kind !== 'TWEAK' &&
+        (note.cookId == null ||
+          !state.cooks.items.some((cook) => cook.id === note.cookId)),
+    );
+    if (targets.length === 0) return 0;
 
-  const batch = writeBatch(db);
-  targets.forEach((note) => batch.update(noteDoc(uid, note.id), { cookId }));
-  try {
-    await batch.commit();
-  } catch (error) {
-    console.error('Pinch could not tie its entries to the cook', error);
-    return 0;
-  }
+    const batch = writeBatch(db);
+    targets.forEach((note) => batch.update(noteDoc(uid, note.id), { cookId }));
+    try {
+      await batch.commit();
+    } catch (error) {
+      console.error('Pinch could not tie its entries to the cook', error);
+      return 0;
+    }
 
-  return targets.length;
-});
+    return targets.length;
+  },
+);
+
+interface DetachNotesInput {
+  uid: string;
+  cookId: string;
+  noteIds: string[];
+}
+
+/** Takes back a link to a cook: only the entries still on that cook lose it, field-scoped like the link. */
+export const detachNotesFromCook = createAsyncThunk<
+  number,
+  DetachNotesInput,
+  { state: RootState; rejectValue: string }
+>(
+  'pinch/notes/detachFromCook',
+  async ({ uid, cookId, noteIds }, { getState, rejectWithValue }) => {
+    const ids = new Set(noteIds);
+    const targets = getState().pinch.notes.items.filter(
+      (note) => ids.has(note.id) && note.cookId === cookId,
+    );
+    if (targets.length === 0) return 0;
+
+    const batch = writeBatch(db);
+    targets.forEach((note) =>
+      batch.update(noteDoc(uid, note.id), { cookId: null }),
+    );
+    try {
+      await batch.commit();
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to take that back.'),
+      );
+    }
+    return targets.length;
+  },
+);
 
 interface ResolveChangeInput {
   uid: string;
@@ -291,39 +336,46 @@ export const resolveChange = createAsyncThunk<
   string,
   ResolveChangeInput,
   { state: RootState; rejectValue: string }
->('pinch/notes/resolve', async ({ uid, id, tweakId }, { getState, rejectWithValue }) => {
-  const notes = getState().pinch.notes.items;
-  const existing = notes.find((note) => note.id === id);
-  if (!existing || existing.kind !== 'CHANGE') {
-    return rejectWithValue('This change is gone, so there is nothing to mark.');
-  }
-  if (
-    tweakId !== null &&
-    !notes.some(
-      (note) =>
-        note.id === tweakId &&
-        note.kind === 'TWEAK' &&
-        note.recipeId === existing.recipeId,
-    )
-  ) {
-    return rejectWithValue(
-      'That edit was undone, so pick another or mark it done on its own.',
-    );
-  }
-  const now = Date.now();
-  try {
-    await updateDoc(noteDoc(uid, id), {
-      ...getMissingNoteFields(existing),
-      resolvedAt: now,
-      resolvedBy: tweakId,
-      updatedAt: now,
-    });
-  } catch (error) {
-    return rejectWithValue(getWriteMessage(error, 'Unable to mark this done.'));
-  }
+>(
+  'pinch/notes/resolve',
+  async ({ uid, id, tweakId }, { getState, rejectWithValue }) => {
+    const notes = getState().pinch.notes.items;
+    const existing = notes.find((note) => note.id === id);
+    if (!existing || existing.kind !== 'CHANGE') {
+      return rejectWithValue(
+        'This change is gone, so there is nothing to mark.',
+      );
+    }
+    if (
+      tweakId !== null &&
+      !notes.some(
+        (note) =>
+          note.id === tweakId &&
+          note.kind === 'TWEAK' &&
+          note.recipeId === existing.recipeId,
+      )
+    ) {
+      return rejectWithValue(
+        'That edit was undone, so pick another or mark it done on its own.',
+      );
+    }
+    const now = Date.now();
+    try {
+      await updateDoc(noteDoc(uid, id), {
+        ...getMissingNoteFields(existing),
+        resolvedAt: now,
+        resolvedBy: tweakId,
+        updatedAt: now,
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to mark this done.'),
+      );
+    }
 
-  return id;
-});
+    return id;
+  },
+);
 
 /** Plans a done change again: the way back from marking it done. */
 export const reopenChange = createAsyncThunk<
@@ -343,7 +395,9 @@ export const reopenChange = createAsyncThunk<
       updatedAt: Date.now(),
     });
   } catch (error) {
-    return rejectWithValue(getWriteMessage(error, 'Unable to plan this again.'));
+    return rejectWithValue(
+      getWriteMessage(error, 'Unable to plan this again.'),
+    );
   }
 
   return id;

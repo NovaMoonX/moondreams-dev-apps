@@ -1,14 +1,20 @@
 import { useState } from 'react';
 
 import { Label } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Link } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import NoteEntry from '@apps/pinch/components/notes/NoteEntry';
 import { COOK_LINK_WINDOW_MS } from '@apps/pinch/constants';
-import { attachNotesToCook } from '@apps/pinch/store/actions/noteActions';
+import {
+  attachNotesToCook,
+  detachNotesFromCook,
+} from '@apps/pinch/store/actions/noteActions';
 import {
   selectCooksByRecipe,
   selectNoteSummaries,
@@ -85,18 +91,40 @@ function CookJournal({
     cook === undefined
       ? []
       : getUnlinkedNearCook(notes, cook, cooks, COOK_LINK_WINDOW_MS);
+  const { addToast, removeToast } = useToast();
   const linkLoose = async () => {
+    const noteIds = loose.map((entry) => entry.id);
+    const what = describeKinds(loose);
     setLinkError(null);
     setIsLinking(true);
     try {
-      await dispatch(
-        attachNotesToCook({
-          uid,
-          recipeId,
-          cookId,
-          noteIds: loose.map((entry) => entry.id),
-        }),
+      const linked = await dispatch(
+        attachNotesToCook({ uid, recipeId, cookId, noteIds }),
       ).unwrap();
+      if (linked === 0) {
+        setLinkError(
+          'Unable to link these. Check your connection and try again.',
+        );
+      } else {
+        const toastId = generateUuid();
+        addToast({
+          id: toastId,
+          title: `Linked ${what.toLowerCase()} to this cook`,
+          type: 'success',
+          duration: UNDO_WINDOW_MS,
+          action: {
+            label: 'Undo',
+            onClick: () => {
+              removeToast(toastId);
+              dispatch(detachNotesFromCook({ uid, cookId, noteIds }))
+                .unwrap()
+                .catch(() =>
+                  addToast({ title: "Couldn't undo that", type: 'error' }),
+                );
+            },
+          },
+        });
+      }
     } catch (error) {
       setLinkError(getErrorMessage(error, 'Unable to link these.'));
     }

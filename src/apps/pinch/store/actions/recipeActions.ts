@@ -371,16 +371,6 @@ export const saveRecipe = createAsyncThunk<
         if (tweakPlan.kind !== 'NONE') {
           batch.set(noteDoc(uid, tweakPlan.note.id), tweakPlan.note);
         }
-        if (tweakPlan.kind === 'APPLY') {
-          tweakPlan.applied.forEach((change) =>
-            batch.update(noteDoc(uid, change.id), {
-              ...getMissingNoteFields(change),
-              resolvedAt: now,
-              resolvedBy: tweakPlan.note.id,
-              updatedAt: now,
-            }),
-          );
-        }
       } else {
         const recipe: Recipe = {
           id: recipeId,
@@ -404,6 +394,20 @@ export const saveRecipe = createAsyncThunk<
           error.code === 'permission-denied'
           ? 'That change was already applied or taken off on another device. Close this and open the recipe again.'
           : getWriteMessage(error, 'Unable to save this recipe.'),
+      );
+    }
+
+    // Marked done after the save, not in its batch: a change deleted on another device would otherwise fail the whole save.
+    if (tweakPlan.kind === 'APPLY') {
+      await Promise.all(
+        tweakPlan.applied.map((change) =>
+          updateDoc(noteDoc(uid, change.id), {
+            ...getMissingNoteFields(change),
+            resolvedAt: now,
+            resolvedBy: tweakPlan.note.id,
+            updatedAt: now,
+          }).catch(() => undefined),
+        ),
       );
     }
 

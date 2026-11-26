@@ -11,7 +11,11 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
-import { isOpenChange, resolveNoteStep } from '@apps/pinch/utils/notes';
+import {
+  isDoneChange,
+  isOpenChange,
+  resolveNoteStep,
+} from '@apps/pinch/utils/notes';
 
 const NO_NOTES: RecipeNote[] = [];
 const NO_STEPS: string[] = [];
@@ -66,7 +70,18 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
       );
   const tips = getEntries('TIP');
   const written = getEntries('NOTE');
-  const changes = getEntries('CHANGE');
+  // A change handled with no edit and no cook is shown nowhere else, so it stays here, after the open ones.
+  const handled = notes
+    .filter(
+      (note) =>
+        isDoneChange(note) &&
+        note.cookId == null &&
+        (note.resolvedBy ?? null) === null &&
+        (note.text ?? '') !== '',
+    )
+    .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0))
+    .map((note) => ({ note, step: resolveNoteStep(note, steps) }));
+  const changes = [...getEntries('CHANGE'), ...handled];
 
   const getSlimAdd = (label: string, kind: WrittenNoteKind | null) =>
     canAdd && (
@@ -111,12 +126,13 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
         >
           {entries.map(({ note, step }) => {
             const isChange = kind === 'CHANGE';
-            const where =
+            const place =
               step === null
                 ? isChange
                   ? 'Whole recipe'
                   : ''
                 : `Step ${step + 1}`;
+            const where = isDoneChange(note) ? `${place} · Done` : place;
             const when = kind === 'NOTE' ? formatDateShort(note.createdAt) : '';
             return (
               <li
