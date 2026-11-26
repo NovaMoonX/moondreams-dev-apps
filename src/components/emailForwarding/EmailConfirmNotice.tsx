@@ -16,6 +16,8 @@ interface EmailConfirmNoticeProps {
   confirm: EmailConfirm;
   isTapped: boolean;
   onConfirmTapped: () => void;
+  /** The screen's footer carries the Confirm or Copy code button, so the notice only says what was asked. */
+  isActionInFooter?: boolean;
 }
 
 const openLink = (url: string) =>
@@ -46,6 +48,7 @@ function EmailConfirmNotice({
   confirm,
   isTapped,
   onConfirmTapped,
+  isActionInFooter = false,
 }: EmailConfirmNoticeProps) {
   const url = readConfirmLink(confirm);
   const name =
@@ -66,9 +69,7 @@ function EmailConfirmNotice({
   if (url !== null && isTapped) {
     return (
       <div className='space-y-2'>
-        <p className='text-muted-foreground text-sm'>
-          {WORDS.confirmWaiting(name)}
-        </p>
+        <p className='text-muted-foreground text-sm'>{WORDS.confirmWaiting}</p>
         <LinkRow label={WORDS.confirmAgain} url={url} />
       </div>
     );
@@ -79,36 +80,41 @@ function EmailConfirmNotice({
       icon={Mail}
       title={WORDS.confirmAsked(name ?? 'Your email')}
     >
-      <div className='mt-2 space-y-2'>
-        {url !== null ? (
-          <Button
-            className='w-full'
-            onClick={() => {
-              openLink(url);
-              onConfirmTapped();
-            }}
-          >
-            {WORDS.confirmButton(name)}
-          </Button>
-        ) : (
-          <>
-            <p className='text-muted-foreground'>
-              {WORDS.confirmCodeLine(name)}
-            </p>
-            <div className='flex items-center justify-between gap-3'>
-              <span className='text-lg font-semibold tabular-nums'>
-                {confirm.code}
-              </span>
-              <CopyTextButton
-                text={confirm.code ?? ''}
-                label={WORDS.copyCode}
-                variant='tertiary'
-                isCompact
-              />
-            </div>
-          </>
-        )}
-      </div>
+      {!(url !== null && isActionInFooter) && (
+        <div className='mt-2 space-y-2'>
+          {url !== null && (
+            <Button
+              className='w-full'
+              onClick={() => {
+                openLink(url);
+                onConfirmTapped();
+              }}
+            >
+              {WORDS.confirmButton(name)}
+            </Button>
+          )}
+          {url === null && (
+            <>
+              <p className='text-muted-foreground'>
+                {WORDS.confirmCodeLine(name)}
+              </p>
+              <div className='flex items-center justify-between gap-3'>
+                <span className='text-lg font-semibold tabular-nums'>
+                  {confirm.code}
+                </span>
+                {!isActionInFooter && (
+                  <CopyTextButton
+                    text={confirm.code ?? ''}
+                    label={WORDS.copyCode}
+                    variant='tertiary'
+                    isCompact
+                  />
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </InlineNotice>
   );
 }

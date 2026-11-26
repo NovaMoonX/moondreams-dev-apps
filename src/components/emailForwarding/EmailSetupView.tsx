@@ -1,23 +1,30 @@
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import CopyTextButton from '@/components/CopyTextButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import {
+  CONFIRM_PROVIDER_NAMES,
+  readConfirmLink,
+} from '@/lib/emailForwarding/address';
 import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
+import EmailProviderGuide, {
+  type EmailFilterSuggestion,
+} from '@/components/emailForwarding/EmailProviderGuide';
+import EmailSetupSteps from '@/components/emailForwarding/EmailSetupSteps';
+import {
+  type EmailForwardingState,
+  readSetupProgress,
+  type SetupStepKey,
+} from '@/lib/emailForwarding/setupProgress';
 import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
 
-/** A mail search an app suggests for forwarding only its emails. */
-export interface EmailFilterSuggestion {
-  sender: string;
-  phrase: string;
-}
-
-const toGmailSearch = ({ sender, phrase }: EmailFilterSuggestion) =>
-  `from:(${sender}) "${phrase}"`;
+export type { EmailFilterSuggestion };
 
 interface EmailSetupViewProps {
+  /** Names the app where a step says who accepts a confirmation. */
+  appName: string;
   /** What to forward and what the app does with it, in one line. */
   setupLine: string;
   /** The address's local part before the token. */
@@ -27,17 +34,25 @@ interface EmailSetupViewProps {
   isFailed: boolean;
   isBusy: boolean;
   error: string | null;
-  /** Where forwarding stands, shown under the address so a confirmation lands without leaving setup. */
-  progress?: ReactNode;
-  /** Shown once there is an address, as a starting point for the person's own filter. */
+  /** Where forwarding stands, live, so each step ticks itself and a confirmation lands without leaving setup. */
+  forwarding: EmailForwardingState;
+  /** The search for only this app's emails, offered in the help once the person asks how. */
   filter?: EmailFilterSuggestion | null;
   onGetAddress: () => void;
   onRetry: () => void;
   onDone: () => void;
 }
 
-/** The whole forwarding setup on one screen: the ask, the address, and Copy address as its one act. */
+interface OpenedStep {
+  key: SetupStepKey | null;
+  /** The person's pick holds only until the setup moves on or a confirmation arrives; then the step to act on opens. */
+  whileCurrent: SetupStepKey | null;
+  confirmAt: number | null;
+}
+
+/** The whole forwarding setup on one screen: the ask, the address, then four steps whose current one is the footer's single action. */
 function EmailSetupView({
+  appName,
   setupLine,
   prefix,
   address,
@@ -45,32 +60,107 @@ function EmailSetupView({
   isFailed,
   isBusy,
   error,
-  progress = null,
+  forwarding,
   filter = null,
   onGetAddress,
   onRetry,
   onDone,
 }: EmailSetupViewProps) {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
-  const [isCopyFailed, setIsCopyFailed] = useState(false);
-  const [isSearchCopyFailed, setIsSearchCopyFailed] = useState(false);
+  const [copiedCodeAt, setCopiedCodeAt] = useState<number | null>(null);
+  const [copyFailure, setCopyFailure] = useState<string | null>(null);
+  const [isForwardSaid, setIsForwardSaid] = useState(false);
+  const [isConfirmSkipped, setIsConfirmSkipped] = useState(false);
+  const [openedStep, setOpenedStep] = useState<OpenedStep | null>(null);
+  const [guideOpenedAt, setGuideOpenedAt] = useState<{
+    confirmAt: number | null;
+  } | null>(null);
+  const isGuideOpen =
+    guideOpenedAt !== null && guideOpenedAt.confirmAt === forwarding.confirmAt;
+  const isCopied = address !== null && copiedAddress === address;
+  const progress = readSetupProgress({
+    forwarding,
+    isCopied,
+    isForwardSaid,
+    isConfirmSkipped,
+  });
+  const openStep =
+    openedStep !== null &&
+    openedStep.whileCurrent === progress.current &&
+    openedStep.confirmAt === forwarding.confirmAt
+      ? openedStep.key
+      : progress.current;
+
+  const copyText = async (text: string, failure: string) => {
+    const didCopy = await copyToClipboard(text);
+    setCopyFailure(didCopy ? null : failure);
+    return didCopy;
+  };
 
   const copyAddress = async () => {
     if (address === null) return;
-    const didCopy = await copyToClipboard(address);
-    setIsCopyFailed(!didCopy);
+    const didCopy = await copyText(address, WORDS.copyFailed);
     setCopiedAddress(didCopy ? address : null);
+  };
+
+  const copyCode = async (code: string) => {
+    const didCopy = await copyText(code, WORDS.codeCopyFailed);
+    setCopiedCodeAt(didCopy ? forwarding.confirmAt : null);
+  };
+
+  const confirmAction = () => {
+    const pending = progress.pendingConfirm;
+    if (pending === null) {
+      return {
+        label: WORDS.skipConfirm,
+        onClick: () => setIsConfirmSkipped(true),
+      };
+    }
+    const url = readConfirmLink(pending);
+    const name =
+      pending.provider === null
+        ? null
+        : CONFIRM_PROVIDER_NAMES[pending.provider];
+    if (url !== null && !forwarding.isTapped) {
+      return {
+        label: WORDS.confirmButton(name),
+        onClick: () => {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          forwarding.onConfirmTapped();
+        },
+      };
+    }
+    if (
+      url === null &&
+      pending.code !== null &&
+      (copiedCodeAt === null || copiedCodeAt !== forwarding.confirmAt)
+    ) {
+      const code = pending.code;
+      return { label: WORDS.copyCode, onClick: () => void copyCode(code) };
+    }
+    return { label: WORDS.done, onClick: onDone };
+  };
+
+  const stepAction = () => {
+    if (progress.current === 'copy') {
+      return { label: WORDS.copyAddress, onClick: () => void copyAddress() };
+    }
+    if (progress.current === 'forward') {
+      return {
+        label: WORDS.forwardOnButton,
+        onClick: () => setIsForwardSaid(true),
+      };
+    }
+    if (progress.current === 'confirm') return confirmAction();
+    return { label: WORDS.done, onClick: onDone };
   };
 
   const footerButton = () => {
     if (address !== null) {
-      const isCopied = copiedAddress === address;
+      const action = stepAction();
       return (
-        <Button
-          type='button'
-          onClick={isCopied ? onDone : () => void copyAddress()}
-        >
-          {isCopied ? WORDS.done : WORDS.copyAddress}
+        <Button type='button' onClick={action.onClick}>
+          {action.label}
         </Button>
       );
     }
@@ -100,41 +190,47 @@ function EmailSetupView({
           <EmailAddressText address={address} prefix={prefix} />
         </p>
       )}
-      {address !== null && progress}
-      {address !== null && filter !== null && (
-        <div className='bg-muted/40 space-y-2 rounded-2xl p-3'>
-          <p className='text-sm font-semibold'>{WORDS.filterTitle}</p>
-          <p className='text-muted-foreground text-sm break-words'>
-            {WORDS.filterLine(filter.sender, filter.phrase)}
-          </p>
-          <code className='bg-background border-border block rounded-xl border px-2.5 py-2 text-xs break-words select-all'>
-            {toGmailSearch(filter)}
-          </code>
-          <div className='flex justify-end'>
-            <CopyTextButton
-              isCompact
-              variant='secondary'
-              text={toGmailSearch(filter)}
-              label={WORDS.copySearch}
-              onFailed={() => setIsSearchCopyFailed(true)}
-            />
-          </div>
-          {isSearchCopyFailed && (
-            <p className='text-destructive text-sm' role='alert'>
-              {WORDS.searchCopyFailed}
-            </p>
-          )}
-          <p className='text-muted-foreground text-xs'>{WORDS.filterCheck}</p>
-        </div>
+      {address !== null && (
+        <EmailSetupSteps
+          appName={appName}
+          address={address}
+          forwarding={forwarding}
+          progress={progress}
+          openStep={openStep}
+          onOpenStep={(key) =>
+            setOpenedStep({
+              key,
+              whileCurrent: progress.current,
+              confirmAt: forwarding.confirmAt,
+            })
+          }
+          onShowGuide={() =>
+            setGuideOpenedAt({ confirmAt: forwarding.confirmAt })
+          }
+          onUndoForward={() => {
+            setIsForwardSaid(false);
+            setIsConfirmSkipped(false);
+          }}
+          onUndoSkip={() => setIsConfirmSkipped(false)}
+        />
+      )}
+      {address !== null && (
+        <EmailProviderGuide
+          isOpen={isGuideOpen}
+          onClose={() => setGuideOpenedAt(null)}
+          address={address}
+          prefix={prefix}
+          filter={filter}
+        />
       )}
       {address === null && isFailed && (
         <p className='text-destructive text-sm' role='alert'>
           {WORDS.addressLoadFailed}
         </p>
       )}
-      {isCopyFailed && (
+      {copyFailure !== null && (
         <p className='text-destructive text-sm' role='alert'>
-          {WORDS.copyFailed}
+          {copyFailure}
         </p>
       )}
       {error && (
