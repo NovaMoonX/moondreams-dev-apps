@@ -538,12 +538,15 @@ for (const { existing, add } of mergeCases) {
   assert.equal(links[2].label, 'Toni Toni Kitchen');
   const record = recordOf(store, data.changes[0].id);
   assert.ok((record.lines as string[]).includes('Added the how-to link'));
+  assert.deepEqual(data.reply.lines, [
+    'Added a link: youtube.com',
+    'Added a link: Toni Toni Kitchen',
+    'One link you sent was already on the recipe, so not added again.',
+  ]);
   assert.ok(
-    data.reply.lines.some((line) =>
-      /Already on the recipe, so not added again: example\.com/.test(line),
-    ),
+    !JSON.stringify(data.reply).includes('example.com'),
+    "the reply names nothing about the recipe's own links",
   );
-  assert.ok(data.reply.lines.includes('Added the how-to video: youtube.com'));
   assert.deepEqual(
     await undoPinchOutsideChange(
       store.firestore,
@@ -589,7 +592,7 @@ for (const { existing, add } of mergeCases) {
   const over = planAddedLinks(full, [{ url: 'https://example.com/new' }]);
   assert.equal(over.kind, 'refused');
   if (over.kind === 'refused')
-    assert.match(over.message, /this one is full, so no link was added/);
+    assert.match(over.message, /has no room for another, so no link was added/);
   const store = createStore({ [`${K}/recipes/r1`]: recipe({ links: full }) });
   assert.equal(
     (

@@ -34,8 +34,7 @@ export const helmGuideFor = (
         ? ''
         : !canChangeApps
           ? ` Changing it needs "Change things in your apps" on for this assistant (Helm > Settings > Connected assistants).`
-          : off.length ===
-              new Set(changes.map(({ permission }) => permission?.id)).size
+          : off.length === new Set(changes.map(({ permission }) => permission?.id)).size
             ? ` Every kind of change is switched off (${where}).`
             : off.length > 0
               ? ` Switched off: ${off.join(', ')} (${where}).`
@@ -70,3 +69,4 @@ export const helmGuideFor = (
     .filter((line) => line !== '')
     .join(' ');
 };
+

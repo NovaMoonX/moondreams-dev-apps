@@ -778,32 +778,23 @@ export const planAddedLinks = (
     },
     { links: existing, added: [], skipped: [], demoted: [] },
   );
-  const room = MAX_RECIPE_LINKS - existing.length;
   if (planned.links.length > MAX_RECIPE_LINKS) {
     return {
       kind: 'refused',
-      message:
-        room <= 0
-          ? `A recipe holds up to ${MAX_RECIPE_LINKS} links and this one is full, so no link was added. The person can remove one in Pinch first.`
-          : `A recipe holds up to ${MAX_RECIPE_LINKS} links and this one has room for ${room} more, so no link was added. Send at most ${room}.`,
+      message: `A recipe holds up to ${MAX_RECIPE_LINKS} links and this one has no room for ${planned.added.length > 1 ? 'that many more' : 'another'}, so no link was added. The person can remove one in Pinch first.`,
     };
   }
   return { kind: 'ok', value: planned };
 };
 
-const toLinkReply = ({ added, skipped, demoted }: AddedLinks) => [
+/** What an assistant is told about the links it sent: never anything about the recipe's own links, which are not shared, so a demoted how-to reads as any added link. */
+const toLinkReply = ({ added, skipped }: AddedLinks) => [
   ...added.map(
-    (link) =>
-      `Added ${link.kind === 'HOW_TO' ? 'the how-to video' : 'a link'}: ${link.label ?? getLinkHost(link.url)}`,
+    (link) => `Added a link: ${link.label ?? getLinkHost(link.url)}`,
   ),
-  ...(demoted.length > 0
-    ? [
-        `The recipe already has a how-to video, so ${demoted.length > 1 ? 'these were' : 'this one was'} added as another link.`,
-      ]
-    : []),
   ...(skipped.length > 0
     ? [
-        `Already on the recipe, so not added again: ${skipped.map(getLinkHost).join(', ')}`,
+        `${skipped.length === 1 ? 'One link you sent was' : `${skipped.length} links you sent were`} already on the recipe, so not added again.`,
       ]
     : []),
 ];

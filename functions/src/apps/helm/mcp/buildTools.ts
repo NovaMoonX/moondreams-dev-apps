@@ -232,9 +232,7 @@ const describeFields = (shape: z.ZodRawShape) => {
     ? 'none'
     : keys
         .map((key) =>
-          (shape[key] as z.ZodType).safeParse(undefined).success
-            ? key
-            : `${key} (required)`,
+          (shape[key] as z.ZodType).safeParse(undefined).success ? key : `${key} (required)`,
         )
         .join(', ');
 };
@@ -1380,7 +1378,9 @@ export function buildHelmTools(scope: HelmToolScope) {
               : option.categories.map((category) => category.label).join(' or ')
           } in ${where}.)`;
     return app.tools.flatMap((declared): HelmTool<z.ZodRawShape>[] => {
-      const options = app.actions.filter((entry) => entry.tool === declared.id);
+      const options = app.actions.filter(
+        (entry) => entry.tool === declared.id,
+      );
       if (options.length === 0) return [];
       const kind = options[0].kind;
       const isChange = kind === 'change';
@@ -1415,10 +1415,7 @@ export function buildHelmTools(scope: HelmToolScope) {
           isAdditive: options.every((entry) => !entry.changesExisting),
           description,
           shape: isGrouped
-            ? groupedShape(
-                options.map((entry) => entry.id),
-                options,
-              )
+            ? groupedShape(options.map((entry) => entry.id), options)
             : options[0].action.shape,
           run: async (input) => {
             const record = input as Record<string, unknown>;
