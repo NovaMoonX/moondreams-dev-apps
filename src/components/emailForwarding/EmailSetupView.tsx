@@ -67,7 +67,7 @@ function EmailSetupView({
   onDone,
 }: EmailSetupViewProps) {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [copiedCodeAt, setCopiedCodeAt] = useState<number | null>(null);
   const [copyFailure, setCopyFailure] = useState<string | null>(null);
   const [isForwardSaid, setIsForwardSaid] = useState(false);
   const [isConfirmSkipped, setIsConfirmSkipped] = useState(false);
@@ -105,7 +105,7 @@ function EmailSetupView({
 
   const copyCode = async (code: string) => {
     const didCopy = await copyText(code, WORDS.codeCopyFailed);
-    setCopiedCode(didCopy ? code : null);
+    setCopiedCodeAt(didCopy ? forwarding.confirmAt : null);
   };
 
   const confirmAction = () => {
@@ -130,7 +130,11 @@ function EmailSetupView({
         },
       };
     }
-    if (url === null && pending.code !== null && copiedCode !== pending.code) {
+    if (
+      url === null &&
+      pending.code !== null &&
+      (copiedCodeAt === null || copiedCodeAt !== forwarding.confirmAt)
+    ) {
       const code = pending.code;
       return { label: WORDS.copyCode, onClick: () => void copyCode(code) };
     }

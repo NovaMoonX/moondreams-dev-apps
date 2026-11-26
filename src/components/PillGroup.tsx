@@ -347,7 +347,10 @@ export function PillOptions<T extends string>({
                 isSelected={isSelected(option.value)}
                 className={join(
                   hasRoundIcons && !isThin && 'min-h-10! px-4!',
-                  hasRoundIcons && !isThin && option.icon && 'gap-2 pl-2!',
+                  hasRoundIcons &&
+                    !isThin &&
+                    Boolean(option.icon) &&
+                    'gap-2 pl-2!',
                   option.detail &&
                     !isScrolling &&
                     'max-[359px]:h-auto! max-[359px]:min-h-8! max-[359px]:py-0.5!',
