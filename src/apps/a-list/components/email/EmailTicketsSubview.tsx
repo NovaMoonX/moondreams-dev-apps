@@ -232,6 +232,7 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
             error={error}
             forwarding={{
               confirm: shownConfirm,
+              confirmAt,
               isTapped:
                 shownConfirm !== null &&
                 (isConfirmTappedBefore || confirmTappedAt === shownConfirm.at),

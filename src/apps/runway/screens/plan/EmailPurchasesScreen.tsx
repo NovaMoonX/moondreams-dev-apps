@@ -385,6 +385,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
           error={error}
           forwarding={{
             confirm: shownConfirm,
+            confirmAt,
             isTapped:
               shownConfirm !== null &&
               (isConfirmTappedBefore || confirmTappedAt === shownConfirm.at),

@@ -58,7 +58,7 @@ function EmailSetupView({
   const isCopied = address !== null && copiedAddress === address;
   const isSetUp =
     isCopied ||
-    forwarding.confirm !== null ||
+    forwarding.confirmAt !== null ||
     forwarding.lastReceivedAt !== null;
 
   const copyAddress = async () => {

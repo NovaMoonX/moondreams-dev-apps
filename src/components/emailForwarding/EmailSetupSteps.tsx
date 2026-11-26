@@ -15,6 +15,8 @@ import type { EmailConfirm } from '@/lib/emailForwarding/types';
 export interface EmailForwardingState {
   /** The confirmation still worth showing, or null once it is settled or none came. */
   confirm: EmailConfirm | null;
+  /** When the newest confirmation arrived, shown or not, so its own email never counts as the first one. */
+  confirmAt: number | null;
   isTapped: boolean;
   onConfirmTapped: () => void;
   lastReceivedAt: number | null;
@@ -75,15 +77,16 @@ function EmailSetupSteps({
   isCopied,
   onShowGuide,
 }: EmailSetupStepsProps) {
-  const { confirm, isTapped, onConfirmTapped, lastReceivedAt } = forwarding;
+  const { confirm, confirmAt, isTapped, onConfirmTapped, lastReceivedAt } =
+    forwarding;
   const shownConfirm =
     confirm !== null && hasConfirmNotice(confirm) ? confirm : null;
   const isConfirmPending =
     shownConfirm !== null && shownConfirm.autoConfirm !== 'confirmed';
   const hasFirstEmail =
     lastReceivedAt !== null &&
-    (shownConfirm === null || lastReceivedAt > shownConfirm.at);
-  const isForwarding = shownConfirm !== null || lastReceivedAt !== null;
+    (confirmAt === null || lastReceivedAt > confirmAt);
+  const isForwarding = confirmAt !== null || lastReceivedAt !== null;
   const isConfirmSettled =
     (shownConfirm !== null && !isConfirmPending) ||
     (shownConfirm === null && hasFirstEmail);
