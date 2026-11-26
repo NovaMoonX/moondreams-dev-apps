@@ -216,7 +216,7 @@ function UploadThumb({ upload, onRetry, onDismiss }: UploadThumbProps) {
   );
 }
 
-/** Several photos for one record: a camera loop (or one small add tile ending the row, `hasAddTile`), a library multi-pick, the first as the cover, and a tapped photo's sheet to make it the cover, move it or remove it (with undo). Each photo is shrunk on the device and saved on its own (`usePhotoSetUploads`), so one uploading never holds the screen. */
+/** Several photos for one record: a camera loop (or one small add tile ending the row, `hasAddTile`), a library multi-pick, the first as the cover, and a tapped photo's sheet to make it the cover, move it or remove it (with undo). Each photo is shrunk on the device and saved on its own, so one uploading never holds the screen. */
 function PhotoSetPicker({
   photos,
   uploads,
@@ -484,7 +484,7 @@ function PhotoSetPicker({
       <Button
         type='button'
         variant='tertiary'
-        className='border-border text-muted-foreground size-(--thumb) flex-col gap-1 rounded-xl border-2 border-dashed px-1! py-1! text-xs font-normal whitespace-normal'
+        className='border-border text-muted-foreground! size-(--thumb) flex-col gap-1 rounded-xl border-2 border-dashed px-1! py-1! text-xs font-normal whitespace-normal'
         onClick={() =>
           isTouch ? setIsChoosing(true) : openPicker(libraryRef.current)
         }
@@ -530,10 +530,10 @@ function PhotoSetPicker({
             </p>
           )}
           {shown.length > 1 && (
-            <p className='text-muted-foreground text-xs'>
+            <p className='text-muted-foreground text-xs text-pretty'>
               {isTouch
-                ? 'Hold and drag to reorder. Tap a photo to make it the cover.'
-                : 'Drag to reorder. Click a photo to make it the cover.'}
+                ? 'Hold and drag to reorder. Tap a photo to move or remove it.'
+                : 'Drag to reorder. Click a photo to move or remove it.'}
             </p>
           )}
           <ul

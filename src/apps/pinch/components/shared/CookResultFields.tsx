@@ -21,7 +21,7 @@ import { getCookPhotoPaths } from '@apps/pinch/utils/cooks';
 interface CookResultFieldsProps {
   uid: string;
   cookId: string;
-  /** Left-aligned, for the screen whose job is this cook; the last panel centres it. */
+  /** Left-aligned where the cook is the whole screen; centred otherwise. */
   isLarge?: boolean;
 }
 

@@ -9,6 +9,7 @@ import { ChevronRight, NotebookPen, Plus } from 'lucide-react';
 import ActionChips from '@/components/ActionChips';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
+import IconBadge from '@/components/IconBadge';
 import { PillGroup } from '@/components/PillGroup';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import StarRating from '@/components/StarRating';
@@ -489,7 +490,7 @@ function CookingHistorySheet({
               );
             })}
             {cookPhotos.length > PHOTOS_SHOWN && (
-              <li className='col-span-full text-muted-foreground text-xs'>
+              <li className='text-muted-foreground col-span-full text-xs'>
                 The latest {PHOTOS_SHOWN} are here; the rest are in All cooks.
               </li>
             )}
@@ -501,6 +502,7 @@ function CookingHistorySheet({
               const putAway = putAwayByCook.get(cook.id) ?? null;
               const day = formatDateShort(cook.cookedAt);
               const writtenLine = getWrittenLine(writtenByCook.get(cook.id));
+              const cookPhotoCount = getCookPhotoPaths(cook).length;
               return (
                 <li key={cook.id} className='pb-2'>
                   <Button
@@ -540,7 +542,11 @@ function CookingHistorySheet({
                         </span>
                       )}
                     </span>
-                    <CookPhotoThumb cook={cook} className='size-12' />
+                    <IconBadge
+                      icon={<CookPhotoThumb cook={cook} className='size-12' />}
+                      count={cookPhotoCount > 1 ? cookPhotoCount : 0}
+                      className='shrink-0'
+                    />
                     <ChevronRight
                       className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
                       aria-hidden='true'
