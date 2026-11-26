@@ -489,15 +489,17 @@ assert.match(guide(), /Switched off: "planMeals" \(Helm > Connected apps > Pinch
 PINCH_ACTIONS.filter((action) => action.kind === 'change').forEach((action) =>
   offActions.add(action.id),
 );
-assert.match(guide(), /It can't be changed here: every kind of change is switched off \(Helm > Connected apps > Pinch\)\./);
+assert.match(guide(), /Every kind of change is switched off \(Helm > Connected apps > Pinch\)\./);
 assert.ok(!guide().includes('Helm can also change'), 'no change promise when none is on');
+assert.match(guide(), /tell them exactly which switch to turn on and where/);
 offActions.clear();
 assert.match(
   guide({ canChangeApps: false }),
-  /It can't be changed here: "Change things in your apps" is off for this assistant \(Helm > Settings > Connected assistants\)\./,
+  /Changing it needs "Change things in your apps" on for this assistant \(Helm > Settings > Connected assistants\)\./,
 );
+assert.match(guide({ canChangeApps: false }), /never say it can't be done/);
 assert.match(fullGuide, /Helm can also change what the person allowed in their apps, never delete/);
-assert.match(fullGuide, /appears the next time you connect/);
+assert.match(fullGuide, /Each call checks the switches live/);
 
 // save_to_helm writes one note, filed under a topic, a new topic or none, with no model call.
 const seal = (fields: Record<string, unknown>) => fields as never;
@@ -1182,24 +1184,28 @@ assert.equal(
   ).some((tool) => tool.name === 'pinch_save'),
   false,
 );
-// Without the assistant's own switch, or with every kind of change off, no change tool is offered at all.
+// Without the assistant's own switch, or with every kind of change off, the change tools stay listed, say which switch opens them, and change nothing.
 for (const scope of [
   { canChangeApps: false },
   { canChangeApps: undefined },
   { outsideReadScopes: null, canChangeApps: false },
 ]) {
-  assert.equal(
-    changeTool('pinch_save', scope),
-    undefined,
-    'an assistant without "Change things in your apps" sees no change tools',
+  const blocked = changeTool('pinch_save', scope);
+  assert.ok(blocked, 'an assistant without "Change things in your apps" still sees the change tools');
+  assert.match(
+    blocked.description,
+    /Off right now for this assistant: the person turns on "Change things in your apps" for it in Helm > Settings > Connected assistants/,
   );
+  assert.match(blocked.description, /never that it can't be done/);
+  const refusedRun = (await blocked.run(EDIT as never)) as Record<string, unknown>;
+  assert.equal(refusedRun.status, 'assistantCannotChange');
 }
+assert.deepEqual(filedChanges, [], 'a blocked change is not filed');
 PINCH_CHANGES.forEach((action) => offActions.add(action.id));
-assert.equal(
-  changeTool('pinch_add'),
-  undefined,
-  'a change whose switch is off is not offered',
-);
+const allOff = changeTool('pinch_add');
+assert.ok(allOff, 'a tool whose every change is off stays listed');
+assert.match(allOff.description, /Every change here is off right now/);
+assert.match(allOff.description, /Off right now: the person turns on "addToShoppingList"/);
 offActions.clear();
 offActions.add('update_recipe');
 assert.match(
