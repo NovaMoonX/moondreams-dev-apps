@@ -102,7 +102,6 @@ export function useDictation({
     note,
     needsMicrophone,
     clearNeedsMicrophone: () => setNeedsMicrophone(false),
-    /** Drops the line about what didn't fit once the box has changed. */
     clearCutNote: () =>
       setNote((current) => (current === 'cut' ? null : current)),
     canListen: voice.unavailableReason !== 'no-recognition',
