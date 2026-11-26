@@ -122,8 +122,10 @@ export interface PepperScreenInput {
     status: 'running' | 'paused' | 'done';
     leftMs: number;
   }[];
-  /** What the step on screen uses, at the servings being made. */
-  stepLines: { name: string; amountText: string }[];
+  /** What the step on screen uses, at the servings being made, and whether the person has marked each as added. */
+  stepLines: { name: string; amountText: string; isAdded: boolean }[];
+  /** The offer to tick off what they add has already been made this cook, by Pepper or the screen, or the person already does it. */
+  isAddOffered: boolean;
   /** The gather screen's lines per dish, or null elsewhere. */
   gather:
     | {
@@ -207,6 +209,11 @@ export const buildPepperScreen = (input: PepperScreenInput) => {
       : [
           `Step ${input.step.number} of ${input.step.count}${input.step.section === null ? '' : ` (${plain(input.step.section)})`}: ${clip(plain(input.step.text), MAX_STEP_TEXT)}`,
         ]),
+    ...(input.isAddOffered
+      ? [
+          "You've already offered to tick off what they add; don't offer it again.",
+        ]
+      : []),
   ].join('\n');
   const blocks = [
     {
@@ -222,7 +229,9 @@ export const buildPepperScreen = (input: PepperScreenInput) => {
     },
     {
       heading: 'This step uses (amounts at the servings being made):',
-      lines: input.stepLines.map(getLineText),
+      lines: input.stepLines.map(
+        (line) => `${getLineText(line)}${line.isAdded ? ' (added)' : ''}`,
+      ),
     },
     ...(input.gather ?? []).flatMap((dish) => {
       const name = dish.dish === null ? '' : ` for ${plain(dish.dish)}`;
