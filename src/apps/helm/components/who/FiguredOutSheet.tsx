@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Check, X } from 'lucide-react';
 
@@ -210,7 +211,7 @@ function Body({ who, otherId, onClose, onDirtyChange }: BodyProps) {
           <span className='block text-sm font-medium break-words'>
             {HELM_COPY.connectionFamilyField(other.name, ownName)}
           </span>
-          <Select
+          <AppSelect
             options={WRONG_OPTIONS}
             value={choice ?? ''}
             placeholder={HELM_COPY.figuredFixLead}

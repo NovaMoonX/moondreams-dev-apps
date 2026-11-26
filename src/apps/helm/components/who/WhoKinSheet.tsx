@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Trash2 } from 'lucide-react';
 
@@ -160,7 +161,7 @@ function WhoKinForm({ who, onClose, requestClose, onDirtyChange }: FormProps) {
         <span className='block text-sm font-medium'>
           {HELM_COPY.kinKindField}
         </span>
-        <Select
+        <AppSelect
           options={KIND_OPTIONS}
           value={kind}
           onChange={(value) => {

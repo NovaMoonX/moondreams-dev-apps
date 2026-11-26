@@ -1,5 +1,6 @@
 import { useAppSelector } from '@/store';
-import { Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Input } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { shallowEqual } from 'react-redux';
 import { selectCustomHealthRecordTypesByHousehold } from '../store/selectors';
 import { HealthRecordType } from '../types';
@@ -52,7 +53,7 @@ function RecordTypeField({
 
   return (
     <div className='space-y-2'>
-      <Select
+      <AppSelect
         options={options.map((option) => ({
           text: option.label,
           value: option.value,

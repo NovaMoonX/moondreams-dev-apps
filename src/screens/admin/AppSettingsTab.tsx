@@ -1,9 +1,9 @@
 import {
   Button,
   Input,
-  Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -216,7 +216,7 @@ function AppSettingsTab({
             <label className='text-foreground text-sm font-medium'>
               Status
             </label>
-            <Select
+            <AppSelect
               options={APP_STATUS_OPTIONS.map((option) => ({
                 text:
                   option === 'draft'

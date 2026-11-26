@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
 import { Bell, Smartphone } from 'lucide-react';
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useQuery } from '@tanstack/react-query';
 
 import ActionRow from '@/components/ActionRow';
@@ -155,7 +156,7 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
                       <p className='text-muted-foreground text-xs'>
                         {NOTIFY_WORDS.hourLabel}
                       </p>
-                      <Select
+                      <AppSelect
                         className='max-w-40'
                         options={HOUR_OPTIONS}
                         value={String(hour)}
