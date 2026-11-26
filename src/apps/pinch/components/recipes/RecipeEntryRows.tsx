@@ -42,7 +42,7 @@ interface RecipeEntryRowsProps {
 }
 
 /**
- * The person's own tips, notes and open planned changes at the foot of the recipe, each kind its own row of cards that scrolls sideways and snaps to a card, the last card adding another. A tip is advice for the dish; a note is about a cook, so it is dated; a planned change is something to do to the recipe, and leaves here once it is done. The records of edits are not here: they live behind the clock.
+ * The person's own tips, notes and open planned changes at the foot of the recipe, each kind its own row of cards that scrolls sideways and snaps to a card, the last card adding another. A tip is advice for the dish; a note is about a cook, so it is dated; a planned change is something to do to the recipe, and leaves here once it is done, unless it was handled with no edit and no cook. The records of edits are not here: they live behind the clock.
  */
 function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;

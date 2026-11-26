@@ -160,7 +160,7 @@ export interface RecipeDraft {
   fromIdeaId: string | null;
   /** Why the person changed the recipe, for the tweak a save of a cooked recipe records; ignored when none is recorded. */
   tweakReason: string;
-  /** The planned changes this edit takes care of. When the edit changed the recipe, each is marked done by the tweak that records it, in the same write; when it changed nothing they stay planned. */
+  /** The planned changes this edit takes care of. When the edit changed the recipe, each is marked done by the tweak that records it, right after the save; when it changed nothing they stay planned. */
   appliesChangeIds: string[];
 }
 
@@ -389,11 +389,7 @@ export const saveRecipe = createAsyncThunk<
         await deleteFile(path).catch(() => undefined);
       }
       return rejectWithValue(
-        tweakPlan.kind === 'APPLY' &&
-          error instanceof FirebaseError &&
-          error.code === 'permission-denied'
-          ? 'That change was already applied or taken off on another device. Close this and open the recipe again.'
-          : getWriteMessage(error, 'Unable to save this recipe.'),
+        getWriteMessage(error, 'Unable to save this recipe.'),
       );
     }
 
@@ -406,7 +402,9 @@ export const saveRecipe = createAsyncThunk<
             resolvedAt: now,
             resolvedBy: tweakPlan.note.id,
             updatedAt: now,
-          }).catch(() => undefined),
+          }).catch((error) =>
+            console.error('Pinch could not mark a change done', error),
+          ),
         ),
       );
     }
