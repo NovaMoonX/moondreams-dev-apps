@@ -120,6 +120,8 @@ export const getOutsideTweak = (input: {
   stepText: null,
   reason: null,
   previous: null,
+  resolvedAt: null,
+  resolvedBy: null,
   by: { kind: 'you', name: null },
   createdAt: input.now,
   updatedAt: input.now,
@@ -146,6 +148,8 @@ export const getMissingNoteFields = (existing: object) => ({
   ...('reason' in existing ? {} : { reason: null }),
   ...('previous' in existing ? {} : { previous: null }),
   ...('by' in existing ? {} : { by: null }),
+  ...('resolvedAt' in existing ? {} : { resolvedAt: null }),
+  ...('resolvedBy' in existing ? {} : { resolvedBy: null }),
 });
 
 const getLatestTweaks = (notes: RecipeNote[]) => {
@@ -277,6 +281,8 @@ export const planGoBack = (input: {
       stepText: null,
       reason: null,
       previous: getRecipeSnapshot(recipe),
+      resolvedAt: null,
+      resolvedBy: null,
       by: { kind: 'you', name: null },
       createdAt: input.now,
       updatedAt: input.now,
@@ -433,7 +439,64 @@ const KIND_RANK: Record<NoteKind, number> = {
 };
 
 /** The entries a person writes to be read while cooking (never a tweak), in the order they show: tips, planned changes, then notes, each newest first. */
-export const isStepEntry = (note: RecipeNote) => note.kind !== 'TWEAK';
+export const isStepEntry = (note: RecipeNote) =>
+  note.kind !== 'TWEAK' && !isDoneChange(note);
+
+/** A CHANGE the person still means to make. */
+export const isOpenChange = (note: RecipeNote) =>
+  note.kind === 'CHANGE' && (note.resolvedAt ?? null) === null;
+
+/** A CHANGE the person marked done, by an edit or on its own. */
+export const isDoneChange = (note: RecipeNote) =>
+  note.kind === 'CHANGE' && (note.resolvedAt ?? null) !== null;
+
+/** The planned changes an edit took care of, oldest first. */
+export const getChangesDoneBy = (notes: RecipeNote[], tweakId: string) =>
+  notes
+    .filter((note) => isDoneChange(note) && note.resolvedBy === tweakId)
+    .sort((a, b) => a.createdAt - b.createdAt);
+
+/** The edits that could have taken care of a change: the recipe's recorded edits since it was written, newest first, at most `limit`. */
+export const getResolveCandidates = (
+  notes: RecipeNote[],
+  change: RecipeNote,
+  limit: number,
+) =>
+  notes
+    .filter(
+      (note) =>
+        note.kind === 'TWEAK' &&
+        note.recipeId === change.recipeId &&
+        note.createdAt >= change.createdAt,
+    )
+    .sort(byNewest)
+    .slice(0, limit);
+
+/** Entries with no cook (or a cook that is gone) written in the day after this cook and before the recipe's next one: most likely written about it, so its page offers to link them. */
+export const getUnlinkedNearCook = (
+  notes: RecipeNote[],
+  cook: Pick<Cook, 'id' | 'recipeId' | 'cookedAt'>,
+  cooks: Pick<Cook, 'id' | 'recipeId' | 'cookedAt'>[],
+  windowMs: number,
+) => {
+  const cookIds = new Set(cooks.map((entry) => entry.id));
+  const nextAt = cooks
+    .filter(
+      (entry) =>
+        entry.recipeId === cook.recipeId && entry.cookedAt > cook.cookedAt,
+    )
+    .reduce((soonest, entry) => Math.min(soonest, entry.cookedAt), Infinity);
+  const endAt = Math.min(cook.cookedAt + windowMs, nextAt);
+
+  return notes.filter(
+    (note) =>
+      note.recipeId === cook.recipeId &&
+      note.kind !== 'TWEAK' &&
+      (note.cookId == null || !cookIds.has(note.cookId)) &&
+      note.createdAt >= cook.cookedAt &&
+      note.createdAt < endAt,
+  );
+};
 
 export const sortStepEntries = (notes: RecipeNote[]) =>
   [...notes]

@@ -60,10 +60,10 @@ const getAddProblem = (
   state: RootState,
   input: Pick<
     AddNoteInput,
-    'recipeId' | 'kind' | 'text' | 'reason' | 'cookId' | 'stepIndex'
+    'recipeId' | 'text' | 'reason' | 'cookId' | 'stepIndex'
   >,
 ) => {
-  const { recipeId, kind, text, reason, cookId, stepIndex } = input;
+  const { recipeId, text, reason, cookId, stepIndex } = input;
   const { isLoaded, loadError, items } = state.pinch.notes;
   if (loadError !== null) {
     return "Your recipe notes couldn't load, so adding is paused.";
@@ -83,13 +83,12 @@ const getAddProblem = (
     return GONE_STEP;
   }
   if (
-    kind !== 'TIP' &&
     cookId !== null &&
     !state.pinch.cooks.items.some(
       (cook) => cook.id === cookId && cook.recipeId === recipeId,
     )
   ) {
-    return "That cook is gone, so the note can't follow it up.";
+    return "That cook is gone, so the entry can't follow it up.";
   }
   const count = items.filter((note) => note.recipeId === recipeId).length;
   return isNoteHistoryFull(count) ? FULL : null;
@@ -104,7 +103,7 @@ interface AddNoteInput {
   text: string;
   /** Why the change; only a change keeps it. */
   reason: string | null;
-  /** The cook a note or a change was written for, or null. A tip never follows one. */
+  /** The cook the entry was written for, or null. */
   cookId: string | null;
   /** The step it is about (0-based), or null for the whole recipe. */
   stepIndex: number | null;
@@ -135,10 +134,12 @@ export const addNote = createAsyncThunk<
     kind,
     text: text.trim(),
     changes: [],
-    cookId: kind === 'TIP' ? null : input.cookId,
+    cookId: input.cookId,
     ...getStepAnchor(steps, stepIndex),
     reason: getReason(kind, input.reason),
     previous: null,
+    resolvedAt: null,
+    resolvedBy: null,
     by: null,
     createdAt: now,
     updatedAt: now,
@@ -168,16 +169,21 @@ interface UpdateNoteInput {
   reason?: string | null;
   /** Moves the entry to this step (0-based) or to the whole recipe (null); leave out to keep it where it is. A tweak has no step. */
   stepIndex?: number | null;
+  /** Links the entry to this cook of its recipe, or to none (null); leave out to keep it. A tweak's cook never moves. */
+  cookId?: string | null;
 }
 
-/** The words, a change's reason and the step, with `updatedAt`: a tweak's record of what changed is history, and an entry's cook and date stay as they were. */
+/** The words, a change's reason, the step and the cook, with `updatedAt`: a tweak's record of what changed is history, and an entry's date stays as it was. */
 export const updateNote = createAsyncThunk<
   string,
   UpdateNoteInput,
   { state: RootState; rejectValue: string }
 >(
   'pinch/notes/update',
-  async ({ uid, id, text, reason, stepIndex }, { getState, rejectWithValue }) => {
+  async (
+    { uid, id, text, reason, stepIndex, cookId },
+    { getState, rejectWithValue },
+  ) => {
     const state = getState();
     const existing = state.pinch.notes.items.find((note) => note.id === id);
     if (!existing) {
@@ -202,6 +208,16 @@ export const updateNote = createAsyncThunk<
     ) {
       return rejectWithValue(GONE_STEP);
     }
+    if (
+      !isTweak &&
+      cookId !== undefined &&
+      cookId !== null &&
+      !state.pinch.cooks.items.some(
+        (cook) => cook.id === cookId && cook.recipeId === existing.recipeId,
+      )
+    ) {
+      return rejectWithValue("That cook is gone, so the entry can't follow it.");
+    }
 
     try {
       await updateDoc(noteDoc(uid, id), {
@@ -213,6 +229,7 @@ export const updateNote = createAsyncThunk<
         ...(!isTweak && stepIndex !== undefined
           ? getStepAnchor(steps, stepIndex)
           : {}),
+        ...(!isTweak && cookId !== undefined ? { cookId } : {}),
         updatedAt: Date.now(),
       });
     } catch (error) {
@@ -232,7 +249,7 @@ interface AttachNotesInput {
   noteIds: string[];
 }
 
-/** Ties the notes and changes written while cooking to the cook once it is recorded: only entries with no cook (or whose cook was deleted), only the cook field, so a later edit and the share's change stamp are untouched. */
+/** Ties the tips, notes and changes written while cooking (or written later and linked from the cook's page) to the cook: only entries with no cook (or whose cook was deleted), only the cook field, so a later edit and the share's change stamp are untouched. */
 export const attachNotesToCook = createAsyncThunk<
   number,
   AttachNotesInput,
@@ -244,7 +261,7 @@ export const attachNotesToCook = createAsyncThunk<
     (note) =>
       ids.has(note.id) &&
       note.recipeId === recipeId &&
-      note.kind !== 'TIP' &&
+      note.kind !== 'TWEAK' &&
       (note.cookId == null ||
         !state.cooks.items.some((cook) => cook.id === note.cookId)),
   );
@@ -260,6 +277,76 @@ export const attachNotesToCook = createAsyncThunk<
   }
 
   return targets.length;
+});
+
+interface ResolveChangeInput {
+  uid: string;
+  id: string;
+  /** The recorded edit that took care of it, or null for one handled without naming an edit. */
+  tweakId: string | null;
+}
+
+/** Marks a planned change done, naming the edit that took care of it when there is one; field-scoped, so its words, step and cook stay. */
+export const resolveChange = createAsyncThunk<
+  string,
+  ResolveChangeInput,
+  { state: RootState; rejectValue: string }
+>('pinch/notes/resolve', async ({ uid, id, tweakId }, { getState, rejectWithValue }) => {
+  const notes = getState().pinch.notes.items;
+  const existing = notes.find((note) => note.id === id);
+  if (!existing || existing.kind !== 'CHANGE') {
+    return rejectWithValue('This change is gone, so there is nothing to mark.');
+  }
+  if (
+    tweakId !== null &&
+    !notes.some(
+      (note) =>
+        note.id === tweakId &&
+        note.kind === 'TWEAK' &&
+        note.recipeId === existing.recipeId,
+    )
+  ) {
+    return rejectWithValue(
+      'That edit was undone, so pick another or mark it done on its own.',
+    );
+  }
+  const now = Date.now();
+  try {
+    await updateDoc(noteDoc(uid, id), {
+      ...getMissingNoteFields(existing),
+      resolvedAt: now,
+      resolvedBy: tweakId,
+      updatedAt: now,
+    });
+  } catch (error) {
+    return rejectWithValue(getWriteMessage(error, 'Unable to mark this done.'));
+  }
+
+  return id;
+});
+
+/** Plans a done change again: the way back from marking it done. */
+export const reopenChange = createAsyncThunk<
+  string,
+  { uid: string; id: string },
+  { state: RootState; rejectValue: string }
+>('pinch/notes/reopen', async ({ uid, id }, { getState, rejectWithValue }) => {
+  const existing = getState().pinch.notes.items.find((note) => note.id === id);
+  if (!existing || existing.kind !== 'CHANGE') {
+    return rejectWithValue('This change is gone, so there is nothing to plan.');
+  }
+  try {
+    await updateDoc(noteDoc(uid, id), {
+      ...getMissingNoteFields(existing),
+      resolvedAt: null,
+      resolvedBy: null,
+      updatedAt: Date.now(),
+    });
+  } catch (error) {
+    return rejectWithValue(getWriteMessage(error, 'Unable to plan this again.'));
+  }
+
+  return id;
 });
 
 interface RemoveNoteInput {
