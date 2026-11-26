@@ -88,8 +88,11 @@ interface Session {
 interface ListenerOptions {
   lang: string;
   speechLang: string;
-  /** Gets each finished phrase's guesses, best first; returns true when it used the phrase. */
-  onFinalTranscript: (alternatives: string[]) => boolean | void;
+  /** Gets each finished phrase's guesses, best first, with the recognizer's confidence in each (null when it gave none); returns true when it used the phrase. */
+  onFinalTranscript: (
+    alternatives: string[],
+    confidences: (number | null)[],
+  ) => boolean | void;
   /** Gets the words of the phrase being said before it is finished, so a screen can show what is being picked up. */
   onInterimTranscript?: (text: string) => void;
   /** Stops listening after this long with no phrase used; never when left out. */
@@ -98,6 +101,8 @@ interface ListenerOptions {
   onHalt?: (error: SpeechCommandsError) => void;
   /** Read with the natural voice (see `useNaturalVoice`) whenever it is ready; the browser's voice otherwise. */
   isNaturalVoice?: boolean;
+  /** Says which voice reads a line (a reading that falls back to the browser's voice reports twice), for a debug log. */
+  onVoice?: (voice: 'natural' | 'system', text: string) => void;
   phrases?: string[] | null;
   onPhrasesRefused?: () => void;
 }
@@ -208,9 +213,14 @@ export const createSpeechListener = (
       .forEach((index) => {
         session.handled.add(index);
         const result = event.results[index];
-        const alternatives = Array.from({ length: result.length }, (_, at) =>
-          result[at].transcript.trim(),
-        ).filter((transcript) => transcript !== '');
+        const guesses = Array.from({ length: result.length }, (_, at) => ({
+          text: result[at].transcript.trim(),
+          confidence:
+            typeof result[at].confidence === 'number'
+              ? result[at].confidence
+              : null,
+        })).filter((guess) => guess.text !== '');
+        const alternatives = guesses.map((guess) => guess.text);
         const now = Date.now();
         const last = session.lastFinal;
         // Some browsers re-send a finished phrase under a new index once interim results are on.
@@ -226,7 +236,10 @@ export const createSpeechListener = (
         }
         if (
           alternatives.length > 0 &&
-          state.options?.onFinalTranscript(alternatives)
+          state.options?.onFinalTranscript(
+            alternatives,
+            guesses.map((guess) => guess.confidence),
+          )
         ) {
           armIdle();
         }
@@ -429,6 +442,7 @@ export const createSpeechListener = (
       state.stopReading = readAloud(text, {
         lang: state.options?.speechLang ?? '',
         isNatural: state.options?.isNaturalVoice === true,
+        onVoice: (voice) => state.options?.onVoice?.(voice, text),
         startTimeoutMs: SPEECH_START_TIMEOUT_MS,
         onNoStart: () => {
           state.noStarts += 1;
@@ -519,6 +533,7 @@ export function useSpeechCommands({
   idleStopMs,
   onHalt,
   isNaturalVoice,
+  onVoice,
 }: ListenerOptions) {
   const [isSupported] = useState(canUseSpeechCommands);
   const [status, setStatus] = useState<SpeechCommandsStatus>('off');
@@ -534,6 +549,7 @@ export function useSpeechCommands({
       idleStopMs,
       onHalt,
       isNaturalVoice,
+      onVoice,
     });
   });
 

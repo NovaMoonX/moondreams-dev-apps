@@ -37,6 +37,10 @@ export type TurnEvent =
       searches: number;
       usage: ModelUsage;
       ms: number;
+      /** The model id that answered; null for a canned reply no model made. */
+      model: string | null;
+      /** A canned reply stood in for the model (no key to call it with). */
+      isStandIn: boolean;
     }
   | { type: 'error'; code: string };
 
@@ -187,6 +191,8 @@ export async function streamTurn({
       searches: tally.searches,
       usage: tally.usage,
       ms: Date.now() - startedAt,
+      model: spec.id,
+      isStandIn: false,
     };
     emit(event);
     return event;

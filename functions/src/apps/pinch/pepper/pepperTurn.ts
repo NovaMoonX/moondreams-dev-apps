@@ -210,6 +210,8 @@ export const pepperTurn = onRequest(
             cacheWriteTokens: 0,
           },
           ms: 0,
+          model: null,
+          isStandIn: true,
         });
         return;
       }
@@ -230,6 +232,7 @@ export const pepperTurn = onRequest(
         event: 'pepper.turn',
         endedBy: done.endedBy,
         ms: done.ms,
+        model: done.model,
         searches: done.searches,
         ...done.usage,
       });

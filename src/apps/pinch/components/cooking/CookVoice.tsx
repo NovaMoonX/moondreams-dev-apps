@@ -30,6 +30,10 @@ import {
   COOK_WAKE_TIMER_GRACE_MS,
   COOK_WINDOW_MS,
 } from '@apps/pinch/constants';
+import {
+  CookTurnLogRow,
+  CookTurnLogView,
+} from '@apps/pinch/components/cooking/CookTurnLog';
 import type { CookVoice } from '@apps/pinch/hooks/useCookVoice';
 import type { VoiceMode, VoiceStop } from '@apps/pinch/utils/cookVoiceMode';
 
@@ -347,10 +351,12 @@ function CookVoiceSheet({
 }: CookVoiceSheetProps) {
   const [isSayShown, setIsSayShown] = useState(false);
   const [isMoreShown, setIsMoreShown] = useState(false);
+  const [isLogShown, setIsLogShown] = useState(false);
   const doneRef = useRef<HTMLButtonElement>(null);
   const close = () => {
     setIsSayShown(false);
     setIsMoreShown(false);
+    setIsLogShown(false);
     voice.closeSheet();
   };
   const { dialogId, onDialogClose } = useSheetHistory(voice.isSheetOpen, close);
@@ -478,7 +484,12 @@ function CookVoiceSheet({
       title='Voice control'
       className='border-border border'
     >
-      <div className='space-y-3 text-left text-sm'>
+      {isLogShown && (
+        <CookTurnLogView voice={voice} onBack={() => setIsLogShown(false)} />
+      )}
+      <div
+        className={join('space-y-3 text-left text-sm', isLogShown && 'hidden')}
+      >
         {isBlocked && <MicrophoneAccess />}
         {lastStop !== null && (
           <p className='bg-muted/50 border-border rounded-xl border px-3 py-2'>
@@ -544,6 +555,7 @@ function CookVoiceSheet({
             )}
           </>
         )}
+        <CookTurnLogRow onOpen={() => setIsLogShown(true)} />
         <div
           className={join(
             PINNED_FOOTER,
