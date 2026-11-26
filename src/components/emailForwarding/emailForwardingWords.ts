@@ -11,6 +11,19 @@ export const EMAIL_FORWARDING_WORDS = {
     `Emails from ${sender} that contain “${phrase}”. In Gmail this search finds them:`,
   filterCheck:
     'It’s a suggestion: search it first and check that every result is an email you want to send here.',
+  guideTitle: 'Set it up in your email',
+  guideLine:
+    'Your email’s own help shows how to forward automatically. Which do you use?',
+  guidePickLabel: 'Your email service',
+  otherProvider: 'Other',
+  paidPill: 'Paid',
+  paidAria: (provider: string, plan: string) => `${provider}, needs ${plan}`,
+  paidLine: (provider: string, plan: string) =>
+    `${provider} forwards automatically only with ${plan}. You can still forward an email by hand.`,
+  openGuide: (provider: string) => `Open ${provider}’s guide`,
+  watchVideo: (provider: string) => `Watch ${provider}’s video`,
+  otherGuide:
+    'Search your email’s help for “automatic forwarding”, and use this address where it asks for one.',
   copySearch: 'Copy search',
   searchCopyFailed: 'Couldn’t copy it. Press and hold the search to copy it.',
   noEmailsYet: 'No emails yet',

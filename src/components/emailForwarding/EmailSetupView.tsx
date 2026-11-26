@@ -6,6 +6,7 @@ import CopyTextButton from '@/components/CopyTextButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { copyToClipboard } from '@/utils/clipboardUtils';
 import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
+import EmailProviderGuide from '@/components/emailForwarding/EmailProviderGuide';
 import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
 
 /** A mail search an app suggests for forwarding only its emails. */
@@ -101,6 +102,7 @@ function EmailSetupView({
         </p>
       )}
       {address !== null && progress}
+      {address !== null && <EmailProviderGuide />}
       {address !== null && filter !== null && (
         <div className='bg-muted/40 space-y-2 rounded-2xl p-3'>
           <p className='text-sm font-semibold'>{WORDS.filterTitle}</p>
