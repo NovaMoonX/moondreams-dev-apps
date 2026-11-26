@@ -776,6 +776,8 @@ interface CookVoiceLineProps extends CookVoiceSheetProps {
   isPepperOn?: boolean;
   /** The footer has a Next that moves to another step, which cuts what is being said. */
   isNextShown?: boolean;
+  /** Pepper's answer is on screen, so the line offers hearing it again or closing it. */
+  isAnswerShown?: boolean;
   className?: string;
 }
 
@@ -826,6 +828,7 @@ export function PepperHeaderOrb({
 export function CookVoiceLine({
   isPepperOn = false,
   isNextShown = false,
+  isAnswerShown = false,
   className,
   ...props
 }: CookVoiceLineProps) {
@@ -882,6 +885,7 @@ export function CookVoiceLine({
         </>
       );
     }
+    if (isAnswerShown) return 'Say “repeat that” or “close that”';
     return (
       <>
         <span className='text-xs sm:hidden'>

@@ -67,6 +67,8 @@ interface CookStepViewProps {
   onAddEntry: (() => void) | null;
   /** A tip, note or change being written by voice, above the step's bubbles. */
   dictation: ReactNode | null;
+  /** Pepper's held answer, under the step it answers. */
+  answer: ReactNode | null;
   dishes: ReactNode;
   /** The times the step mentions that have no timer yet. */
   timerSlots: StepTimerSlot[];
@@ -115,6 +117,7 @@ function CookStepView({
   onDockGone,
   onAddEntry,
   dictation,
+  answer,
   dishes,
   timerSlots,
   isTimersFull,
@@ -240,6 +243,9 @@ function CookStepView({
                 )}
               </div>
             </div>
+          )}
+          {answer !== null && (
+            <div className='mt-6 [@media(max-height:640px)]:mt-4'>{answer}</div>
           )}
         </div>
         <div

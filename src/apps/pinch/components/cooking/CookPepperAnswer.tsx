@@ -37,7 +37,7 @@ function CookPepperAnswer({
       ref={cardRef}
       aria-label='Pepper’s answer'
       data-no-swipe=''
-      className='border-border bg-accent scroll-mb-40 rounded-2xl border p-3 sm:[@media(min-height:701px)]:p-4'
+      className='border-border bg-accent scroll-mb-40 rounded-2xl border p-3 shadow-sm sm:[@media(min-height:701px)]:p-4'
     >
       <div className='flex items-start gap-2'>
         <p className='text-muted-foreground min-w-0 flex-1 pt-1.5 text-xs font-medium sm:[@media(min-height:701px)]:text-sm'>

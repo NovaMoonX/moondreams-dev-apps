@@ -3006,23 +3006,18 @@ function CookingSession({
     return heldAnswer;
   };
   const shownAnswer = getShownAnswer();
-  const getStepCards = () =>
-    shownAnswer === null ? (
-      dictationCard
-    ) : (
-      <>
-        {dictationCard}
-        <CookPepperAnswer
-          heard={shownAnswer.heard}
-          text={shownAnswer.text}
-          isSearching={shownAnswer.isSearching}
-          onReadAloud={() => {
-            pepper.cancel();
-            void voice.speakInOrder(shownAnswer.text, { canAnswer: false });
-          }}
-          onDismiss={() => setHeldAnswer(null)}
-        />
-      </>
+  const getAnswerCard = () =>
+    shownAnswer === null ? null : (
+      <CookPepperAnswer
+        heard={shownAnswer.heard}
+        text={shownAnswer.text}
+        isSearching={shownAnswer.isSearching}
+        onReadAloud={() => {
+          pepper.cancel();
+          void voice.speakInOrder(shownAnswer.text, { canAnswer: false });
+        }}
+        onDismiss={() => setHeldAnswer(null)}
+      />
     );
   const voiceContext = {
     recipes: entries.map((candidate) => ({
@@ -3147,27 +3142,37 @@ function CookingSession({
   // A question the app already answered says that answer itself when Pepper can't.
   const pepperFallback = useRef<string | null>(null);
   useTurnLogRecording();
-  const pepperAsked = useRef<{ turnKey: number; place: string; heard: string }>(
-    { turnKey: 0, place: '', heard: '' },
-  );
+  const pepperAsked = useRef<{
+    turnKey: number;
+    place: string;
+    heard: string;
+    hasAction: boolean;
+  }>({ turnKey: 0, place: '', heard: '', hasAction: false });
   const pepper = usePepper({
     speak: (text, { canAnswer }) => voice.speakInOrder(text, { canAnswer }),
     onStart: ({ turnKey, heard }) => {
-      pepperAsked.current = { turnKey, place: dockKey, heard };
+      pepperAsked.current = {
+        turnKey,
+        place: dockKey,
+        heard,
+        hasAction: false,
+      };
+      setHeldAnswer(null);
     },
     onText: ({ turnKey, text, isSearching }) => {
       const asked = pepperAsked.current;
       if (asked.turnKey !== turnKey) return;
-      setHeldAnswer((current) => ({
+      setHeldAnswer({
         turnKey,
         place: asked.place,
         heard: asked.heard,
         text,
         isSearching,
-        hasAction: current?.turnKey === turnKey && current.hasAction,
-      }));
+        hasAction: asked.hasAction,
+      });
     },
     onAction: (action) => {
+      pepperAsked.current.hasAction = true;
       const askedKey = pepperAsked.current.turnKey;
       setHeldAnswer((current) =>
         current?.turnKey === askedKey
@@ -3587,7 +3592,8 @@ function CookingSession({
       onAddEntry={
         capture.isAvailable(recipe.id) && !isRemoved ? openStepCapture : null
       }
-      dictation={getStepCards()}
+      dictation={dictationCard}
+      answer={getAnswerCard()}
       dishes={isDishStripInStep ? dishStrip : null}
       onStartTimer={(stepNumber, seconds, label) =>
         startTimer(recipe, stepNumber, seconds, label)
@@ -4057,6 +4063,7 @@ function CookingSession({
                 <CookVoiceLine
                   voice={voice}
                   isPepperOn={isPepperOn}
+                  isAnswerShown={shownAnswer !== null}
                   isNextShown={
                     isStepsView && focused === null && next.kind !== 'FINISH'
                   }
