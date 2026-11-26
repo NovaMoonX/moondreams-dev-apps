@@ -460,6 +460,7 @@ function ReorderList<T extends { id: string }>({
   const frame = useRef(0);
   const detach = useRef<(() => void) | null>(null);
   const press = useRef<Press | null>(null);
+  const hasPressFired = useRef(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
   const [overGroupId, setOverGroupId] = useState<string | null>(null);
@@ -1040,7 +1041,9 @@ function ReorderList<T extends { id: string }>({
     const target = event.target instanceof Element ? event.target : null;
     if (
       !target ||
-      target.closest('[data-reorder-handle],[data-reorder-group-handle]')
+      target.closest(
+        '[data-reorder-handle],[data-reorder-group-handle],input,textarea,select,[contenteditable="true"],[data-no-reorder-press]',
+      )
     )
       return;
     const { groups: current, onMoveGroup: moveGroup } = latest.current;
@@ -1081,6 +1084,7 @@ function ReorderList<T extends { id: string }>({
       const snap = startDrag(armed.kind, armed.id, 'pointer', pointerY.current);
       if (!snap) return endPress();
       armed.isFired = true;
+      hasPressFired.current = true;
       frame.current = requestAnimationFrame(autoScroll);
     };
     press.current = {
@@ -1117,7 +1121,12 @@ function ReorderList<T extends { id: string }>({
 
   const onTouchEnd = (event: TouchEvent) => {
     const armed = press.current;
-    if (!armed) return;
+    const hadFired = hasPressFired.current;
+    hasPressFired.current = false;
+    if (!armed) {
+      if (hadFired && event.cancelable) event.preventDefault();
+      return;
+    }
     if (!armed.isFired) return endPress();
     if (event.cancelable) event.preventDefault();
     finish(true);
