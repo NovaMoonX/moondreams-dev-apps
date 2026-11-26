@@ -538,6 +538,19 @@ assert.deepEqual(
   [],
   'another page on the same site is not a copy',
 );
+const twoOwn = [
+  linkOf('http://site.example.com/r'),
+  linkOf('https://www.site.example.com/r'),
+];
+assert.deepEqual(
+  cleanRevision(
+    answerWith(twoOwn.map(({ url }) => url)),
+    readAllowedAddresses(twoOwn, [], []),
+    readRecipeUrls(twoOwn),
+  )!.links.map(({ url }: { url: string }) => url),
+  ['http://site.example.com/r', 'https://www.site.example.com/r'],
+  'two own links that differ only by www or scheme both stay as they were',
+);
 const counted = cleanRevision(
   answerWith([
     'https://invented.example.com/a',

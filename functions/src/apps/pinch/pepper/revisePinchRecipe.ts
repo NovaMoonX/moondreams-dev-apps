@@ -176,7 +176,9 @@ export function cleanRevision(
   );
   const checked = cleanLinks(answer.links).map(({ kind, label, url }) => {
     const key = toLooseAddress(url);
-    return { kind, label, url: (key === null ? null : own.get(key)) ?? url };
+    const original =
+      ownUrls.includes(url) || key === null ? null : own.get(key);
+    return { kind, label, url: original ?? url };
   });
   const kept = checked.filter(({ url }) => {
     const address = normalizeAddress(url);

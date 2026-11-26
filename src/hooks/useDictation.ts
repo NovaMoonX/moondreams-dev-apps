@@ -102,6 +102,9 @@ export function useDictation({
     note,
     needsMicrophone,
     clearNeedsMicrophone: () => setNeedsMicrophone(false),
+    /** Drops the line about what didn't fit once the box has changed. */
+    clearCutNote: () =>
+      setNote((current) => (current === 'cut' ? null : current)),
     canListen: voice.unavailableReason !== 'no-recognition',
     /** Where the words are listened to ('cloud' or the device), null when not listening. */
     route: voice.listeningRoute,

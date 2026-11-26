@@ -131,7 +131,10 @@ function DictationField({
             'placeholder:text-muted-foreground! min-h-9 flex-1 resize-none bg-transparent px-0! py-2 text-sm placeholder:truncate focus:outline-none',
             !isIdle && 'hidden',
           )}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            dictation.clearCutNote();
+            onChange(event.target.value);
+          }}
           onKeyDown={onKeyDown}
         />
         {isIdle && dictation.canListen && (
@@ -157,7 +160,10 @@ function DictationField({
             aria-label={copy.sendLabel}
             loading={isBusy}
             disabled={isBusy || value.trim() === ''}
-            onClick={onSend}
+            onClick={() => {
+              dictation.clearCutNote();
+              onSend();
+            }}
           >
             <ArrowUp className='h-4 w-4' aria-hidden='true' />
           </Button>
