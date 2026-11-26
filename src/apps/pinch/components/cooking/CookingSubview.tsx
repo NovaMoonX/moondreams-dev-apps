@@ -155,7 +155,10 @@ import {
   type PlateCookState,
 } from '@apps/pinch/utils/cooks';
 import {
+  describeAdded,
   describeAmounts,
+  matchByName,
+  readAddedLines,
   toSpokenAmount,
   describeTimerGuess,
   describeTimerQuestion,
@@ -167,6 +170,7 @@ import {
   withTimeLeft,
   type CookServingsChange,
   type CookTimerAnswer,
+  type CookScrollTo,
   type CookTimerTarget,
   type CookVoiceChoice,
   type CookEntryKind,
@@ -201,7 +205,10 @@ import {
   getStepSections,
 } from '@apps/pinch/utils/stepSections';
 import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
-import { isPouredIngredient } from '@apps/pinch/utils/measuringTools';
+import {
+  isPouredIngredient,
+  orderDryFirst,
+} from '@apps/pinch/utils/measuringTools';
 import {
   canCombineGather,
   combineGatherDishes,
@@ -253,6 +260,8 @@ const VOICE_WHILE_WRITING = new Set<CookActionCommand['kind']>([
   'START_TIMER',
   'TIMER_ANSWER',
 ]);
+const TICK_OFFER_WORDS = /tick (it|them) off|mark (it|them) off/i;
+const ADD_OFFER = "Tell me what you add and I'll tick it off.";
 const ENTRY_WORDS: Record<CookEntryKind, string> = {
   TIP: 'tip',
   NOTE: 'note',
@@ -535,10 +544,16 @@ function CookingSession({
     entries.find((candidate) => candidate.recipe.id === currentId) ??
     entries[0];
   const { recipe, isRemoved, plannedServings } = entry;
-  const { stepIndex, servings, gotOut } = plate[recipe.id] ?? {
+  const {
+    stepIndex,
+    servings,
+    gotOut,
+    added: addedAll,
+  } = plate[recipe.id] ?? {
     stepIndex: 0,
     servings: getCookStartServings(recipe.servings, plannedServings),
     gotOut: {},
+    added: {},
   };
   const isPlate = entries.length > 1;
   const [isFinished, setIsFinished] = useState(false);
@@ -556,6 +571,7 @@ function CookingSession({
     }),
     [openConversion],
   );
+  const isAddOfferMade = useRef(false);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   /** The cooks this screen wrote, by recipe: only these can be taken back with Undo. */
@@ -831,6 +847,9 @@ function CookingSession({
       : stepMatch.lineIds
           .map((id) => rows.find((row) => row.id === id))
           .filter((row) => row !== undefined);
+  const added = Object.fromEntries(
+    stepRows.map((row) => [row.id, addedAll[`${index}:${row.id}`] === true]),
+  );
   const stepText = hasSteps ? recipe.steps[index] : '';
   const stepDurations = useMemo(
     () =>
@@ -1005,6 +1024,13 @@ function CookingSession({
             notesSegments: getSpokenSegments(),
           }
         : null,
+    peekStepOffer: () =>
+      isAddOfferMade.current || isWide || stepRows.length < 2
+        ? null
+        : ADD_OFFER,
+    commitStepOffer: () => {
+      isAddOfferMade.current = true;
+    },
     onTurnOn: timers.prepareSound,
     isAlarmRinging: timers.timers.some((timer) => timer.status === 'done'),
     runningTimers: timers.timers.filter((timer) => timer.status === 'running')
@@ -1034,6 +1060,28 @@ function CookingSession({
     rootRef.current
       ?.closest<HTMLElement>('[data-subview-scroller]')
       ?.scrollTo({ top: 0 });
+
+  /** The open step panel's body when it has more than fits, else the subview's own scroller. */
+  const getScrollTarget = () => {
+    const panel = document.querySelector<HTMLElement>(
+      '#cook-step-panel [data-cook-scroll]',
+    );
+    return panel !== null && panel.scrollHeight > panel.clientHeight + 1
+      ? panel
+      : (rootRef.current?.closest<HTMLElement>('[data-subview-scroller]') ??
+          null);
+  };
+  const getScrollTop = (target: HTMLElement, to: CookScrollTo) => {
+    const max = target.scrollHeight - target.clientHeight;
+    const page = Math.round(target.clientHeight * 0.8);
+    const wanted = {
+      DOWN: target.scrollTop + page,
+      UP: target.scrollTop - page,
+      TOP: 0,
+      BOTTOM: max,
+    }[to];
+    return Math.min(max, Math.max(0, wanted));
+  };
 
   const goBy = (direction: 1 | -1) => {
     if (isFinished) {
@@ -1497,6 +1545,31 @@ function CookingSession({
           }
         : current;
     });
+  const setAddedIds = (
+    ids: string[],
+    isAdded: boolean,
+    step = index,
+    recipeId = recipe.id,
+  ) =>
+    setPlate((current) => {
+      const known = current[recipeId];
+      return known
+        ? {
+            ...current,
+            [recipeId]: {
+              ...known,
+              added: {
+                ...known.added,
+                ...Object.fromEntries(
+                  ids.map((id) => [`${step}:${id}`, isAdded]),
+                ),
+              },
+            },
+          }
+        : current;
+    });
+  const toggleAdded = (id: string, isAdded: boolean) =>
+    setAddedIds([id], isAdded);
   const resetGotOutFor = (recipeId: string) =>
     updateRecipe(recipeId, { gotOut: {} });
   const resetGotOut = useCallback(
@@ -2485,7 +2558,7 @@ function CookingSession({
         return refuse("This step doesn't name any ingredients.");
       }
       if (!isWide) showDockView('AMOUNTS');
-      const { show, speak } = describeAmounts(stepRows);
+      const { show, speak } = describeAmounts(orderDryFirst(stepRows).rows);
       return done(show, `For this step: ${speak}`);
     },
     showLastNote: () => {
@@ -2666,6 +2739,76 @@ function CookingSession({
       );
       return done(plan.show, plan.speak);
     },
+    markAdded: (queries, isAdded) => {
+      if (!isOnStep || isWide) {
+        return refuse('Go to a step to mark what you added.');
+      }
+      const { lineIds, outside } = readAddedLines(queries, voiceContext.lines);
+      isAddOfferMade.current = true;
+      const hit = stepRows.filter((row) => lineIds.includes(row.id));
+      const changing = hit.filter(
+        (row) => (added[row.id] === true) !== isAdded,
+      );
+      const isAddedAfter = (row: CookRow) =>
+        hit.some((each) => each.id === row.id)
+          ? isAdded
+          : added[row.id] === true;
+      const getNames = (list: CookRow[]) =>
+        Array.from(new Set(list.map((row) => row.name)));
+      const text = describeAdded({
+        names: getNames(changing),
+        already: getNames(hit.filter((row) => !changing.includes(row))),
+        outside: outside.map((name) => {
+          const lineId = matchByName(name, voiceContext.lines)[0]?.id;
+          const at = stepMatches.findIndex(
+            (match, matchIndex) =>
+              matchIndex !== index && match.lineIds.includes(lineId ?? ''),
+          );
+          return { name, step: at === -1 ? null : at + 1 };
+        }),
+        isAdded,
+        left: stepRows.filter((row) => !isAddedAfter(row)).length,
+      });
+      if (changing.length === 0) return refuse(text);
+      setAddedIds(
+        changing.map((row) => row.id),
+        isAdded,
+      );
+      return done(text, text);
+    },
+    markAllAdded: () => {
+      if (!isOnStep || isWide) {
+        return refuse('Go to a step to mark what you added.');
+      }
+      if (stepRows.length === 0) {
+        return refuse("This step doesn't name any ingredients.");
+      }
+      isAddOfferMade.current = true;
+      setAddedIds(
+        stepRows.map((row) => row.id),
+        true,
+      );
+      const text = "That's everything for this step.";
+      return done(text, text);
+    },
+    scroll: (to) => {
+      const target = getScrollTarget();
+      if (target === null || target.scrollHeight <= target.clientHeight + 1) {
+        return refuse("Everything's already on screen.");
+      }
+      const top = getScrollTop(target, to);
+      target.scrollTo({ top, behavior: 'smooth' });
+      const max = target.scrollHeight - target.clientHeight;
+      const text =
+        top >= max - 1 && (to === 'DOWN' || to === 'BOTTOM')
+          ? "That's the bottom."
+          : top <= 0 && (to === 'UP' || to === 'TOP')
+            ? "That's the top."
+            : to === 'UP'
+              ? 'Scrolled up.'
+              : 'Scrolled down.';
+      return done(text, text);
+    },
     tickAll: () => {
       if (!isGatherView) {
         return refuse('Ticking is on the “Get your ingredients out” screen.');
@@ -2823,6 +2966,7 @@ function CookingSession({
     timers: timers.timers.map(toVoiceTimerRef),
     choice: getVoiceChoice(),
     isGathering: isGatherView,
+    isStepView: isOnStep && !isWide,
     lines: (isGatherView
       ? entries.flatMap((candidate) => candidate.recipe.ingredients)
       : voiceStep.recipe.ingredients
@@ -2903,6 +3047,22 @@ function CookingSession({
       lines.forEach(({ recipeId, lineId }) =>
         toggleGotOutFor(recipeId, lineId, isOut),
       ),
+    getAddedChanges: (queries, isAdded) => {
+      if (!isOnStep || isWide) return null;
+      const { lineIds } = readAddedLines(queries, voiceContext.lines);
+      return {
+        recipeId: recipe.id,
+        step: index,
+        lineIds: stepRows
+          .filter(
+            (row) =>
+              lineIds.includes(row.id) && (added[row.id] === true) !== isAdded,
+          )
+          .map((row) => row.id),
+      };
+    },
+    setAdded: (change, isAdded) =>
+      setAddedIds(change.lineIds, isAdded, change.step, change.recipeId),
     goToStep: goToStepForPepper,
     say: (text) => voice.speak(text),
     capture,
@@ -2927,6 +3087,9 @@ function CookingSession({
       void voice.speakInOrder(result.said, {
         canAnswer: pepperActions.hasPending(),
       });
+    },
+    onReply: (text) => {
+      if (TICK_OFFER_WORDS.test(text)) isAddOfferMade.current = true;
     },
     onProblem: (held) => {
       void voice.speakInOrder(getPepperProblemLine(held), {
@@ -2967,6 +3130,7 @@ function CookingSession({
       })),
     );
     const screen = buildPepperScreen({
+      isAddOffered: isAddOfferMade.current,
       view: pepperView,
       recipeTitle: voiceStep.recipe.title,
       step: isStepShown
@@ -2992,6 +3156,7 @@ function CookingSession({
         ? stepRows.map((row) => ({
             name: row.name,
             amountText: row.amountText,
+            isAdded: added[row.id] === true,
           }))
         : [],
       gather: isGatherView
@@ -3278,6 +3443,8 @@ function CookingSession({
       sections={getStepSections(recipe)}
       index={index}
       ingredients={isWide ? [] : stepRows}
+      added={added}
+      onToggleAdded={toggleAdded}
       isAmountNoteShown={
         isScaled && stepMatch !== null && stepMatch.hasWrittenAmount
       }

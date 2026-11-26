@@ -7860,10 +7860,10 @@ assert.deepEqual(
     { recipeId: 'none', recipeServings: 0, plannedServings: null },
   ]),
   {
-    adobo: { stepIndex: 0, servings: 4, gotOut: {} },
-    rice: { stepIndex: 0, servings: 6, gotOut: {} },
-    one: { stepIndex: 0, servings: 6, gotOut: {} },
-    none: { stepIndex: 0, servings: 1, gotOut: {} },
+    adobo: { stepIndex: 0, servings: 4, gotOut: {}, added: {} },
+    rice: { stepIndex: 0, servings: 6, gotOut: {}, added: {} },
+    one: { stepIndex: 0, servings: 6, gotOut: {}, added: {} },
+    none: { stepIndex: 0, servings: 1, gotOut: {}, added: {} },
   },
   'each recipe of a session starts on its first step, nothing ticked, at its own servings or the plan’s when that is more',
 );

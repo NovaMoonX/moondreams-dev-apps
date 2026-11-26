@@ -31,7 +31,9 @@ export type PepperCookCommand = Extract<
       | 'EXTEND_TIMER'
       | 'SET_SERVINGS'
       | 'SHOW_ENTRIES'
-      | 'GOT_INGREDIENT';
+      | 'GOT_INGREDIENT'
+      | 'MARK_ADDED'
+      | 'SCROLL';
   }
 >;
 
@@ -185,6 +187,24 @@ const readTicks = (input: Record<string, unknown>): PepperCommand => {
   return cook({ kind: 'GOT_INGREDIENT', queries, isOut: input.got });
 };
 
+const readMarkAdded = (input: Record<string, unknown>): PepperCommand => {
+  const queries = (Array.isArray(input.names) ? input.names : [])
+    .map((name) => clipText(readText(name), MAX_NAME_CHARS))
+    .filter((name) => name !== '')
+    .slice(0, MAX_NAMES);
+  if (queries.length === 0 || typeof input.added !== 'boolean') {
+    return invalid("I didn't catch which ingredients.");
+  }
+  return cook({ kind: 'MARK_ADDED', queries, isAdded: input.added });
+};
+
+const SCROLL_DIRECTIONS = new Map<string, 'DOWN' | 'UP' | 'TOP' | 'BOTTOM'>([
+  ['down', 'DOWN'],
+  ['up', 'UP'],
+  ['top', 'TOP'],
+  ['bottom', 'BOTTOM'],
+]);
+
 const readAddEntry = (input: Record<string, unknown>): PepperCommand => {
   const entryKind =
     typeof input.kind === 'string' ? ENTRY_KINDS.get(input.kind) : undefined;
@@ -242,6 +262,17 @@ export const readPepperAction = (action: {
     }
     case 'tick_ingredients':
       return readTicks(input);
+    case 'mark_added':
+      return readMarkAdded(input);
+    case 'scroll': {
+      const to =
+        typeof input.direction === 'string'
+          ? SCROLL_DIRECTIONS.get(input.direction)
+          : undefined;
+      return to === undefined
+        ? invalid("I'm not sure which way to scroll.")
+        : cook({ kind: 'SCROLL', to });
+    }
     case 'add_entry':
       return readAddEntry(input);
     case 'edit_entry': {
