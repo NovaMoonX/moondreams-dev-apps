@@ -1548,7 +1548,14 @@ assert.deepEqual(
 );
 assert.deepEqual(
   getMissingCookFields({ id: 'x', recipeId: 'adobo' }),
-  { plannedMealId: null, rating: null, photoPath: null, photoPaths: [] },
+  {
+    plannedMealId: null,
+    rating: null,
+    photoPath: null,
+    photoPaths: [],
+    durationSeconds: null,
+    stepTimes: null,
+  },
   'an older cook gets the keys it lacks, as null or an empty list',
 );
 assert.deepEqual(
@@ -1557,18 +1564,20 @@ assert.deepEqual(
     rating: null,
     photoPath: null,
     photoPaths: [],
+    durationSeconds: null,
+    stepTimes: null,
   }),
   {},
   'a cook with the keys, even null ones, lacks nothing',
 );
 assert.deepEqual(
   getMissingCookFields({ plannedMealId: 'p', rating: 4 }),
-  { photoPath: null, photoPaths: [] },
+  { photoPath: null, photoPaths: [], durationSeconds: null, stepTimes: null },
   'a cook rated before photos gets only the photo keys',
 );
 assert.deepEqual(
   getMissingCookFields({ plannedMealId: 'p', rating: 4, photoPath: 'p/one' }),
-  { photoPaths: ['p/one'] },
+  { photoPaths: ['p/one'], durationSeconds: null, stepTimes: null },
   "a cook from before several photos keeps its one photo as the list's first",
 );
 assert.deepEqual(

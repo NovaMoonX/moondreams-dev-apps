@@ -33,6 +33,14 @@ import {
   isWhyAsked,
   type RecipeContent,
 } from '../../src/apps/pinch/utils/recipeChanges.ts';
+import {
+  GATHER_CLOCK_KEY,
+  getCookStepTimes,
+  getStepClockKey,
+  moveStepClock,
+  readStepClock,
+  startStepClock,
+} from '../../src/apps/pinch/utils/stepClock.ts';
 import { formatClock } from '../../src/utils/durationUtils.ts';
 import { clearViewerSessions } from '../../src/utils/viewerSessionUtils.ts';
 
@@ -959,6 +967,81 @@ assert.equal(
     })?.resume.startedAt,
     undefined,
     'a start in the future is not trusted',
+  );
+}
+
+// Time on each step
+{
+  const SEC = 1_000;
+  const step = (index: number) => getStepClockKey('adobo', index);
+  const visits: [string | null, number][] = [
+    [GATHER_CLOCK_KEY, 0],
+    [step(0), 90 * SEC],
+    [step(1), 150 * SEC],
+    [step(0), 153 * SEC],
+    [step(1), 156 * SEC],
+    [step(0), 400 * SEC],
+    [step(3), 405 * SEC],
+  ];
+  const clock = visits.reduce(
+    (current, [key, at]) => moveStepClock(current, key, NOW + at),
+    startStepClock({}),
+  );
+  const totals = readStepClock(moveStepClock(clock, null, NOW + 465 * SEC), 0);
+  const times = getCookStepTimes(totals, 'adobo', [
+    'Marinate the chicken.',
+    'Simmer it covered.',
+    'Reduce the sauce.',
+    'Serve it over rice.',
+  ]);
+  assert.equal(times.gatherSeconds, 90, 'the gather screen is counted');
+  assert.deepEqual(
+    times.steps.map((entry) => entry.seconds),
+    [60 + 3 + 5, 3 + 244, 0, 60],
+    'returning to a step adds to what it had, and a skipped step reads 0',
+  );
+  assert.equal(times.steps[2].text, 'Reduce the sauce.');
+  assert.equal(
+    readStepClock(moveStepClock(clock, null, NOW + 465 * SEC), NOW + 999 * SEC)[
+      step(3)
+    ],
+    60 * SEC,
+    'nothing is counted after Finish',
+  );
+  assert.equal(
+    readStepClock(clock, NOW + 410 * SEC)[step(3)],
+    5 * SEC,
+    'reading the clock counts the place in progress without moving it',
+  );
+
+  const written = buildCookingSnapshot({
+    uid: UID,
+    sessionId: 'session-1',
+    now: NOW,
+    open: {
+      recipeId: 'adobo',
+      servings: null,
+      plannedMealId: null,
+      plannedMealDate: null,
+      plate: null,
+    },
+    currentId: 'adobo',
+    positions: { adobo: { stepIndex: 1, servings: 4 } },
+    timers: [],
+    stepClock: { [GATHER_CLOCK_KEY]: 90 * SEC, [step(0)]: 68 * SEC },
+  });
+  assert.deepEqual(
+    parse(written)?.resume.stepClock,
+    { [GATHER_CLOCK_KEY]: 90 * SEC, [step(0)]: 68 * SEC },
+    'a picked-up cook keeps the time each step already had',
+  );
+  assert.deepEqual(
+    parse({
+      ...written,
+      resume: { ...written.resume, stepClock: { gather: -5, [step(0)]: 'x' } },
+    })?.resume.stepClock,
+    {},
+    'a clock that is not one reads as empty without failing the pick-up',
   );
 }
 

@@ -7,6 +7,7 @@ import type {
 } from '@apps/pinch/types';
 import { isValidCookServings } from '@apps/pinch/utils/cooks';
 import { getPlateTitle } from '@apps/pinch/utils/mealFormat';
+import { parseStepClock } from '@apps/pinch/utils/stepClock';
 
 export const COOKING_SESSION_VERSION = 1;
 export const COOKING_SESSION_MAX_AGE_MS = 12 * 3_600_000;
@@ -80,6 +81,7 @@ export const buildCookingSnapshot = (input: {
   /** The journal entries written on this screen. */
   captured?: string[];
   startedAt?: number;
+  stepClock?: Record<string, number>;
 }): CookingSnapshot => ({
   version: COOKING_SESSION_VERSION,
   uid: input.uid,
@@ -109,6 +111,9 @@ export const buildCookingSnapshot = (input: {
     timers: input.timers.map(toResumeTimer),
     captured: (input.captured ?? []).slice(0, MAX_SAVED_CAPTURED),
     ...(input.startedAt === undefined ? {} : { startedAt: input.startedAt }),
+    ...(input.stepClock === undefined
+      ? {}
+      : { stepClock: parseStepClock(input.stepClock) }),
   },
 });
 
@@ -310,6 +315,9 @@ export const parseCookingSnapshot = (
         ...(isTime(startedAt) && startedAt <= now + CLOCK_SLACK_MS
           ? { startedAt }
           : {}),
+        ...(resume?.stepClock === undefined
+          ? {}
+          : { stepClock: parseStepClock(resume.stepClock) }),
       },
     };
   } catch {
@@ -435,6 +443,9 @@ export const resolveCookingResume = (
       ...(snapshot.resume.startedAt === undefined
         ? {}
         : { startedAt: snapshot.resume.startedAt }),
+      ...(snapshot.resume.stepClock === undefined
+        ? {}
+        : { stepClock: snapshot.resume.stepClock }),
     },
     title,
     dishTitle: isPlate ? (current?.title ?? null) : null,

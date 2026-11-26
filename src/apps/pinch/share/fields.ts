@@ -241,6 +241,8 @@ const COOK_FIELDS = {
   rating: 'never',
   photoPath: 'never',
   photoPaths: 'never',
+  durationSeconds: 'never',
+  stepTimes: 'never',
   createdAt: 'never',
   updatedAt: 'never',
 } satisfies Record<keyof Cook, ShareDecision>;
@@ -365,6 +367,7 @@ const COOKING_RESUME_FIELDS = {
   timers: 'notUseful',
   captured: 'notUseful',
   startedAt: 'notUseful',
+  stepClock: 'notUseful',
 } satisfies Record<keyof CookingResume, ShareDecision>;
 
 const PINCH_SHARE_FIELDS = {

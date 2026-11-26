@@ -106,7 +106,10 @@ import {
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import { updateCook } from '@apps/pinch/store/actions/cookActions';
+import {
+  setCookTiming,
+  updateCook,
+} from '@apps/pinch/store/actions/cookActions';
 import { attachNotesToCook } from '@apps/pinch/store/actions/noteActions';
 import { announceCookingSession } from '@apps/pinch/lib/cookingSessionPresence';
 import {
@@ -126,6 +129,15 @@ import {
   applyResumePositions,
   buildCookingSnapshot,
 } from '@apps/pinch/utils/cookSession';
+import {
+  GATHER_CLOCK_KEY,
+  getCookStepTimes,
+  getStepClockKey,
+  moveStepClock,
+  readStepClock,
+  startStepClock,
+  type StepClockTotals,
+} from '@apps/pinch/utils/stepClock';
 import {
   getLastTimeNote,
   getSpokenEntries,
@@ -601,6 +613,15 @@ function CookingSession({
   const [sessionId] = useState(generateUuid);
   const [startedAt] = useState(() => resume?.startedAt ?? Date.now());
   const [cookedForMs, setCookedForMs] = useState<number | null>(null);
+  const stepClock = useRef(startStepClock(resume?.stepClock ?? {}));
+  const clockKey = isFinished
+    ? null
+    : view === 'gather'
+      ? GATHER_CLOCK_KEY
+      : getStepClockKey(recipe.id, stepIndex);
+  useEffect(() => {
+    stepClock.current = moveStepClock(stepClock.current, clockKey, Date.now());
+  }, [clockKey]);
   const [goingCount] = useState(createLiveCount);
   const isWide = useMediaQuery().isAtLeast('lg');
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -1157,6 +1178,7 @@ function CookingSession({
         positions: plate,
         captured: capture.captured,
         startedAt,
+        stepClock: readStepClock(stepClock.current, Date.now()),
         timers: timers.timers.map((timer): ResumeTimer => {
           const name = timer.recipeId === null ? timer.stepName : null;
           return timer.status === 'running'
@@ -1170,6 +1192,7 @@ function CookingSession({
     sessionId,
     startedAt,
     isFinished,
+    clockKey,
     entries,
     openedRecipeId,
     plannedMealId,
@@ -1430,7 +1453,7 @@ function CookingSession({
   };
 
   const markCooked = async () => {
-    if (isMarking || !canMark || markable.length === 0) return;
+    if (isMarking || !canMark || markable.length === 0) return [];
     setMarkError(null);
     setIsMarking(true);
     try {
@@ -1441,9 +1464,38 @@ function CookingSession({
         ...Object.fromEntries(written),
       }));
       setIsMarking(false);
+      return written;
     } catch (error) {
       setMarkError(getErrorMessage(error, 'Unable to mark this as cooked.'));
       setIsMarking(false);
+      return [];
+    }
+  };
+
+  const saveTiming = async (
+    cooks: (readonly [string, string])[],
+    totals: StepClockTotals,
+    durationSeconds: number,
+  ) => {
+    if (cooks.length === 0) return;
+    try {
+      await dispatch(
+        setCookTiming({
+          uid,
+          timings: cooks.map(([recipeId, id]) => ({
+            id,
+            durationSeconds: durationSeconds > 0 ? durationSeconds : null,
+            stepTimes: getCookStepTimes(
+              totals,
+              recipeId,
+              entries.find((candidate) => candidate.recipe.id === recipeId)
+                ?.recipe.steps ?? [],
+            ),
+          })),
+        }),
+      ).unwrap();
+    } catch (error) {
+      setMarkError(getErrorMessage(error, 'Unable to save how long it took.'));
     }
   };
 
@@ -1495,12 +1547,24 @@ function CookingSession({
     setIsFinished(true);
     scrollToTop();
     focusPrimary();
-    records.forEach((record) => {
-      if (record.recordedCookId !== null) {
-        void saveServings(record.recordedCookId, record.servings);
-      }
+    const totals = readStepClock(stepClock.current, finishedAt.current);
+    const durationSeconds = Math.round(
+      (finishedAt.current - startedAt) / 1_000,
+    );
+    const recorded = records.flatMap((record) =>
+      record.recordedCookId === null
+        ? []
+        : [[record.recipeId, record.recordedCookId] as const],
+    );
+    recorded.forEach(([recipeId, id]) => {
+      const record = records.find(
+        (candidate) => candidate.recipeId === recipeId,
+      );
+      if (record) void saveServings(id, record.servings);
     });
-    void markCooked();
+    void markCooked().then((written) =>
+      saveTiming([...recorded, ...written], totals, durationSeconds),
+    );
   };
 
   const handleDone = async () => {

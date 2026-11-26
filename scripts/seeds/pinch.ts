@@ -202,6 +202,25 @@ const SEED_COOKS = [
     servings: 6,
     rating: 4,
     hasPhoto: true,
+    // Timed by cooking mode: the gather screen, the marinade and the simmer, and the last step skipped.
+    durationSeconds: 4_215,
+    stepTimes: {
+      gatherSeconds: 312,
+      steps: [
+        {
+          text: 'Marinate the chicken in the soy sauce, garlic and pepper for 30 minutes.',
+          seconds: 1_874,
+        },
+        {
+          text: 'Add the vinegar, the rest of the soy sauce and garlic, and the bay leaves,…',
+          seconds: 2_029,
+        },
+        {
+          text: 'Uncover and reduce the sauce until it clings to the chicken.',
+          seconds: 0,
+        },
+      ],
+    },
   },
   {
     id: 'seed-pinch-cook-3',
@@ -230,6 +249,9 @@ const SEED_COOKS = [
     servings: 4,
     rating: 4.5,
     hasPhoto: true,
+    // Typed by hand on the cook's page, so it has no breakdown.
+    durationSeconds: 5_400,
+    stepTimes: null,
   },
 ];
 

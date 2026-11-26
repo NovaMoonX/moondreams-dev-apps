@@ -162,7 +162,7 @@ How each surface opens, closes, and what it is. "Overlay" subviews (recipe, plan
 | Source form | `components/recipes/SourceFormSheet.tsx` | Sources "New source" or a row |
 | Container (put away) | `components/containers/ContainerFormSheet.tsx` | Recipe drawer "Put some away"; Meal drawer "Put some away"; Prepared meals "+ Add" |
 | Container (one box) | `components/containers/ContainerSheet.tsx` | Prepared meals row. In-place views: Ate some…, Change the eat-by date, Correct the count, move (Put in the freezer / Thaw) |
-| Cooking history | `components/recipes/CookingHistorySheet.tsx` | Recipe drawer "History" chip, only once cooked. In place: one cook (`CookEditView.tsx`), its note |
+| Cooking history | `components/recipes/CookingHistorySheet.tsx` | Recipe drawer "History" chip, only once cooked. In place: one cook (`CookPageView.tsx`), its note |
 | Note | `components/notes/NoteSheet.tsx` | Recipe drawer Notes "Add a note" / "Edit" |
 | New idea (link / photo / jot it down) | `components/ideas/IdeaAddSheet.tsx` (+ `IdeaWays.tsx`) | Ideas "New idea" |
 | Idea (edit) | `components/ideas/IdeaFormSheet.tsx` | Idea drawer "Modify" |
