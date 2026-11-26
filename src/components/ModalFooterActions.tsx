@@ -7,6 +7,8 @@ interface ModalFooterActionsProps {
   rightActions: ReactNode;
   /** Why the primary action is disabled, kept in the pinned footer so it is on screen with the button. */
   note?: ReactNode;
+  /** Pinned above the note and buttons, such as a composer that works on the form. */
+  top?: ReactNode;
 }
 
 /**
@@ -16,9 +18,10 @@ interface ModalFooterActionsProps {
  * clear belongs in a wider layout, not a wrapped stack here. On a phone the right group takes
  * the row's remaining width and its last button (the primary) grows.
  */
-function ModalFooterActions({ leftActions, cancelAction, rightActions, note }: ModalFooterActionsProps) {
+function ModalFooterActions({ leftActions, cancelAction, rightActions, note, top }: ModalFooterActionsProps) {
   return (
     <div className='form-footer col-span-full'>
+      {top}
       {note && (
         <p className='text-muted-foreground mb-2 text-xs' role='status'>
           {note}

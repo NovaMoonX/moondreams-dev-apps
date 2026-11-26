@@ -46,8 +46,10 @@ export function useUndoRemoval() {
     setRemoval(null);
   }, [removal]);
 
+  const clear = useCallback(() => setRemoval(null), []);
+
   const pending: PendingUndo | null =
     removal === null ? null : { message: removal.message, secondsLeft };
 
-  return { pending, showUndo, undo };
+  return { pending, showUndo, undo, clear };
 }

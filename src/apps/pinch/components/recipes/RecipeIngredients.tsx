@@ -1097,6 +1097,8 @@ interface RecipeIngredientsProps {
   onAdaptedIdsChange: (ids: string[]) => void;
   /** The person's units while a saved recipe is being edited, so its lines can be adapted; null otherwise. */
   adaptUnits: PinchUnitSettings | null;
+  /** Lines an AI added or changed, drawn marked. */
+  aiMarkedIds?: readonly string[];
 }
 
 /** A new line joins the last group, the one just above the add button, and "Add another" keeps the group of the line before. */
@@ -1108,6 +1110,7 @@ function RecipeIngredients({
   adaptedIds,
   onAdaptedIdsChange,
   adaptUnits,
+  aiMarkedIds = [],
 }: RecipeIngredientsProps) {
   const latest = useRef({ rows, onChange });
   useEffect(() => {
@@ -1459,8 +1462,11 @@ function RecipeIngredients({
                 className={join(
                   'border-border scroll-mt-16 scroll-mb-28 py-1',
                   !isFirst && 'border-t',
+                  aiMarkedIds.includes(row.id) &&
+                    'ai-changed -mx-2 my-0.5 rounded-lg border-transparent px-2',
                 )}
                 data-ingredient-row={row.id}
+                data-change-key={`ingredient-${row.id}`}
                 data-ingredient-unresolved={isUnresolved || undefined}
                 data-ingredient-amount-wrong={
                   (!isUnresolved && !isRowAmountValid(row)) || undefined

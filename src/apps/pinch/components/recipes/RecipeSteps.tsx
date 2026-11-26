@@ -27,6 +27,7 @@ import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { generateUuid } from '@/utils';
 import { clipAtWord } from '@/utils/stringUtils';
+import { getStepChangeKey } from '@apps/pinch/utils/pepperMarks';
 import {
   MAX_RECIPE_STEPS,
   MAX_STEP_LENGTH,
@@ -498,6 +499,8 @@ interface RecipeStepsProps {
   onRemoved: (message: string, restore: () => void) => void;
   /** Drawn under "Add a step". */
   footerAction?: ReactNode;
+  /** Steps an AI added or changed, by index, drawn marked. */
+  aiMarkedIndices?: readonly number[];
   /** Drawn under a step's row, by its index. */
   renderStepExtra?: (index: number) => ReactNode;
 }
@@ -537,6 +540,7 @@ function RecipeSteps({
   onChange,
   onRemoved,
   footerAction,
+  aiMarkedIndices = [],
   renderStepExtra,
 }: RecipeStepsProps) {
   const isPhone = useMediaQuery().isBelow('sm');
@@ -753,7 +757,14 @@ function RecipeSteps({
       </span>
     );
     return (
-      <div className='space-y-2'>
+      <div
+        className={join(
+          'space-y-2',
+          aiMarkedIndices.includes(index) &&
+            'ai-changed -mx-2 my-0.5 rounded-lg px-2',
+        )}
+        data-change-key={getStepChangeKey(step)}
+      >
         <div className='flex items-start gap-1'>
           {isEditing ? (
             <div className='flex min-w-0 flex-1 items-start gap-3 py-2'>

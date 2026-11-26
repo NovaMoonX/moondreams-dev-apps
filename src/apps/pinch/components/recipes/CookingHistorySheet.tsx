@@ -21,7 +21,7 @@ import ChangeEntryView from '@apps/pinch/components/notes/ChangeEntryView';
 import ChangeRow from '@apps/pinch/components/notes/ChangeRow';
 import NoteForm from '@apps/pinch/components/notes/NoteForm';
 import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
-import CookEditView from '@apps/pinch/components/recipes/CookEditView';
+import CookPageView from '@apps/pinch/components/recipes/CookPageView';
 import CookJournal from '@apps/pinch/components/recipes/CookJournal';
 import CookPhotoThumb from '@apps/pinch/components/shared/CookPhotoThumb';
 import {
@@ -335,7 +335,7 @@ function CookingHistorySheet({
     }
     if (editing !== null && isEditing) {
       return (
-        <CookEditView
+        <CookPageView
           key={editing.token}
           uid={uid}
           recipeId={recipeId}

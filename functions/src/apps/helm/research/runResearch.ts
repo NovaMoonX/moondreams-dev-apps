@@ -239,6 +239,8 @@ export const createResearchFixtureProvider = (): SearchProvider => ({
       errorCode: null,
       usage: EMPTY_USAGE,
       searches: hasWeb ? 2 : 0,
+      sources: [],
+      foundUrls: [],
     });
   },
 });

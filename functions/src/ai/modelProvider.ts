@@ -79,6 +79,10 @@ export interface WebSearchResult {
   usage: ModelUsage;
   /** Searches the API billed, from its own count. */
   searches: number;
+  /** The pages the searches returned, pages the model cited first; no more than a caller reads. */
+  sources: { title: string; url: string }[];
+  /** Every page address the searches returned or the model cited, uncapped, to check a found link against. */
+  foundUrls: string[];
 }
 
 /** One question answered with live web search, ending in the terminal tool's input. */
