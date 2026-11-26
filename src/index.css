@@ -597,6 +597,7 @@ html[data-pressing] * {
   --orb-accent: var(--assistant-orb-accent, var(--color-primary));
   --orb-level: var(--assistant-orb-level, 0);
   --orb-disc: 30px;
+  --orb-disc-faced: 40px;
   --orb-ripple: 1.4;
   --orb-ring: -4px;
   --orb-grow: 0.28;
@@ -616,6 +617,7 @@ html[data-pressing] * {
 }
 .assistant-orb[data-size="sm"] {
   --orb-disc: 18px;
+  --orb-disc-faced: 28px;
   --orb-ripple: 1.22;
   --orb-ring: -2px;
   --orb-grow: 0.18;
@@ -635,9 +637,21 @@ html[data-pressing] * {
 }
 .assistant-orb[data-size="lg"] {
   --orb-disc: 46px;
+  --orb-disc-faced: 56px;
   --orb-ripple: 1.34;
   gap: 14px;
   padding: 8px 20px 8px 8px;
+}
+.assistant-orb[data-avatar] {
+  --orb-disc: var(--orb-disc-faced);
+}
+/* A faced `sm` pill is taller than the 24px text line it sits in, so it overhangs the line's gaps rather than growing the line. */
+.assistant-orb[data-size="sm"][data-avatar] {
+  padding: 1px 10px 1px 1px;
+  margin-block: -4px;
+}
+.assistant-orb[data-size="sm"][data-avatar][data-state="waiting"] {
+  padding-right: 8px;
 }
 .assistant-orb[data-state="waiting"] {
   padding-right: 12px;
@@ -663,20 +677,49 @@ html[data-pressing] * {
   width: 100%;
   height: 100%;
   border-radius: 9999px;
-  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
 }
 .assistant-orb-avatar > * {
   width: 100%;
   height: 100%;
 }
-.assistant-orb-default {
-  display: block;
-  border-radius: 9999px;
-  background: radial-gradient(
-    circle at 35% 30%,
-    color-mix(in oklab, var(--orb-accent) 70%, white),
-    var(--orb-accent)
-  );
+/* The plain orb: a lit drop of the accent that expresses with light, moved by the nearest `data-state` (the pill's, or a picker tile's). */
+.assistant-orb-drop {
+  --orb-accent: var(--assistant-orb-accent, var(--color-primary));
+  --orb-level: var(--assistant-orb-level, 0);
+  overflow: visible;
+}
+.assistant-orb-drop * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.assistant-orb-drop .whole {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.assistant-orb-drop .halo,
+.assistant-orb-drop .body {
+  fill: var(--orb-accent);
+}
+.assistant-orb-drop .halo {
+  opacity: 0.25;
+}
+.assistant-orb-drop .core {
+  fill: color-mix(in oklab, var(--orb-accent) 55%, white);
+  opacity: 0.5;
+}
+.assistant-orb-drop .sheen {
+  fill: white;
+  opacity: 0.5;
+  transform: rotate(-32deg);
+}
+.assistant-orb-drop .sweep {
+  fill: none;
+  stroke: white;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 40 160;
+  opacity: 0;
 }
 .assistant-orb-word {
   overflow: hidden;
@@ -713,13 +756,30 @@ html[data-pressing] * {
 .assistant-orb-wave i:nth-child(4) { --bar: 60%; }
 .assistant-orb-wave i:nth-child(5) { --bar: 40%; }
 
-.assistant-orb[data-state="waiting"] .assistant-orb-avatar {
-  transform: scale(0.62);
-  opacity: 0.55;
-  animation: assistant-orb-breathe 3.6s ease-in-out infinite;
+[data-state="waiting"] .assistant-orb-drop .whole {
+  animation: assistant-orb-breathe 4.2s ease-in-out infinite;
 }
-.assistant-orb[data-state="listening"] .assistant-orb-avatar {
-  transform: scale(calc(1 + var(--orb-level) * var(--orb-grow)));
+[data-state="waiting"] .assistant-orb-drop .core {
+  animation: assistant-orb-pulse 4.2s ease-in-out infinite;
+}
+[data-state="listening"] .assistant-orb-drop .whole {
+  transform: scale(calc(1 + var(--orb-level) * 0.1));
+}
+[data-state="listening"] .assistant-orb-drop .core {
+  opacity: 1;
+  transform: scale(calc(0.8 + var(--orb-level) * 0.4));
+}
+[data-state="thinking"] .assistant-orb-drop .sweep {
+  opacity: 1;
+  animation: assistant-orb-spin 1.3s linear infinite;
+}
+[data-state="speaking"] .assistant-orb-drop .core {
+  opacity: 1;
+  transform: scale(calc(0.7 + var(--orb-level) * 0.7));
+}
+[data-state="speaking"] .assistant-orb-drop .halo {
+  opacity: calc(0.25 + var(--orb-level) * 0.5);
+  transform: scale(calc(1 + var(--orb-level) * 0.12));
 }
 .assistant-orb[data-state="listening"] .assistant-orb-disc::before {
   border: 2px solid var(--orb-accent);
@@ -729,23 +789,36 @@ html[data-pressing] * {
   border: 2px solid var(--orb-accent);
   animation: assistant-orb-ripple 1.4s 0.7s ease-out infinite;
 }
-.assistant-orb[data-state="thinking"] .assistant-orb-disc::before {
+.assistant-orb[data-state="thinking"][data-avatar] .assistant-orb-disc::before {
   inset: var(--orb-ring);
-  border: 2px solid transparent;
+  border: 1.5px solid transparent;
   border-top-color: var(--orb-accent);
   border-right-color: var(--orb-accent);
   animation: assistant-orb-spin 0.9s linear infinite;
 }
-.assistant-orb[data-state="speaking"] .assistant-orb-avatar {
-  transform: scale(0.85);
-}
 .assistant-orb[data-state="speaking"] .assistant-orb-wave {
   display: flex;
+}
+/* With a face, the face does the expressing: one thin ripple, and the light stays quiet. */
+.assistant-orb[data-state="listening"][data-avatar] .assistant-orb-disc::before {
+  border-width: 1.5px;
+}
+.assistant-orb[data-state="listening"][data-avatar] .assistant-orb-disc::after {
+  display: none;
+}
+/* The plain orb carries its own light, so no outer ring turns round it while it thinks. */
+.assistant-orb[data-state="thinking"]:not([data-avatar]) .assistant-orb-disc::before {
+  display: none;
 }
 
 @keyframes assistant-orb-breathe {
   50% {
-    opacity: 0.8;
+    transform: scale(0.96);
+  }
+}
+@keyframes assistant-orb-pulse {
+  50% {
+    opacity: 0.9;
   }
 }
 @keyframes assistant-orb-ripple {
@@ -766,16 +839,16 @@ html[data-pressing] * {
 @media (prefers-reduced-motion: reduce) {
   .assistant-orb-disc::before,
   .assistant-orb-disc::after,
-  .assistant-orb-avatar {
+  .assistant-orb-drop * {
     animation: none !important;
-    transition: none;
+    transition: none !important;
   }
   .assistant-orb[data-state="listening"] .assistant-orb-disc::before,
   .assistant-orb[data-state="listening"] .assistant-orb-disc::after {
     display: none;
   }
-  .assistant-orb[data-state="listening"] .assistant-orb-avatar {
-    transform: scale(1.1);
+  [data-state="listening"] .assistant-orb-drop .whole {
+    transform: scale(1.06);
   }
   .assistant-orb-wave i {
     transition: none;

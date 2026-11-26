@@ -96,6 +96,7 @@ const PINCH_VOICE_SETTINGS_FIELDS = {
   isReadingAloud: 'notUseful',
   isReadingNotes: 'notUseful',
   isWaiting: 'notUseful',
+  look: 'notUseful',
 } satisfies Record<keyof PinchVoiceSettings, ShareDecision>;
 
 const PINCH_UNIT_SETTINGS_FIELDS = {

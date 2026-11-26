@@ -10689,6 +10689,7 @@ assert.equal(
         isReadingAloud: null,
         isReadingNotes: null,
         isWaiting: null,
+        look: 'CALM',
       },
       units: { weight: 'AS_WRITTEN', volume: 'AS_WRITTEN', keepSpoons: true },
       reminders: {
@@ -10868,6 +10869,7 @@ assert.equal(
       isReadingAloud: null,
       isReadingNotes: null,
       isWaiting: null,
+      look: 'CALM',
     },
     "and one written before the voice choices reads each as not chosen yet, so this device's own earlier choice still stands",
   );
@@ -10882,6 +10884,7 @@ assert.equal(
         isReadingAloud: null,
         isReadingNotes: null,
         isWaiting: true,
+        look: 'CALM',
       },
       [
         { path: ['voice', 'hasAgreed'], value: true },

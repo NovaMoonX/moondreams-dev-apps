@@ -11,7 +11,7 @@ interface AssistantOrbProps {
   state: AssistantOrbState;
   /** The short line for the current state; the caller writes the copy for each. */
   word: string;
-  /** The round mark in the disc; a plain accent-coloured orb when omitted. */
+  /** The round mark in the disc, which then does the expressing and gets a larger disc; a lit drop of the accent when omitted. */
   avatar?: ReactNode;
   /** The live input level while listening and the output level while speaking, 0 to 1, read every frame. */
   getLevel?: () => number;
@@ -24,6 +24,21 @@ interface AssistantOrbProps {
   /** When given the whole pill is one button. */
   onClick?: () => void;
   className?: string;
+}
+
+/** The plain orb's drawing: a halo, the accent body, a lighter core and a small sheen, moved by CSS on the nearest `data-state`; the pill uses it when it has no avatar, and a picker can draw it alone. */
+export function AssistantOrbDrop() {
+  return (
+    <svg viewBox='6 6 88 88' focusable='false' className='assistant-orb-drop'>
+      <g className='whole'>
+        <circle className='halo' cx='50' cy='50' r='44' />
+        <circle className='body' cx='50' cy='50' r='38' />
+        <circle className='core' cx='50' cy='52' r='24' />
+        <ellipse className='sheen' cx='39' cy='33' rx='8' ry='4.5' />
+        <circle className='sweep' cx='50' cy='50' r='31' />
+      </g>
+    </svg>
+  );
 }
 
 /** The floating pill that shows where a spoken assistant is (waiting, listening, thinking, speaking); the accent is `--assistant-orb-accent`. */
@@ -73,11 +88,12 @@ function AssistantOrb({
       ref={rootRef}
       data-state={state}
       data-size={size}
+      data-avatar={avatar ? 'true' : undefined}
       className={join('assistant-orb', !onClick && className)}
     >
       <span aria-hidden='true' className='assistant-orb-disc'>
         <span className='assistant-orb-avatar'>
-          {avatar ?? <span className='assistant-orb-default' />}
+          {avatar ?? <AssistantOrbDrop />}
         </span>
       </span>
       <span aria-hidden='true' className='assistant-orb-word'>

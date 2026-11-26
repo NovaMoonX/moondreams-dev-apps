@@ -10,6 +10,7 @@ import { readMicrophonePermission } from '@/lib/speech/microphonePermission';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import type { MeasureUnit } from '@/utils/measureUtils';
 import { COOK_WINDOW_MS } from '@apps/pinch/constants';
+import type { PepperLook } from '@apps/pinch/types';
 import {
   getCookCommandKey,
   stepCookReading,
@@ -321,6 +322,7 @@ export function useCookVoice({
   const isReadingAloud = settings.voice.isReadingAloud ?? localReadingAloud;
   const isReadingNotes = settings.voice.isReadingNotes ?? localReadingNotes;
   const isWaitingPreferred = settings.voice.isWaiting ?? localWaiting;
+  const look = settings.voice.look;
   const setHasAgreed = (next: boolean) => {
     setLocalAgreed(next);
     void saveSettings({ voice: { hasAgreed: next } });
@@ -332,6 +334,9 @@ export function useCookVoice({
   const setIsReadingNotes = (next: boolean) => {
     setLocalReadingNotes(next);
     void saveSettings({ voice: { isReadingNotes: next } });
+  };
+  const setLook = (next: PepperLook) => {
+    void saveSettings({ voice: { look: next } });
   };
   const setIsWaitingPreferred = (next: boolean) => {
     setLocalWaiting(next);
@@ -922,6 +927,9 @@ export function useCookVoice({
     /** Reads a step's tips and notes right after the step. */
     isReadingNotes,
     setIsReadingNotes,
+    /** How Pepper looks in the orb, saved with the account. */
+    look,
+    setLook,
     /** Speaks `text` now, whether or not the mic is on. */
     speak: (text: string) => {
       notesQueue.current = null;
