@@ -16,7 +16,6 @@ import PicksRow from '@apps/pinch/components/settings/PicksRow';
 import UnitsRow from '@apps/pinch/components/settings/UnitsRow';
 import SharedLinksSection from '@apps/pinch/components/settings/SharedLinksSection';
 import {
-  selectIngredientsById,
   selectPinchSettings,
   selectPinchSettingsLoadError,
 } from '@apps/pinch/store/selectors';
@@ -28,15 +27,10 @@ interface SettingsScreenProps {
 /** The choices that reach every tab. A group whose document couldn't be read draws nothing to change, since its switches would show the defaults as the person's choices; the other groups read other documents and stay. */
 function SettingsScreen({ uid }: SettingsScreenProps) {
   const loadError = useAppSelector(selectPinchSettingsLoadError);
-  const hasPicks = useAppSelector((state) => {
-    const ingredientsById = selectIngredientsById(state);
-    return Object.values(selectPinchSettings(state).ingredientPicks).some(
-      (pick) => {
-        const ingredient = ingredientsById.get(pick.ingredientId);
-        return ingredient !== undefined && !ingredient.isArchived;
-      },
-    );
-  });
+  const hasPicks = useAppSelector(
+    (state) =>
+      Object.keys(selectPinchSettings(state).ingredientPicks).length > 0,
+  );
   const screenRef = useRef<HTMLElement>(null);
 
   useEffect(() => {

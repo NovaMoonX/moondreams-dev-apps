@@ -45,15 +45,23 @@ export interface ExtractedIngredient {
   group: string | null;
 }
 
+export const ESTIMATED_FIELDS = [
+  'PREP',
+  'COOK',
+  'FRIDGE',
+  'FREEZER',
+  'REHEAT',
+] as const;
+
+export type EstimatedField = (typeof ESTIMATED_FIELDS)[number];
+
 /** What the reader found. It only ever fills the form; nothing is saved from it. */
 export interface ExtractedRecipe {
   title: string | null;
   servings: number | null;
   isServingsEstimate: boolean;
-  /** True only when the source gave no prep or cook time and either was estimated from the method. */
-  isTimeEstimate: boolean;
-  /** True when the keeping details were estimated from the dish rather than stated. */
-  isCareEstimate: boolean;
+  /** The time and keeping fields the reader worked out rather than read, each only while it has a value. */
+  estimated: EstimatedField[];
   categories: DishCategory[];
   prepMinutes: number | null;
   cookMinutes: number | null;
@@ -64,7 +72,7 @@ export interface ExtractedRecipe {
   steps: string[];
   /** The section each step sits under, index for index with `steps`; the reader groups the steps into sections when the source doesn't. */
   stepSections: (string | null)[];
-  /** What the source says, or an estimate for the dish when `isCareEstimate`. */
+  /** What the source says, or an estimate for the dish when FRIDGE, FREEZER or REHEAT is in `estimated`. */
   care: RecipeCare | null;
   /** Parts of the recipe the reader could not make out. */
   unread: string[];
@@ -243,13 +251,11 @@ const readUnmeasured = (line: ExtractedIngredient): ExtractedIngredient[] => {
   }));
 };
 
-const MAX_AMOUNT_WORDS = 3;
-const HOW_MUCH_WORD =
-  /\b(?:taste|needed|required|garnish|serving|handful|pinch(?:es)?|splash|dash|drizzle|sprinkle|knob|bunch|sprigs?|sticks?|dollop|glug|few|some|little|bit|lot|plenty|enough|couple|half|whole)\b|\d/i;
+const DESCRIPTION_LEAD =
+  /\b(?:whatever|whichever|which ?ever|your (?:favou?rite|choice)|of your choice|any (?:kind|type|sort)|depending on|you(?:'|’)?re (?:cooking|using|like|prefer)|you are (?:cooking|using)|the kind)\b/i;
 
-/** Words that say which or what kind, not how much ("whatever meat that you are cooking"), belong in the note. */
-const isDescription = (text: string) =>
-  text.split(/\s+/).length > MAX_AMOUNT_WORDS && !HOW_MUCH_WORD.test(text);
+/** Words that say which ingredient or what kind ("whatever meat you're cooking"), never how much, belong in the note. */
+const isDescription = (text: string) => DESCRIPTION_LEAD.test(text);
 
 const SAME_AMOUNT_RATIO = 0.8;
 
@@ -322,25 +328,33 @@ export function normalizeExtractedRecipe(
     unknown
   >;
   const list = (value: unknown) => (Array.isArray(value) ? value : []);
-  const isCareDropped = !isFinishing && parsed.isCareEstimate === true;
+  const listed = ESTIMATED_FIELDS.filter((field) =>
+    list(parsed.estimated).includes(field),
+  );
+  const kept = (field: EstimatedField) =>
+    isFinishing || !listed.includes(field);
   const care = toCare({
-    fridgeDays: isCareDropped ? null : asWholeDays(parsed.fridgeDays),
-    freezerDays: isCareDropped ? null : asWholeDays(parsed.freezerDays),
-    reheat: isCareDropped ? null : parsed.reheat,
+    fridgeDays: kept('FRIDGE') ? asWholeDays(parsed.fridgeDays) : null,
+    freezerDays: kept('FREEZER') ? asWholeDays(parsed.freezerDays) : null,
+    reheat: kept('REHEAT') ? parsed.reheat : null,
     tip: parsed.tip,
   });
-  const isTimeDropped = !isFinishing && parsed.isTimeEstimate === true;
-  const prepMinutes = isTimeDropped ? null : asMinutes(parsed.prepMinutes);
-  const cookMinutes = isTimeDropped ? null : asMinutes(parsed.cookMinutes);
+  const prepMinutes = kept('PREP') ? asMinutes(parsed.prepMinutes) : null;
+  const cookMinutes = kept('COOK') ? asMinutes(parsed.cookMinutes) : null;
+  const hasValue: Record<EstimatedField, boolean> = {
+    PREP: prepMinutes !== null,
+    COOK: cookMinutes !== null,
+    FRIDGE: (care?.fridgeDays ?? null) !== null,
+    FREEZER: (care?.freezerDays ?? null) !== null,
+    REHEAT: (care?.reheat ?? null) !== null,
+  };
 
   return {
     title: asString(parsed.title)?.slice(0, MAX_RECIPE_TITLE_LENGTH) ?? null,
     servings: asNumber(parsed.servings),
     isServingsEstimate:
       parsed.servingsEstimated === true && asNumber(parsed.servings) !== null,
-    isTimeEstimate:
-      parsed.isTimeEstimate === true &&
-      (prepMinutes !== null || cookMinutes !== null),
+    estimated: isFinishing ? listed.filter((field) => hasValue[field]) : [],
     categories: getCategories({
       categories: list(parsed.categories).filter(
         (value): value is string => typeof value === 'string',
@@ -386,8 +400,6 @@ export function normalizeExtractedRecipe(
       .slice(0, MAX_RECIPE_INGREDIENTS),
     ...readSteps(list(parsed.steps)),
     care,
-    isCareEstimate:
-      parsed.isCareEstimate === true && care !== null && !isCareDropped,
     unread: list(parsed.unread)
       .flatMap((entry) =>
         asString(entry) ? [asString(entry)!.slice(0, 200)] : [],

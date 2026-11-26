@@ -192,19 +192,23 @@ export const withPageFallbacks = (
   );
   const publishedPrep = readIsoMinutes(getPublished(nodes, 'prepTime'));
   const publishedCook = readIsoMinutes(getPublished(nodes, 'cookTime'));
+  const isPrepEstimated = recipe.estimated.includes('PREP');
+  const isCookEstimated = recipe.estimated.includes('COOK');
   const result = {
     ...recipe,
     title: readPageTitle(recipe.title) ?? (pageTitle || null),
     description: recipe.description ?? (pageDescription || null),
-    prepMinutes: recipe.isTimeEstimate
+    prepMinutes: isPrepEstimated
       ? (publishedPrep ?? recipe.prepMinutes)
       : (recipe.prepMinutes ?? publishedPrep),
-    cookMinutes: recipe.isTimeEstimate
+    cookMinutes: isCookEstimated
       ? (publishedCook ?? recipe.cookMinutes)
       : (recipe.cookMinutes ?? publishedCook),
-    isTimeEstimate:
-      recipe.isTimeEstimate &&
-      (publishedPrep === null || publishedCook === null),
+    estimated: recipe.estimated.filter(
+      (field) =>
+        !(field === 'PREP' && publishedPrep !== null) &&
+        !(field === 'COOK' && publishedCook !== null),
+    ),
     servings: hasPublishedServings ? publishedServings : recipe.servings,
     isServingsEstimate: hasPublishedServings
       ? false

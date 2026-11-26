@@ -393,12 +393,11 @@ assert.deepEqual(Object.keys(hostile).sort(), [
   'categories',
   'cookMinutes',
   'description',
+  'estimated',
   'finished',
   'guided',
   'ingredients',
-  'isCareEstimate',
   'isServingsEstimate',
-  'isTimeEstimate',
   'photoSearch',
   'prepMinutes',
   'servings',
@@ -1134,6 +1133,29 @@ const meat = normalizeExtractedRecipe({
       note: null,
       amountText: 'a big handful or so',
     },
+    ...[
+      'to coat the pan',
+      'for dusting the board',
+      'as much as you like',
+      'for greasing the dish',
+    ].map((amountText) => ({
+      name: 'Flour',
+      amount: null,
+      unit: null,
+      note: null,
+      amountText,
+    })),
+    ...[
+      "whatever meat you're cooking",
+      'your favorite cheese',
+      'depending on the pasta you are using',
+    ].map((amountText) => ({
+      name: 'Other',
+      amount: null,
+      unit: null,
+      note: null,
+      amountText,
+    })),
   ],
   steps: [],
   unread: [],
@@ -1144,37 +1166,65 @@ assert.deepEqual(
     ['Meat', 'your choice, whatever meat that you are cooking', null],
     ['Butter', null, 'a stick'],
     ['Parsley', null, 'a big handful or so'],
+    ['Flour', null, 'to coat the pan'],
+    ['Flour', null, 'for dusting the board'],
+    ['Flour', null, 'as much as you like'],
+    ['Flour', null, 'for greasing the dish'],
+    ['Other', "whatever meat you're cooking", null],
+    ['Other', 'your favorite cheese', null],
+    ['Other', 'depending on the pasta you are using', null],
   ],
   'words that describe which meat are a note; how-much words stay the amount in words',
 );
 
-// isTimeEstimate is false when absent, old, or when no time was read
-assert.equal(
-  normalizeExtractedRecipe({ prepMinutes: 10 }).isTimeEstimate,
-  false,
+// estimated lists only fields that exist and were listed
+assert.deepEqual(normalizeExtractedRecipe({ prepMinutes: 10 }).estimated, []);
+assert.deepEqual(
+  normalizeExtractedRecipe({ estimated: ['PREP'] }).estimated,
+  [],
+  'a listed field with no value is not estimated',
 );
-assert.equal(
-  normalizeExtractedRecipe({ isTimeEstimate: true }).isTimeEstimate,
-  false,
-  'an estimate flag with no time is false',
+assert.deepEqual(
+  normalizeExtractedRecipe({ estimated: ['COOK', 'nonsense'], cookMinutes: 45 })
+    .estimated,
+  ['COOK'],
 );
-assert.equal(
-  normalizeExtractedRecipe({ isTimeEstimate: true, cookMinutes: 45 })
-    .isTimeEstimate,
-  true,
+assert.deepEqual(
+  normalizeExtractedRecipe({ estimated: ['FRIDGE'], fridgeDays: 3.9 })
+    .estimated,
+  ['FRIDGE'],
 );
 
-assert.equal(normalizeExtractedRecipe({ fridgeDays: 3 }).isCareEstimate, false);
-assert.equal(
-  normalizeExtractedRecipe({ isCareEstimate: true }).isCareEstimate,
+// A stated prep with an estimated cook: finishing off nulls only the cook
+const statedPrep = {
+  prepMinutes: 15,
+  cookMinutes: 40,
+  estimated: ['COOK'],
+  fridgeDays: 4,
+  freezerDays: 90,
+  reheat: 'Warm gently.',
+};
+const statedPrepOff = normalizeExtractedRecipe(statedPrep, false);
+assert.equal(statedPrepOff.prepMinutes, 15, 'the source’s prep is kept');
+assert.equal(statedPrepOff.cookMinutes, null, 'the estimated cook goes');
+assert.equal(statedPrepOff.care?.fridgeDays, 4, 'stated keeping is kept');
+assert.deepEqual(statedPrepOff.estimated, []);
+const statedPrepOn = normalizeExtractedRecipe(statedPrep);
+assert.equal(statedPrepOn.cookMinutes, 40);
+assert.deepEqual(statedPrepOn.estimated, ['COOK']);
+
+const statedFridge = normalizeExtractedRecipe(
+  {
+    estimated: ['FREEZER', 'REHEAT'],
+    fridgeDays: 4,
+    freezerDays: 90,
+    reheat: 'Warm gently.',
+  },
   false,
-  'an estimate flag with no care is false',
 );
-assert.equal(
-  normalizeExtractedRecipe({ isCareEstimate: true, fridgeDays: 3.9 })
-    .isCareEstimate,
-  true,
-);
+assert.equal(statedFridge.care?.fridgeDays, 4, 'a stated fridge time stays');
+assert.equal(statedFridge.care?.freezerDays, null);
+assert.equal(statedFridge.care?.reheat, null);
 
 // Finishing like a cookbook: what the model added is kept, trimmed, deduped and capped
 assert.deepEqual(normalizeExtractedRecipe({}).finished, []);
@@ -1201,10 +1251,9 @@ assert.equal(
 
 const cornbreadReading = {
   title: 'Cornbread dressing',
-  isTimeEstimate: true,
+  estimated: ['PREP', 'COOK', 'FRIDGE', 'FREEZER', 'REHEAT'],
   prepMinutes: 25,
   cookMinutes: 40,
-  isCareEstimate: true,
   fridgeDays: 3,
   freezerDays: 90,
   reheat: 'Reheat covered at 350°F with a splash of broth.',
@@ -1234,8 +1283,13 @@ assert.deepEqual(cornbread.finished, [
   'added a step to crumble the cornbread',
   'estimated how long it keeps',
 ]);
-assert.equal(cornbread.isTimeEstimate, true);
-assert.equal(cornbread.isCareEstimate, true);
+assert.deepEqual(cornbread.estimated, [
+  'PREP',
+  'COOK',
+  'FRIDGE',
+  'FREEZER',
+  'REHEAT',
+]);
 assert.equal(cornbread.care?.fridgeDays, 3);
 assert.equal(cornbread.steps.length, 4);
 
@@ -1244,8 +1298,7 @@ const strictCornbread = normalizeExtractedRecipe(cornbreadReading, false);
 assert.deepEqual(strictCornbread.finished, []);
 assert.equal(strictCornbread.prepMinutes, null);
 assert.equal(strictCornbread.cookMinutes, null);
-assert.equal(strictCornbread.isTimeEstimate, false);
-assert.equal(strictCornbread.isCareEstimate, false);
+assert.deepEqual(strictCornbread.estimated, []);
 assert.equal(strictCornbread.care?.fridgeDays, null);
 assert.equal(strictCornbread.care?.freezerDays, null);
 assert.equal(strictCornbread.care?.reheat, null);

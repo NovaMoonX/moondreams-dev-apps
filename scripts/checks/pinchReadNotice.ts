@@ -8,8 +8,7 @@ import {
 const base = {
   servings: 4,
   isServingsEstimate: false,
-  isTimeEstimate: false,
-  isCareEstimate: false,
+  estimated: [] as ('PREP' | 'COOK' | 'FRIDGE' | 'FREEZER' | 'REHEAT')[],
   guided: [],
   finished: [],
   unread: [],
@@ -25,7 +24,12 @@ assert.equal(guided.details.length, 1);
 assert.ok(!guided.details[0].startsWith(guided.headline));
 
 const two = getReadNotice(
-  { ...base, isServingsEstimate: true, servings: 12, isTimeEstimate: true },
+  {
+    ...base,
+    isServingsEstimate: true,
+    servings: 12,
+    estimated: ['COOK' as const],
+  },
   [],
 );
 assert.equal(two.headline, 'Filled in and finished for you');
@@ -37,8 +41,7 @@ const four = getReadNotice(
   {
     ...base,
     isServingsEstimate: true,
-    isTimeEstimate: true,
-    isCareEstimate: true,
+    estimated: ['PREP' as const, 'FRIDGE' as const],
     unread: ['the photo'],
   },
   [{ name: 'Flour', ingredientName: 'Bread flour' }],
@@ -73,35 +76,25 @@ const followed = getReadNotice(
 assert.equal(followed.headline, 'We followed your notes');
 assert.ok(followed.footer !== null);
 
-const merged = getReadNotice(
-  {
-    ...finishedBase,
-    finished: [...finishedBase.finished, 'estimated how long it keeps'],
-    isTimeEstimate: true,
-    isCareEstimate: true,
-  },
-  [],
-);
-assert.equal(merged.details.length, 3);
-assert.ok(!merged.details.some((d) => d.startsWith('We estimated')));
-
-const separate = getReadNotice(
+const both = getReadNotice(
   {
     ...base,
-    finished: ['added a step to melt the butter'],
-    isTimeEstimate: true,
-    isCareEstimate: true,
+    finished: ['added a step to cook the bacon'],
+    estimated: ['PREP', 'COOK', 'FRIDGE'],
   },
   [],
 );
-assert.equal(
-  separate.details.filter((d) => d.startsWith('We estimated')).length,
-  2,
-  'estimates the finished list does not mention keep their own lines',
+assert.deepEqual(
+  both.details,
+  [
+    'We estimated a time the recipe didn’t give, from its steps.',
+    'We estimated how long it keeps and how to reheat it.',
+    'Added a step to cook the bacon.',
+  ],
+  'the estimate lines and the finished items are both shown, never merged away',
 );
-assert.ok(separate.details.length > MAX_DIRECT_NOTICE_DETAILS);
 
-const strict = getReadNotice({ ...base, isTimeEstimate: true }, []);
+const strict = getReadNotice({ ...base, estimated: ['PREP' as const] }, []);
 assert.equal(strict.footer, null);
 
 console.log('pinch read notice: ok');

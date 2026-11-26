@@ -8,10 +8,6 @@ export interface ReadNotice {
   footer: string | null;
 }
 
-const SAYS_TIMES = /\b(?:prep|cook|times?|minutes?)\b/i;
-const SAYS_KEEPING =
-  /\b(?:keeps?|keeping|fridge|freezer|reheat\w*|storage|stored?)\b/i;
-
 const toSentence = (text: string) =>
   `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}`;
 
@@ -27,30 +23,33 @@ export const getReadNotice = (
     ExtractedRecipe,
     | 'servings'
     | 'isServingsEstimate'
-    | 'isTimeEstimate'
-    | 'isCareEstimate'
+    | 'estimated'
     | 'guided'
     | 'finished'
     | 'unread'
   >,
   usedPicks: { name: string; ingredientName: string }[],
 ): ReadNotice => {
+  const isTimeEstimated = recipe.estimated.some(
+    (field) => field === 'PREP' || field === 'COOK',
+  );
+  const isCareEstimated = recipe.estimated.some(
+    (field) => field !== 'PREP' && field !== 'COOK',
+  );
   const isFinishedForThem =
     (recipe.isServingsEstimate && recipe.servings !== null) ||
-    recipe.isTimeEstimate ||
-    recipe.isCareEstimate ||
+    isTimeEstimated ||
+    isCareEstimated ||
     recipe.finished.length > 0 ||
     usedPicks.length > 0;
-  const isTimesSaid = recipe.finished.some((item) => SAYS_TIMES.test(item));
-  const isKeepingSaid = recipe.finished.some((item) => SAYS_KEEPING.test(item));
   const details = [
     recipe.isServingsEstimate && recipe.servings !== null
       ? `We guessed ${recipe.servings} servings from the amounts, since the recipe didn’t say.`
       : null,
-    recipe.isTimeEstimate && !isTimesSaid
-      ? 'We estimated the prep and cook times, since the recipe didn’t give them.'
+    isTimeEstimated
+      ? 'We estimated a time the recipe didn’t give, from its steps.'
       : null,
-    recipe.isCareEstimate && !isKeepingSaid
+    isCareEstimated
       ? 'We estimated how long it keeps and how to reheat it.'
       : null,
     ...recipe.finished.map(toSentence),

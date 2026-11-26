@@ -18,11 +18,17 @@ function PicksRow({ uid, position }: PicksRowProps) {
   const { settings, save } = usePinchSettings(uid);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const picks = Object.entries(settings.ingredientPicks)
-    .flatMap(([key, pick]) => {
+    .map(([key, pick]) => {
       const ingredient = ingredientsById.get(pick.ingredientId);
-      return ingredient && !ingredient.isArchived
-        ? [{ key, pick, ingredientName: ingredient.name }]
-        : [];
+      return {
+        key,
+        pick,
+        target: ingredient
+          ? ingredient.isArchived
+            ? `${ingredient.name} (archived)`
+            : ingredient.name
+          : 'an ingredient you removed',
+      };
     })
     .sort((a, b) => b.pick.pickedAt - a.pick.pickedAt);
   const [first] = picks;
@@ -35,7 +41,7 @@ function PicksRow({ uid, position }: PicksRowProps) {
         title='Your usual picks'
         groupPosition={position}
         icon='📌'
-        summary={`${first.pick.name} is ${first.ingredientName}${
+        summary={`${first.pick.name} is ${first.target}${
           picks.length > 1 ? `, and ${picks.length - 1} more` : ''
         }`}
         lines={2}
@@ -46,10 +52,10 @@ function PicksRow({ uid, position }: PicksRowProps) {
           When a recipe says one of these, we use your pick.
         </p>
         <ul className='space-y-1'>
-          {picks.map(({ key, pick, ingredientName }) => (
+          {picks.map(({ key, pick, target }) => (
             <li key={key} className='flex min-h-10 items-center gap-2'>
               <span className='min-w-0 flex-1 text-pretty'>
-                {pick.name} → {ingredientName}
+                {pick.name} → {target}
               </span>
               <Button
                 type='button'

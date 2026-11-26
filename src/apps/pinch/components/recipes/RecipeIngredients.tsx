@@ -544,12 +544,14 @@ function IngredientEditor({
       openedName,
       ingredientId,
       settings.ingredientPicks,
-      Date.now(),
+      ingredients,
     );
     if (ingredientPicks === null) return;
     void dispatch(savePinchSettings({ uid, patch: { ingredientPicks } }))
       .unwrap()
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        console.error('Could not remember the ingredient pick', error);
+      });
   };
 
   if (isUnresolved) {

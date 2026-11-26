@@ -1,7 +1,4 @@
-import type {
-  IngredientPick,
-  ResolvedIngredient,
-} from '@apps/pinch/types';
+import type { IngredientPick, ResolvedIngredient } from '@apps/pinch/types';
 import { withoutFiller } from '@apps/pinch/utils/ingredientMatch';
 
 /** At most this many names are remembered; the oldest pick goes first. */
@@ -27,21 +24,26 @@ export const findPickedIngredient = (
   );
 };
 
-/** The settings change that remembers a pick, forgetting the oldest once the list is full; null when the name has no key or the pick is already remembered. */
+/** The settings change that remembers a pick, forgetting picks whose ingredient is gone first and then the oldest once the list is full; null when the name has no key or the pick is already remembered. */
 export const getRememberPatch = (
   name: string,
   ingredientId: string,
   picks: Record<string, IngredientPick>,
-  now: number,
+  ingredients: ResolvedIngredient[],
 ): Record<string, IngredientPick | null> | null => {
   const key = getPickKey(name);
   if (key === '' || picks[key]?.ingredientId === ingredientId) return null;
+  const known = new Set(ingredients.map((ingredient) => ingredient.id));
   const others = Object.entries(picks).filter(([other]) => other !== key);
   const overflow = others
-    .sort(([, a], [, b]) => a.pickedAt - b.pickedAt)
+    .sort(
+      ([, a], [, b]) =>
+        Number(known.has(a.ingredientId)) - Number(known.has(b.ingredientId)) ||
+        a.pickedAt - b.pickedAt,
+    )
     .slice(0, Math.max(0, others.length + 1 - MAX_INGREDIENT_PICKS));
   return {
     ...Object.fromEntries(overflow.map(([other]) => [other, null])),
-    [key]: { name: name.trim(), ingredientId, pickedAt: now },
+    [key]: { name: name.trim(), ingredientId, pickedAt: Date.now() },
   };
 };

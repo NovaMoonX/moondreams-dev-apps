@@ -788,7 +788,7 @@ function RecipeSteps({
               {number}
               <span
                 className={join(
-                  'line-clamp-6 min-w-0 break-words flex-1 text-sm font-normal',
+                  'line-clamp-6 min-w-0 flex-1 text-sm font-normal break-words',
                   step.trim() === '' && 'text-muted-foreground',
                 )}
               >

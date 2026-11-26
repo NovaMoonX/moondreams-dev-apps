@@ -69,12 +69,6 @@ const getResponseSchema = (isFinishing: boolean) => ({
         ? 'Cook time in whole minutes: the time the source gives, otherwise your estimate from the method.'
         : 'Cook time in whole minutes: only the time the source gives, otherwise null.',
     ),
-    isTimeEstimate: {
-      type: SchemaType.BOOLEAN,
-      description: isFinishing
-        ? 'True only when the source gives no prep or cook time and you estimated either one from the method. False when both come from the source.'
-        : 'Always false.',
-    },
     description: nullable(
       SchemaType.STRING,
       'One or two warm sentences describing the dish: what it is and what makes it this one (its key flavour or a named product it uses), plus any story the person\'s guidance gives ("Mom\'s Christmas meatballs"). Written from the source and the guidance, never claiming anything neither says.',
@@ -173,11 +167,15 @@ const getResponseSchema = (isFinishing: boolean) => ({
       SchemaType.STRING,
       "A tip for storing leftovers, such as keeping the sauce separate: the recipe's own, otherwise null.",
     ),
-    isCareEstimate: {
-      type: SchemaType.BOOLEAN,
+    estimated: {
+      type: SchemaType.ARRAY,
       description: isFinishing
-        ? 'True when the recipe states none of the keeping details and any of fridgeDays, freezerDays or reheat is your estimate; false when they all come from the recipe.'
-        : 'Always false.',
+        ? 'The fields you estimated rather than read from the source: PREP and COOK for a time you worked out from the method, FRIDGE, FREEZER and REHEAT for keeping details you filled in from general knowledge. A field the source states is never listed, and a field left null is never listed. Empty when everything came from the source.'
+        : 'Always an empty list.',
+      items: {
+        type: SchemaType.STRING,
+        enum: ['PREP', 'COOK', 'FRIDGE', 'FREEZER', 'REHEAT'],
+      },
     },
     unread: {
       type: SchemaType.ARRAY,
@@ -193,7 +191,7 @@ const getResponseSchema = (isFinishing: boolean) => ({
     finished: {
       type: SchemaType.ARRAY,
       description:
-        'Each thing you did beyond the source, in a few plain words ("added a step to melt the butter", "added a step to chop the onion and celery", "raised prep to 25 minutes for the chopping", "estimated how long it keeps"). Empty when nothing was added.',
+        'Only what you added or changed beyond the source, in a few plain words ("added a step to melt the butter", "split the long step into three", "raised prep to 25 minutes for the chopping"): added or split steps and raised times. A time or keeping detail you estimated goes in "estimated", never here. Empty when nothing was added.',
       items: { type: SchemaType.STRING },
     },
   },
@@ -205,8 +203,7 @@ const getResponseSchema = (isFinishing: boolean) => ({
     'finished',
     'categories',
     'servingsEstimated',
-    'isTimeEstimate',
-    'isCareEstimate',
+    'estimated',
   ],
 });
 
@@ -231,21 +228,22 @@ Rules:
 - Servings: use the number the recipe gives ("serves 6", "makes 24 cookies" is 24, "6 to 8 servings" is 6). When it gives none, estimate from the amounts how many people the dish feeds as it is usually served (a 9x13 pan of dressing or casserole is about 12, a pound of pasta about 4, a dozen eggs in a bake about 12) and set servingsEstimated to true; never fall back to a stock number.
 - Categories: pick what the dish is from ${DISH_CATEGORIES.map((category) => `${category.value} (${category.label})`).join(', ')}, as a person would file it at dinner: a protein-centred dish (chicken, beef, pork, fish, tofu) or a full one-pan meal is MAIN; macaroni and cheese, mashed potatoes, rice, vegetables, cornbread and dressing or stuffing are SIDE; a soup, stew, chili or salad is SOUP_SALAD; bread, muffins, biscuits and other baked goods that aren't a dessert are BAKING (with DESSERT when sweet, such as a cake); a dip, gravy, dressing for salad or sauce is SAUCE. Usually one, two only when the dish is plainly both.
 - photoSearch is a short image search (3–6 words) naming the finished dish by its defining features — the dish name plus the pasta shape, protein or key look when the description or ingredients name them, e.g. 'creamy cajun chicken linguine'; no brand or site names.
-- Storage: use fridgeDays, freezerDays and reheat as the recipe states them, whole days from 1 to 365. Never estimate tip: it is the recipe's own or null.
+- Storage: when the recipe states them, use fridgeDays, freezerDays and reheat as it does, whole days from 1 to 365. Never estimate tip: it is the recipe's own or null.
 - Put anything you could not read or are unsure of in "unread", in plain words ("the last two ingredients are cut off").
 - If there is no recipe, return empty lists.`;
 
-const FINISHING_PROMPT = `Finish it like a cookbook. The person wants an actual cookbook recipe, one a home cook can follow from start to finish without guessing, so do what a cookbook editor would, and list each thing you did beyond the source in "finished" (a few plain words each: "added a step to melt the butter", "raised prep to 25 minutes for the chopping"):
+const FINISHING_PROMPT = `Finish it like a cookbook. The person wants an actual cookbook recipe, one a home cook can follow from start to finish without guessing, so do what a cookbook editor would, and list each step you added or split and each time you raised beyond the source in "finished" (a few plain words each: "added a step to melt the butter", "raised prep to 25 minutes for the chopping"); an estimate goes in "estimated", never in "finished":
 - Add a step for every preparation an ingredient line or a step implies but no step does: melting, softening, chopping, dicing, mincing, cutting butter into cubes, toasting, zesting, bringing to room temperature, preheating, greasing the pan. A line like "1 cup melted butter" or "1 onion, diced" with no step that does it needs one. Put each where a cook needs it: up front with the prep, or right before the step that uses it when it can't be done ahead (melt the butter while the cornbread bakes, so it is ready when the bake ends). Combine small preps into one step when that is natural ("Dice the onion and celery"). Make it a real recipe: when the method implies a part (a cornbread crumbled into boiled vegetables, meat, butter, soup, milk and seasonings) write the joining steps a cook needs (crumble, combine, spread in a baking dish, bake uncovered until the stated cue).
 - Break a long step into one action per step when that is easier to follow, keeping the recipe's times, temperatures and cues.
-- Make prep and cook times honest and padded for a home cook: count every prep step, the added ones included, and round up. The recipe may say 10 minutes of prep when the cook also has to cut and melt the butter. A time the source states may be raised when it clearly leaves out work the steps need; say so in "finished". When the source gives no prep or cook time, estimate each from the method as a cook would (chopping and boiling is prep, the bake or simmer is cook) and set isTimeEstimate to true; isTimeEstimate is true only when you estimated either.
-- Storage: when the recipe states no fridgeDays, freezerDays or reheat, estimate them from general cooking knowledge of this dish (cornbread dressing: fridge 3 days, freezer 90 days, reheat covered at 350°F with a splash of broth) with a safety bias: a range is its shorter end, null for a freezer time when the dish doesn't freeze well; set isCareEstimate to true when any was estimated, and say so in "finished".
+- Make prep and cook times honest and padded for a home cook: count every prep step, the added ones included, and round up. The recipe may say 10 minutes of prep when the cook also has to cut and melt the butter. A time the source states may be raised when it clearly leaves out work the steps need; say so in "finished". For each of prep and cook the source doesn't give, estimate it from the method as a cook would (chopping and boiling is prep, the bake or simmer is cook) and list PREP or COOK in "estimated"; a time the source gives is never listed.
+- Storage: when the recipe states no fridgeDays, freezerDays or reheat, estimate them from general cooking knowledge of this dish (cornbread dressing: fridge 3 days, freezer 90 days, reheat covered at 350°F with a splash of broth) with a safety bias: a range is its shorter end, null for a freezer time when the dish doesn't freeze well; list each one you estimated (FRIDGE, FREEZER, REHEAT) in "estimated", and only those the recipe doesn't state.
 - Never add an ingredient or an amount the source doesn't give. You may give a temperature or a time for a step only from general cooking knowledge when the source gives none, and say so in "finished".`;
 
 const STRICT_PROMPT = `Read only what the source gives. Do not finish the recipe:
 - Steps, times, temperatures and storage are only as the source gives them. Add no step beyond splitting a step the source packs together into one action each: no preheat, prep or joining step the source doesn't have.
-- When the source gives no prep or cook time, prepMinutes and cookMinutes are null and isTimeEstimate is false.
-- When the source says nothing about keeping, fridgeDays, freezerDays and reheat are null and isCareEstimate is false.
+- When the source gives no prep or cook time, prepMinutes and cookMinutes are null.
+- When the source says nothing about keeping, fridgeDays, freezerDays and reheat are null.
+- "estimated" is an empty list.
 - Never add a cue, a time, a temperature or an ingredient the source doesn't give.
 - "finished" is an empty list.`;
 
