@@ -5,6 +5,7 @@ import {
   addToShoppingList,
   fillNutrition,
   findIngredients,
+  planAddedLinks,
   planMeal,
   saveIdea,
   undoPinchOutsideChange,
@@ -498,6 +499,125 @@ for (const { existing, add } of mergeCases) {
   );
   assert.equal(store.docs.get(`${K}/recipes/r1`)?.servings, 4);
   assert.equal(store.docs.has(`${K}/notes/${record.noteId}`), false);
+}
+
+// An edit only adds links: the recipe's own stay as they are, a video becomes its how-to, the change is recorded, and Undo takes the new links back.
+{
+  const own = {
+    id: 'l0',
+    kind: 'ARTICLE',
+    label: null,
+    url: 'https://example.com/soup',
+  };
+  const store = createStore({ [`${K}/recipes/r1`]: recipe({ links: [own] }) });
+  const data = dataOf(
+    await updateRecipe(store.firestore, ctx(NOW), {
+      recipeId: 'r1',
+      addLinks: [
+        { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+        { url: 'https://example.com/soup' },
+        {
+          url: 'https://blog.example.org/pie',
+          kind: 'original',
+          label: 'Toni Toni Kitchen',
+        },
+      ],
+    }),
+  );
+  const links = store.docs.get(`${K}/recipes/r1`)?.links as {
+    kind: string;
+    url: string;
+    label: string | null;
+  }[];
+  assert.deepEqual(links[0], own, 'a link the recipe had is never changed');
+  assert.deepEqual(
+    links.map((link) => link.kind),
+    ['ARTICLE', 'HOW_TO', 'ORIGINAL'],
+  );
+  assert.equal(links.length, 3, 'an address already on the recipe is skipped');
+  assert.equal(links[2].label, 'Toni Toni Kitchen');
+  const record = recordOf(store, data.changes[0].id);
+  assert.ok((record.lines as string[]).includes('Added the how-to link'));
+  assert.deepEqual(data.reply.lines, [
+    'Added a link: youtube.com',
+    'Added a link: Toni Toni Kitchen',
+    'One link you sent was already on the recipe, so not added again.',
+  ]);
+  assert.ok(
+    !JSON.stringify(data.reply).includes('example.com'),
+    "the reply names nothing about the recipe's own links",
+  );
+  assert.deepEqual(
+    await undoPinchOutsideChange(
+      store.firestore,
+      UID,
+      record.id,
+      'helm',
+      NOW + 10,
+    ),
+    { ok: true },
+  );
+  assert.deepEqual(store.docs.get(`${K}/recipes/r1`)?.links, [own]);
+}
+
+// Adding links needs no basedOn, a second how-to is kept as another link, a bad address or a full recipe adds nothing.
+{
+  const howTo = {
+    id: 'h',
+    kind: 'HOW_TO' as const,
+    label: null,
+    url: 'https://youtu.be/dQw4w9WgXcQ',
+  };
+  const second = planAddedLinks(
+    [howTo],
+    [{ url: 'https://vimeo.com/123456789' }],
+    () => 'n1',
+  );
+  assert.equal(second.kind, 'ok');
+  if (second.kind === 'ok') {
+    assert.equal(second.value.added[0].kind, 'OTHER');
+    assert.deepEqual(second.value.demoted, ['https://vimeo.com/123456789']);
+  }
+  const sameVideo = planAddedLinks(
+    [howTo],
+    [{ url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' }],
+  );
+  assert.equal(sameVideo.kind, 'ok');
+  if (sameVideo.kind === 'ok') {
+    assert.equal(sameVideo.value.added.length, 0);
+    assert.equal(sameVideo.value.skipped.length, 1);
+  }
+  const otherCase = planAddedLinks(
+    [howTo],
+    [{ url: 'https://youtu.be/DQW4W9WGXCQ' }],
+  );
+  assert.equal(otherCase.kind, 'ok');
+  if (otherCase.kind === 'ok') assert.equal(otherCase.value.added.length, 1);
+  assert.equal(planAddedLinks([], [{ url: 'not a link' }]).kind, 'refused');
+  const full = Array.from({ length: 8 }, (_, index) => ({
+    id: `f${index}`,
+    kind: 'OTHER' as const,
+    label: null,
+    url: `https://example.com/${index}`,
+  }));
+  const over = planAddedLinks(full, [{ url: 'https://example.com/new' }]);
+  assert.equal(over.kind, 'refused');
+  if (over.kind === 'refused')
+    assert.match(over.message, /has no room for another, so no link was added/);
+  const store = createStore({ [`${K}/recipes/r1`]: recipe({ links: full }) });
+  assert.equal(
+    (
+      await updateRecipe(store.firestore, ctx(NOW), {
+        recipeId: 'r1',
+        addLinks: [{ url: 'https://example.com/new' }],
+      })
+    ).status,
+    'refused',
+  );
+  assert.equal(
+    (store.docs.get(`${K}/recipes/r1`)?.links as unknown[]).length,
+    8,
+  );
 }
 
 // Once the person saved the recipe again, Undo is refused and the recipe is left as they made it.
