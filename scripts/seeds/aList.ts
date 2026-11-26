@@ -3,6 +3,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import {
   EMAIL_EVENT_KEEP_DAYS,
   EMAIL_TICKETS_GATE_ID,
+  FRIEND_DAY_STARS_GATE_ID,
 } from '../../src/apps/a-list/constants.ts';
 import type {
   AListEmailEvent,
@@ -546,6 +547,7 @@ async function writeSeedFriendCalendars(
     showing('imdb-tt99000001', 4, 19, 0, 0),
     showing('imdb-tt99000003', 6, 18, 45, 0),
     showing('imdb-tt0133093', 2, 20, 15, 1),
+    showing('imdb-tt0133093', 0, 23, 0, 1),
     // A day the member plans other movies, so the day drawer shows a friend's different pick.
     showing('imdb-tt99000003', 8, 21, 0, 1),
   ];
@@ -851,6 +853,13 @@ async function writeSeedEmail(
             alwaysOnUids: [FIXTURE_USERS.partnerOne.uid],
             alwaysOffUids: [],
             reason: 'Seeded: Alex tests tickets from email',
+            updatedAt: context.now,
+          },
+          [FRIEND_DAY_STARS_GATE_ID]: {
+            rollout: 'off',
+            alwaysOnUids: [FIXTURE_USERS.partnerOne.uid],
+            alwaysOffUids: [],
+            reason: "Seeded: Alex tries friends' days as stars",
             updatedAt: context.now,
           },
         },

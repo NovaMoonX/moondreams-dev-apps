@@ -3,7 +3,10 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DayHoverCard from '@apps/a-list/components/calendar/DayHoverCard';
 import PosterSplit from '@apps/a-list/components/calendar/PosterSplit';
+import FriendDayNumber from '@apps/a-list/components/friends/FriendDayNumber';
 import FriendsOnDayMarker from '@apps/a-list/components/friends/FriendsOnDayMarker';
+import { FRIEND_DAY_STARS_GATE_ID } from '@apps/a-list/constants';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import type { Viewing } from '@apps/a-list/types';
 import {
   countFriendsOnDay,
@@ -47,6 +50,8 @@ function PosterCell({
   const hasOpenings = openings.length > 0;
   const friendCount = countFriendsOnDay(friendGroups);
   const hasFriends = friendCount > 0;
+  const isStarGateOpen = useIsGateOpen('a-list', FRIEND_DAY_STARS_GATE_ID);
+  const isFriendDate = hasFriends && isStarGateOpen;
 
   const face = (
     <span className='relative block h-full w-full overflow-hidden rounded-xl'>
@@ -65,16 +70,27 @@ function PosterCell({
           </span>
         </span>
       )}
-      <span
-        className={join(
-          'absolute top-1 left-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
-          isToday && 'bg-primary text-primary-foreground',
-          !isToday && hasCovers && 'bg-black/50 text-white',
-        )}
-      >
-        {date.getDate()}
-      </span>
-      {hasFriends && <FriendsOnDayMarker count={friendCount} />}
+      {isFriendDate ? (
+        <FriendDayNumber
+          day={date.getDate()}
+          count={friendCount}
+          isToday={isToday}
+          hasCovers={hasCovers}
+        />
+      ) : (
+        <span
+          className={join(
+            'absolute top-1 left-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
+            isToday && 'bg-primary text-primary-foreground',
+            !isToday && hasCovers && 'bg-black/50 text-white',
+          )}
+        >
+          {date.getDate()}
+        </span>
+      )}
+      {hasFriends && !isStarGateOpen && (
+        <FriendsOnDayMarker count={friendCount} />
+      )}
       {isSelected && (
         <span className='ring-primary pointer-events-none absolute inset-0 rounded-xl ring-2 ring-inset' />
       )}

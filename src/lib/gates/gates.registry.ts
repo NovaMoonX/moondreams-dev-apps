@@ -40,6 +40,16 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     warning: null,
   },
   {
+    id: 'friend-day-stars',
+    appId: 'a-list',
+    label: "Friends' days as stars",
+    description:
+      "Someone without it sees a small mark in the corner of a day when friends have plans. Someone with it sees that day's number inside a gold star instead.",
+    defaultRollout: 'off',
+    isServerEnforced: false,
+    warning: null,
+  },
+  {
     id: 'create-trips',
     appId: 'waypoint',
     label: 'Create trips',
