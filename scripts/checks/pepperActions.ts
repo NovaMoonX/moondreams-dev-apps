@@ -22,6 +22,8 @@ const valid: Record<string, unknown> = {
   set_servings: { servings: 6 },
   show: { what: 'tips' },
   tick_ingredients: { names: ['butter'], got: true },
+  mark_added: { names: ['flour'], added: true },
+  scroll: { direction: 'down' },
   add_entry: { kind: 'tip', text: "Don't crowd the pan", step: null },
   edit_entry: { id: 'n1', text: 'Use less salt' },
   remove_entry: { id: 'n1' },
@@ -175,6 +177,23 @@ assert.equal(
     manyNames.command.queries.length,
   20,
 );
+
+// Added ticks and scrolling.
+assert.deepEqual(read('mark_added', { names: [' flour ', ''], added: false }), {
+  kind: 'cook',
+  command: { kind: 'MARK_ADDED', queries: ['flour'], isAdded: false },
+});
+assert.ok(isInvalid('mark_added', { names: [], added: true }));
+assert.ok(isInvalid('mark_added', { names: ['flour'], added: 'yes' }));
+assert.ok(isInvalid('mark_added', { names: 'flour', added: true }));
+['up', 'down', 'top', 'bottom'].forEach((direction) =>
+  assert.deepEqual(read('scroll', { direction }), {
+    kind: 'cook',
+    command: { kind: 'SCROLL', to: direction.toUpperCase() },
+  }),
+);
+assert.ok(isInvalid('scroll', { direction: 'sideways' }));
+assert.ok(isInvalid('scroll', {}));
 
 // Entries.
 assert.deepEqual(
