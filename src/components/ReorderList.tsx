@@ -282,8 +282,8 @@ function RowInner<T extends { id: string }>({
       className={join(
         GRIP_CLASS,
         isActive
-          ? 'text-muted-foreground'
-          : 'text-muted-foreground/50 hover:text-muted-foreground',
+          ? 'text-muted-foreground!'
+          : 'text-muted-foreground/50! hover:text-muted-foreground!',
         isHandleAtFirstLine && 'mt-1',
       )}
       onPointerDown={(event) => onHandlePointerDown(event, item.id)}
