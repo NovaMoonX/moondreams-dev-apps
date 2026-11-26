@@ -1953,6 +1953,22 @@ flowchart LR
     K --> L["Older notes read: Written before you changed the recipe on Oct 20"]
 ```
 
+**Change a recipe with Pepper** (behind the `pepper-edits` switch)
+
+```mermaid
+flowchart LR
+    A["Recipe drawer · ⋯ More · Change with Pepper"] --> B["Recipe form · the box open and focused"]
+    A2["Recipe form, opened any other way"] --> A3["✨ Tell Pepper what to change"] --> B
+    B --> C["Type or tap the mic · Send · 'Pepper is changing the recipe…'"]
+    C --> D["Notice: ✨ Pepper changed 2 ingredients and a step · its one line · Took out: cream · Undo"]
+    D --> E["Changed rows, steps and fields tinted with a leading edge, until edited"]
+    E --> C
+    D -->|Undo| B
+    E --> F["Save · reason prefilled 'Asked Pepper: …' on a cooked recipe"]
+```
+
+The box sits at the top of the form of a saved recipe: a quiet line saying the recipe and the ask go to Gemini and nothing is kept until Save (until the first send), a growing text box (500 characters), a mic where the browser can listen (the words fill the box, never send themselves), and Send. A change that can't be made shows Pepper's one line alone, with nothing marked. After twelve sends in one sitting the box gives way to "That's as many changes as one sitting takes. Save, then ask again."
+
 **Say how to keep a recipe**
 
 ```mermaid
