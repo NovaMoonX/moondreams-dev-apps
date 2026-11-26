@@ -74,9 +74,6 @@ function PosterCell({
         <FriendDayNumber
           day={date.getDate()}
           count={friendCount}
-          color={
-            (localStorage.getItem('aListStarColor') ?? 'gold') as StarColor
-          }
         />
       ) : (
         <span
