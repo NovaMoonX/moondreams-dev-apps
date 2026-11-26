@@ -135,6 +135,17 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     warning:
       'Each question is sent to Deepgram to hear, to Claude to answer and to Google to speak, and each costs a little. Web lookups are capped at 50 a day per person.',
   },
+  {
+    id: 'pepper-edits',
+    appId: 'pinch',
+    label: 'Change a recipe with Pepper',
+    description:
+      "Someone without it edits recipes by hand as before. Someone with it can open a recipe, say or type what to change (\"make it spicier\", \"swap the butter for olive oil\"), and see Pepper's version in the recipe form, marked, before they save it.",
+    defaultRollout: 'off',
+    isServerEnforced: false,
+    warning:
+      'Each change asked for sends the recipe and the request to Gemini, and costs a little. Spoken requests are heard on the device.',
+  },
 ];
 
 export function getAppFeatureGates(appId: string) {
