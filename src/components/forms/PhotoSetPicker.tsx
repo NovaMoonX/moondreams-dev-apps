@@ -480,9 +480,23 @@ function PhotoSetPicker({
   };
 
   const confirmRemoval = async (id: string) => {
+    const index = shown.findIndex((photo) => photo.id === id);
+    const photo = shown[index];
+    if (photo === undefined) return;
     const isConfirmed = await confirm({
-      title: 'Remove this photo?',
-      message: 'You can undo it for a few seconds after.',
+      title:
+        shown.length > 1
+          ? `Remove photo ${index + 1} of ${shown.length}?`
+          : 'Remove this photo?',
+      message: photo.url ? (
+        <FallbackImage
+          src={photo.url}
+          alt=''
+          className='mx-auto size-24 rounded-xl object-cover'
+        />
+      ) : (
+        'It comes out of this set of photos.'
+      ),
       confirmText: 'Remove',
       destructive: true,
     });
