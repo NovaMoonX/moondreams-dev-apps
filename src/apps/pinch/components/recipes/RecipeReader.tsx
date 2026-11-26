@@ -81,7 +81,7 @@ const GUIDANCE_MAX_LINES = 4;
 const getFinishingSubtitle = (isFinishing: boolean, isSettingOn: boolean) => {
   if (isSettingOn) {
     return isFinishing
-      ? 'Adds missing steps and honest times'
+      ? 'Adds missing steps and realistic times'
       : 'Off for this recipe only. To turn it off for every recipe, change it in Settings.';
   }
   return isFinishing

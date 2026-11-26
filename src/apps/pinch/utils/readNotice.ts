@@ -12,7 +12,7 @@ const toSentence = (text: string) =>
   `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}`;
 
 export const FINISHING_OFF_LINE =
-  'Want only what you gave it? Turn off Finish recipes like a cookbook in Settings.';
+  'Want only what you gave it? Turn this off in Settings.';
 
 /** Details shown directly under the headline up to this many; more fold behind a tap. */
 export const MAX_DIRECT_NOTICE_DETAILS = 2;
@@ -43,16 +43,6 @@ export const getReadNotice = (
     recipe.finished.length > 0 ||
     usedPicks.length > 0;
   const details = [
-    recipe.isServingsEstimate && recipe.servings !== null
-      ? `We guessed ${recipe.servings} servings from the amounts, since the recipe didn’t say.`
-      : null,
-    isTimeEstimated
-      ? 'We estimated a time the recipe didn’t give, from its steps.'
-      : null,
-    isCareEstimated
-      ? 'We estimated how long it keeps and how to reheat it.'
-      : null,
-    ...recipe.finished.map(toSentence),
     recipe.guided.length > 0
       ? `Shaped to match your notes: ${formatList(recipe.guided)}.`
       : null,
@@ -63,6 +53,16 @@ export const getReadNotice = (
           ),
         )}.`
       : null,
+    recipe.isServingsEstimate && recipe.servings !== null
+      ? `We guessed ${recipe.servings} servings from the amounts, since the recipe didn’t say.`
+      : null,
+    isTimeEstimated
+      ? 'We estimated a time the recipe didn’t give, from its steps.'
+      : null,
+    isCareEstimated
+      ? 'We estimated how long it keeps and how to reheat it.'
+      : null,
+    ...recipe.finished.map(toSentence),
     recipe.unread.length > 0
       ? `We couldn’t read: ${recipe.unread.join(', ')}.`
       : null,

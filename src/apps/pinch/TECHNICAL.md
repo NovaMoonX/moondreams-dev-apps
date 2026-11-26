@@ -598,7 +598,7 @@ interface PinchSettings {
   fridgeDays: number | null;                     // whole days 1 … 14 a new fridge box starts with; null is CONTAINER_FRIDGE_DAYS (3)
   freezerDays: number | null;                    // whole days 7 … 365 a new freezer box starts with; null is CONTAINER_FREEZER_DAYS (90)
   suggestPhotos: boolean;                        // a new recipe's Photo drawer searches the web with its title; a missing key (a document written before this) reads as true
-  isFinishingRecipes: boolean;                   // the reading AI finishes a recipe like a cookbook (added steps, honest times, keeping); off, it reads only what the source gives; a missing key reads as true
+  isFinishingRecipes: boolean;                   // the reading AI finishes a recipe like a cookbook (added steps, realistic times, keeping); off, it reads only what the source gives; a missing key reads as true
   units: PinchUnitSettings;                      // { weight: AS_WRITTEN | METRIC | US | LB_OZ (pounds and ounces together, a scale's lb:oz mode), volume: AS_WRITTEN | METRIC | CUPS | FL_OZ, keepSpoons }; a missing key reads as everything as written
   reminders: PinchReminderSettings;              // exactly these six keys
   updatedAt: number;

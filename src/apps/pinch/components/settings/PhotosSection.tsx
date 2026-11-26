@@ -30,7 +30,7 @@ function PhotosSection({ uid }: PhotosSectionProps) {
       <SettingsRow
         icon='📖'
         title='Finish recipes like a cookbook'
-        description='The AI adds the steps a recipe leaves out, like melting the butter, gives honest prep and cook times, and says how to keep it. Off: it fills in only what you give it.'
+        description='Adds the steps a recipe leaves out, like melting the butter, realistic prep and cook times, and how long it keeps.'
         control={
           <AppToggle
             aria-label='Finish recipes like a cookbook'

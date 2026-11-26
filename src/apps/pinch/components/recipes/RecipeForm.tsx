@@ -1390,12 +1390,7 @@ function RecipeForm({
                 onClick={() => setIsReadDetailOpen((open) => !open)}
               >
                 <span className='min-w-0 flex-1 text-left'>
-                  <span className='block'>{readNotice.headline}</span>
-                  {!isReadDetailOpen && (
-                    <span className='text-muted-foreground block text-xs'>
-                      Tap to see what we changed
-                    </span>
-                  )}
+                  {readNotice.headline}
                 </span>
                 <ChevronDown
                   className={join(
