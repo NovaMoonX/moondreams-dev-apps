@@ -1655,11 +1655,27 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(ingredient.id)
         .set({ ...ingredient, createdAt, updatedAt: createdAt }),
     ),
+    context.firestore.doc('featureGates/pinch').set(
+      {
+        appId: 'pinch',
+        gates: {
+          pepper: {
+            rollout: 'testing',
+            alwaysOnUids: Object.values(FIXTURE_USERS).map((user) => user.uid),
+            alwaysOffUids: [],
+            reason: 'Seeded: every dev account tries Pepper',
+            updatedAt: context.now,
+          },
+        },
+      },
+      { merge: true },
+    ),
   ]);
 
   return {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
+      1 +
       SEED_FAMILIES.length +
       SEED_SOURCES.length +
       SEED_COLLECTIONS.length +

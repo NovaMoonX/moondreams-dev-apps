@@ -1,6 +1,9 @@
 import { readAloud } from '@/lib/speech/readAloud';
 import type { TtsAdapter } from '@/lib/speech/voice/types';
 
+/** How long the device's voice may take to start before a line is given up on. */
+export const DEVICE_START_TIMEOUT_MS = 1500;
+
 /** Speaks through `readAloud`: the natural voice when `isNatural` and ready, the system voice otherwise. */
 export const createDeviceTts = ({
   isNatural,
@@ -38,7 +41,7 @@ export const createDeviceTts = ({
         state.stop = readAloud(text, {
           lang,
           isNatural,
-          startTimeoutMs: 1500,
+          startTimeoutMs: DEVICE_START_TIMEOUT_MS,
           onStart,
           onEnd: finish,
           onProgress,

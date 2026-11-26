@@ -1,3 +1,5 @@
+import type { GateRollout } from '../gates/gateLogic.js';
+
 export type TtsProviderId = 'googleTts' | 'geminiTts' | 'deepgramAura';
 
 export const VOICE_PROVIDER_DEFAULT: TtsProviderId = 'googleTts';
@@ -72,6 +74,9 @@ export const VOICE_TOKEN_TTL_SECONDS = 60;
 
 export const STT_MODEL = 'nova-3';
 
+/** Deepgram's conversational model, which hears when a turn ends; served on its own `/v2/listen` route. */
+export const STT_FLUX_MODEL = 'flux-general-en';
+
 /** Millionths of a dollar per minute of streamed listening, read from the provider's docs (search results) and unverified until the first real run. */
 export const STT_PRICES = {
   deepgramStream: { perMinuteMicros: 7_700, readOn: '2026-11-09' },
@@ -95,4 +100,10 @@ export interface VoiceAppLimits {
   voiceNames: readonly string[];
   defaultVoice: string;
   speedRange: { min: number; max: number };
+  /** Deepgram's listening model for this app: `flux-*` ends a turn on its own, `nova-3` waits for the device to end it. */
+  sttModel: string;
+  /** Voices tried in order when the asked one fails before any audio; empty tries none. */
+  fallbackVoices: readonly string[];
+  /** The feature switch a caller must be let through to listen or speak; null for none. */
+  gate: { id: string; defaultRollout: GateRollout } | null;
 }

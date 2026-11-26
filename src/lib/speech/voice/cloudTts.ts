@@ -25,10 +25,11 @@ import type {
 import type { SpeechHeldReason, TtsAdapter } from '@/lib/speech/voice/types';
 
 const MAX_CHARS = 600;
-const RESUME_MS = 1000;
+/** How long a line may wait for the audio output to wake before it plays anyway. */
+export const RESUME_MS = 1000;
 const DONE_GRACE_MS = 1000;
 // The first byte waits on sign-in, App Check, a cold function and the first sound being made.
-const FIRST_BYTE_MS = 5000;
+export const FIRST_BYTE_MS = 5000;
 const BODY_BASE_MS = 6000;
 const BODY_MS_PER_CHAR = 30;
 const PROGRESS_MS = 150;

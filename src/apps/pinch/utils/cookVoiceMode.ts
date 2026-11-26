@@ -77,28 +77,61 @@ export type HeardPlan =
   | { kind: 'CLEAR' }
   | { kind: 'COMMAND'; heard: HeardCommand }
   | { kind: 'WAKE'; heard: HeardCommand | null }
+  /** Words that are no command, for Pepper: the guesses best first, none of them empty. */
+  | { kind: 'ASK'; guesses: string[] }
   | { kind: 'MISSED' };
 
 type HeardCommand = NonNullable<ReturnType<typeof readCookCommand>>;
 
-/** What a finished phrase means in each phase: waiting hears only the wake phrase (and a command after it), a window runs commands and quotes back anything else, kept open runs commands and ignores the rest. */
+/** The guesses with words in them, best first; none when the best one that had the phrase said nothing after it, so the phrase alone never asks. */
+const toGuesses = (words: (string | null)[]) => {
+  const lead = words.find((guess) => guess !== null);
+  return (lead ?? '').trim() === ''
+    ? []
+    : words
+        .map((guess) => (guess ?? '').trim())
+        .filter((guess) => guess !== '');
+};
+
+/** The guesses meant for the app, best first: what follows the wake phrase, or everything said in a window; nothing while waiting without the phrase. */
+export const readAddressedGuesses = (
+  phase: VoicePhase,
+  alternatives: string[],
+) => {
+  const woke = readWakeWord(alternatives);
+  if (woke !== null) return toGuesses(woke.rests);
+  return phase === 'WAITING' || phase === 'OFF' ? [] : toGuesses(alternatives);
+};
+
+/** What a finished phrase means in each phase: waiting hears only the wake phrase (and a command after it), a window runs commands and quotes back anything else, kept open runs commands and ignores the rest. With Pepper on, words that are no command go to it: after the wake phrase in any phase, and anything said in a window. */
 export const planHeard = (
   phase: VoicePhase,
   alternatives: string[],
   context: CookVoiceContext,
+  isPepperOn = false,
 ): HeardPlan => {
   if (phase === 'OFF') return { kind: 'IGNORE' };
   const woke = readWakeWord(alternatives);
   if (phase === 'WAITING') {
     if (woke === null) return { kind: 'IGNORE' };
-    const heard = readCookCommand(
-      woke.rests.map((guess) => guess ?? ''),
-      context,
-    );
+    const rests = woke.rests.map((guess) => guess ?? '');
+    const heard = readCookCommand(rests, context);
+    const guesses = toGuesses(woke.rests);
+    if (heard === null && isPepperOn && guesses.length > 0) {
+      return { kind: 'ASK', guesses };
+    }
     return { kind: 'WAKE', heard };
   }
   const heard = readCookCommand(alternatives, context);
   if (heard !== null) return { kind: 'COMMAND', heard };
+  if (isPepperOn && woke !== null) {
+    const guesses = toGuesses(woke.rests);
+    if (guesses.length > 0) return { kind: 'ASK', guesses };
+  }
+  if (isPepperOn && woke === null && phase === 'WINDOW') {
+    const guesses = toGuesses(alternatives);
+    if (guesses.length > 0) return { kind: 'ASK', guesses };
+  }
   if (phase === 'LOCKED') return { kind: 'CLEAR' };
   return woke === null ? { kind: 'MISSED' } : { kind: 'WAKE', heard: null };
 };

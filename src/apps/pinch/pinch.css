@@ -27,6 +27,14 @@ html.pinch-theme {
   --radius-2xl: 1.75rem;
 
   --pinch-drizzle: var(--color-orange-600);
+  --assistant-orb-accent: var(--pinch-drizzle);
+  --pepper-disc: oklch(0.945 0.035 65);
+  --pepper-warm: oklch(0.52 0.075 52);
+  --pepper-warm-hi: oklch(0.66 0.07 62);
+  --pepper-stem: oklch(0.56 0.13 140);
+  --pepper-eye: oklch(0.985 0.01 85);
+  --pepper-pupil: oklch(0.22 0.03 40);
+  --pepper-cheek: var(--pinch-drizzle);
   --pinch-drizzle-fill: var(--color-orange-700);
   --pinch-drizzle-fill-foreground: var(--color-white);
   --pinch-drizzle-soft: color-mix(
@@ -61,6 +69,12 @@ html.pinch-theme.dark {
   --color-tooltip-foreground: oklch(0.2 0.012 55);
 
   --pinch-drizzle: var(--color-orange-400);
+  --pepper-disc: oklch(0.29 0.03 55);
+  --pepper-warm: oklch(0.6 0.075 56);
+  --pepper-warm-hi: oklch(0.72 0.07 64);
+  --pepper-stem: oklch(0.64 0.13 140);
+  --pepper-eye: oklch(0.97 0.015 85);
+  --pepper-pupil: oklch(0.2 0.02 40);
   --pinch-drizzle-fill: var(--color-orange-400);
   --pinch-drizzle-fill-foreground: oklch(0.2 0.012 55);
   --pinch-drizzle-soft: color-mix(
@@ -299,5 +313,189 @@ html.pinch-theme.dark {
 @media (max-width: 1023px) {
   html[data-selection-bar] .pinch-nav {
     display: none;
+  }
+}
+
+/* Pepper's faces: each look moves with the nearest orb state, the orb's own or a picker tile's, and with the voice level. */
+.pepper-face {
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  background: var(--pepper-disc);
+  --pepper-level: var(--assistant-orb-level, 0);
+}
+.pepper-face svg {
+  width: 80%;
+  height: 80%;
+  overflow: visible;
+}
+.assistant-orb[data-size='sm'] .pepper-face svg {
+  width: 88%;
+  height: 88%;
+}
+.pepper-face svg * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.pepper-face svg [transform] {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+.pepper-face svg .whole {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.pepper-face .face-open,
+.pepper-warm .round {
+  opacity: 0;
+}
+[data-state='waiting'] .pepper-face .blinker {
+  animation: pepper-blink 4.2s infinite;
+}
+[data-state='speaking'] .pepper-face .face-smile {
+  opacity: 0;
+}
+[data-state='speaking'] .pepper-face .face-open {
+  opacity: 1;
+  transform: scaleY(calc(0.35 + var(--pepper-level) * 1.1));
+}
+[data-state='waiting'] .pepper-bright .whole {
+  animation: pepper-breathe 3.6s ease-in-out infinite;
+}
+[data-state='waiting']
+  :is(.pepper-calm, .pepper-warm, .pepper-brows, .pepper-line, .pepper-glance)
+  .whole {
+  animation: pepper-breathe 4.4s ease-in-out infinite;
+}
+
+/* Bright eyes */
+[data-state='listening'] .pepper-bright .pupil {
+  transform: scale(1.18);
+}
+[data-state='listening'] .pepper-bright .whole {
+  transform: rotate(-5deg) scale(calc(1 + var(--pepper-level) * 0.05));
+}
+[data-state='thinking'] .pepper-bright .eyes {
+  animation: pepper-ponder 2.4s ease-in-out infinite;
+}
+[data-state='speaking'] .pepper-bright .whole {
+  transform: translateY(calc(var(--pepper-level) * -2px));
+}
+
+/* Calm eyes */
+[data-state='listening'] .pepper-calm .lid {
+  transform: translateY(-1.5px);
+}
+[data-state='listening'] .pepper-calm .whole {
+  transform: scale(calc(1 + var(--pepper-level) * 0.04));
+}
+[data-state='thinking'] .pepper-calm .eyes {
+  animation: pepper-ponder 2.8s ease-in-out infinite;
+}
+
+/* Warm smile */
+[data-state='listening'] .pepper-warm .arc,
+[data-state='speaking'] .pepper-warm .arc {
+  opacity: 0;
+}
+[data-state='listening'] .pepper-warm .round,
+[data-state='speaking'] .pepper-warm .round {
+  opacity: 1;
+}
+[data-state='thinking'] .pepper-warm .whole {
+  animation: pepper-tilt 3s ease-in-out infinite;
+}
+
+/* Soft brows */
+[data-state='listening'] .pepper-brows .brow {
+  transform: translateY(-2.5px);
+}
+[data-state='thinking'] .pepper-brows .brow-l {
+  transform: translateY(1px) rotate(8deg);
+}
+[data-state='thinking'] .pepper-brows .brow-r {
+  transform: translateY(-2px) rotate(-6deg);
+}
+[data-state='thinking'] .pepper-brows .eyes {
+  animation: pepper-ponder 2.8s ease-in-out infinite;
+}
+[data-state='speaking'] .pepper-brows .brow {
+  transform: translateY(calc(var(--pepper-level) * -2px));
+}
+
+/* Line mark */
+[data-state='listening'] .pepper-line .eye {
+  transform: scaleY(1.25);
+}
+[data-state='thinking'] .pepper-line .eyes {
+  animation: pepper-scan 1.6s ease-in-out infinite alternate;
+}
+
+/* Knowing glance */
+.pepper-glance .eyes {
+  transform: translateX(-3px);
+  transition: transform 0.35s;
+}
+[data-state='listening'] .pepper-glance .eyes,
+[data-state='speaking'] .pepper-glance .eyes {
+  transform: none;
+}
+[data-state='listening'] .pepper-glance .lid {
+  transform: translateY(-2px);
+}
+[data-state='thinking'] .pepper-glance .eyes {
+  transform: translate(3px, -2px);
+}
+
+@keyframes pepper-breathe {
+  50% {
+    transform: scale(0.96);
+  }
+}
+@keyframes pepper-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes pepper-ponder {
+  0%,
+  100% {
+    transform: translate(0, -2px);
+  }
+  50% {
+    transform: translate(4px, -4px);
+  }
+}
+@keyframes pepper-tilt {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+@keyframes pepper-scan {
+  from {
+    transform: translateX(-5px);
+  }
+  to {
+    transform: translateX(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pepper-face svg * {
+    animation: none !important;
+    transition: none !important;
+  }
+  [data-state='speaking'] .pepper-face .face-open {
+    transform: scaleY(0.7);
   }
 }

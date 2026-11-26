@@ -93,6 +93,47 @@ Audio said after a tap, or after a listen opens, always reaches a recognizer tha
 - **No capture step delays the first frame.** The noise cleaner is fetched when listening becomes possible (`preloadNoiseCleaning`); a listen that opens before it is loaded is captured raw and the next one gets it, and cleaning the person chose that isn't applied is a reported fallback (`NOISE_CLEANING_FALLBACK_KEY`), cleared once it is. Only a failure inside a capture turns the cleaner off for the page's life; a preload that fails or is slow is recorded and tried again, and turning the cleaning off clears the report.
 - **The listening line shows only once audio is captured** (the microphone is capturing on the device route, Chrome has started on the browser route).
 
+## A spoken assistant
+
+An assistant that answers anything said to it (Pepper in Pinch's cooking mode first; any app can have one) is the conversation voice above with a model behind it. The shared server piece is `functions/src/assistant/` and the shared device piece is `src/lib/speech/assistant/`; each app supplies only its prompt, its tools and its limits (Pinch's are in `functions/src/apps/pinch/pepper/`). Built so far: the endpoint, the allowances, caching and the device's stream reader, and in cooking mode steps 1, 2 and 4 to 7, with the reply spoken in the app's cloud voice (`streamSpeech`, Pinch's Zephyr) through the shared `createCloudSpeaker` (`src/lib/speech/voice/cloudSpeaker.ts`, the `speak` option of `useSpeechCommands`: the device's voice covers a slow or failed line, a fallback shortens the next line's wait to 1.5 s and two in a row speak device-first for the session, retrying the cloud every 5 minutes; a queue that waits for a line to start waits its `getLineWaitMs()`), both endpoints re-warmed every 10 minutes while the screen is open; step 3 still hears the question with the device's recognizer until Flux joins. Debug viewers get a conversation log (`src/lib/speech/turnLog.ts`, drawn by `TurnLogView`): what was heard and its guesses, where each phrase went (a command, the assistant, or nothing and why), the reply, each line spoken with the voice that actually played and why it fell back, and the model that answered, with Copy log; it empties when the signed-in account changes (`claimTurnLog`). A removal the assistant asks about is answered only by the top guess and is dropped by anything else said. Why it is built this way, what else was weighed and when to revisit: [docs/decisions/2026-11-25-spoken-assistant-turns.md](decisions/2026-11-25-spoken-assistant-turns.md).
+
+### One turn, end to end
+
+1. **The phrase is heard on the device.** "Hey Pepper" is matched by the device's recognizer for free; nothing goes to the cloud before it.
+2. **The app's own commands come first.** What was said is read by the app's grammar ("next step", "set a timer for ten minutes"); only what the grammar can't place goes to the model, so the everyday commands stay instant and free.
+3. **The question is heard.** Words said in the same breath as the phrase are used as they were heard. After the phrase alone, a cloud listener that judges the end of a turn (Deepgram Flux) hears the question, so a pause to stir doesn't cut it off; when it can't, the device listens.
+4. **The model answers as it writes.** The device posts the turn to the app's endpoint (`pepperTurn`), which checks the page's origin, the sign-in, App Check, the feature switch and the person's day, then streams server-sent events: words as they come, `searching` when it looks something up, `action` for each thing it does on screen, then `done` with the exact words to keep as history.
+5. **The first sentence plays at once.** `createSentenceFeed` hands each finished sentence to `speak` under the turn's key, the first as soon as it ends and later ones joined to a natural length, so the voice starts while the rest is still being written. Before a web lookup the model says a short line first ("Let me check."), so there is no dead air.
+6. **What it does is a tap.** Each `action` is carried out on the device through the same handlers a tap uses; the model is told it was done and confirms it in the same breath. Nothing the device can't do by tap is offered as a tool, and a removal is confirmed by the device itself, not only by the prompt.
+7. **The person can answer back without the phrase.** A reply that asks a question opens the follow-up window, so "the sauce or the marinade?" is answered by just saying "the sauce".
+8. **The model decides when the conversation is over.** When the person sounds done ("thanks", "that's all", "okay, got it" after an answer), the model gives a short close and calls its end-of-conversation tool; once that line has been said, the window closes as if it ran out and the mic goes back to waiting for the phrase. It is judged from guidance in the prompt, not a phrase list (the device's own closing phrases, "never mind" and the like, still end it instantly), anything heard or tapped before the line ends keeps the window open, and it never ends while a question waits for an answer: a reply that asks something reopens the window, and the device checks that no window has opened since the model asked to end, never trusting the prompt alone.
+
+### Prompt caching: how a long conversation stays cheap
+
+Every turn sends the whole conversation again, so the unchanging part of it is cached at Anthropic and read back at a tenth of the input price for as long as the conversation keeps going (the cache lasts five minutes from its last use, and each turn renews it).
+
+- **What is cached, in order:** the tools, then the system prompt, then the standing context (for Pepper, the recipe as written), then the history so far. `streamTurn` puts a cache breakpoint (`cache_control`) on the system prompt (which covers the tools before it), on the standing context, and on the request as a whole (which moves to the end of the history each turn), so a later turn reuses everything up to its own new words.
+- **What changes each turn goes last.** What is on screen right now (the step, the scaled amounts, the timers, the entries) and what was heard ride in the turn's own message, never in the system prompt or the standing context, so they never break the cached prefix.
+- **History is sent back exactly as it was answered.** The device keeps the `user` and `assistant` lines from each `done` event word for word, so the next turn's prefix matches the cache; an answer with no words is kept as a fixed stand-in line rather than an empty one. The server accepts at most 20 exchanges and 160,000 characters, counted as string length (a user line is a whole earlier turn, screen included), so a device must drop its oldest whole exchanges by the same measure before sending; Pinch's does from the cooking mode PR. Dropping the oldest starts a fresh cache once, which is cheaper than an ever longer history.
+- **What breaks it:** a changed system prompt or tool list (a deploy), a changed recipe (an edit mid-cook), five idle minutes, and a web lookup: the web tool is offered with the lookups still left, so the round after a lookup, and every turn near the daily cap, sees a changed tool and rewrites the cache. That costs more on a lookup turn than a fixed tool would, but a fixed tool could spend lookups nobody set aside. Each costs one cache write, about 1.25 times the normal input price, and the turns after read from the new cache.
+- **What is never cached:** the model's output, and anything a person can't reuse (one-off reads, the nightly batch, which already runs at half price).
+- **Any new model call on the site follows the same order:** what never changes first, what changes per person next, the turn's own words last; the PR that adds or changes caching says in How it works what is cached, what breaks it and what it saves.
+
+### The allowances, and what resets each
+
+- **Per person, per UTC day:** 300 turns and 50 web lookups (Pepper's `PEPPER_LIMITS`), counted in one transaction before the model is called. A turn sets aside up to 3 lookups at that moment and gives back what it didn't use when it ends, so turns sent at once can't spend the same allowance. The day is UTC so a chosen time zone can't open a second one; it resets at midnight UTC.
+- **Per turn:** at most 4 model rounds, 4,000 output tokens a round, 3 lookups across all rounds, and capped input (the standing context, the screen, 40 history lines: each user line up to the size of a whole turn, each answer up to 4,000 characters, 160,000 in all).
+- **The site:** a $5 a day budget across every assistant (`ASSISTANT_DAILY_BUDGET_CENTS`), separate from voice's own $5. Every turn's cost is recorded however it ends (an answer, an error, the page closing mid-answer), including the input side of a round cut off part way and any lookup it had started; it is settled before the response ends, since a server may lose its processor once it has answered.
+- **Past a limit** the endpoint answers `429` with why, and the app says so in words instead of answering.
+
+### What it guarantees
+
+- No provider key reaches a browser, and nothing is sent to the cloud before the wake phrase or a tap.
+- Text put into the prompt (a recipe read from the web, an entry, what was heard) has its angle brackets escaped, so it can't open or close a block of its own.
+- The model only does what a tap could do, and finishing a cook is always the person's own tap.
+- A turn's usage and cost are recorded on every end, and a lookup set aside but not made goes back.
+- Every turn is gated by the app's feature switch on the server.
+
 ## The allowances
 
 - **Cloud listening:** 60 minutes a day for each person, and 300 cloud tokens a day.
@@ -115,7 +156,8 @@ Both downloads work the same way: an opt-in row in the app's voice settings that
 ## Keys and privacy
 
 - **No provider key ever reaches a browser.**
-- **Cloud listening** goes straight from the browser to the provider with a one-minute token that `mintVoiceToken` mints on the server after checking the allowance.
+- **Cloud listening** goes straight from the browser to the provider with a one-minute token that `mintVoiceToken` mints on the server after checking the allowance. An app picks its model in `VOICE_APPS` (`sttModel`): Helm listens with Nova-3, which ends a turn on quiet; Pinch with Flux (`flux-general-en`, Deepgram's `/v2/listen`), which judges from the words and the pause whether the person has finished, so a cook who stops mid-sentence to stir isn't cut off. The adapter reads Flux's `TurnInfo` events and calls `onEndOfTurn`; `useVoiceConversation` then ends the listen at once and keeps its own quiet timer only as a 6 s guard. An app with a gate in `VOICE_APPS` (`gate`) gets tokens and cloud speech only for people the gate lets in, and a voice that fails before its first sound tries the app's `fallbackVoices` in order (Pinch: Zephyr, then Aoede, Erinome, Autonoe), reporting which spoke in `X-Voice-Name`.
+- **A spoken assistant's turn** goes through the app's own endpoint and never sends a key to the browser: see "A spoken assistant" below.
 - **Cloud speaking** goes through the site (`streamSpeech`), which checks sign-in and the allowance, then pipes the provider's audio back.
 - **Voice notes** are transcribed on the server from the sealed file, which is never stored unsealed.
 

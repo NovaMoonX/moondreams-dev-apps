@@ -134,6 +134,10 @@ export interface PinchReminderSettings {
   timeZone: string | null;
 }
 
+/** The looks Pepper can have in the orb: the plain orb, or a face. */
+export type PepperLook =
+  'ORB' | 'CALM' | 'BRIGHT' | 'WARM' | 'BROWS' | 'LINE' | 'GLANCE';
+
 /** What a person chose for hands-free cooking, saved with the account so it follows them to another device. A key is null until they have chosen on any device, and then this device's own earlier choice (kept in localStorage before these were saved) still stands. The natural voice's switch is not here: its download is per device. */
 export interface PinchVoiceSettings {
   /** Said yes to the voice explainer (who hears the audio, that nothing is kept). The browser still asks for the microphone on each device. */
@@ -144,6 +148,8 @@ export interface PinchVoiceSettings {
   isReadingNotes: boolean | null;
   /** Wait for the wake phrase instead of listening for one window per tap. */
   isWaiting: boolean | null;
+  /** How Pepper looks in the orb: a plain orb or one of its faces. A document written before this key lacks it, and an unknown value reads the same: as Calm eyes. */
+  look: PepperLook;
 }
 
 /** How weights are written in the person's recipes: as each recipe wrote them, grams and kilograms, ounces and pounds, or pounds and ounces together as a kitchen scale's lb:oz mode shows them ("2 lb 8 oz"). */

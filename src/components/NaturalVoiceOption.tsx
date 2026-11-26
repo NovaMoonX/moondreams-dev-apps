@@ -13,22 +13,28 @@ const PROBLEM_TEXT: Record<NaturalVoiceProblem, string> = {
   slow: 'It was too slow on this device, so the usual voice reads.',
 };
 
-const getDescription = (voice: NaturalVoice) => {
+const getDescription = (voice: NaturalVoice, intro?: string) => {
   if (voice.status === 'downloading') {
     return `Downloading… ${Math.round(voice.progress * 100)}%`;
   }
   if (voice.status === 'loading') return 'Getting ready…';
   if (voice.problem !== null) return PROBLEM_TEXT[voice.problem];
-  if (voice.isReady) return 'On. It reads with a voice on this device.';
-  return `Sounds less robotic. A one-time download of about ${voice.sizeMb} MB, best on Wi-Fi (the voice file comes from ${voice.host}). It runs on this device and sends nothing. It uses eSpeak NG (GPL-3.0, source at github.com/espeak-ng/espeak-ng).`;
+  if (voice.isReady) {
+    return intro === undefined
+      ? 'On. It reads with a voice on this device.'
+      : `On. ${intro}`;
+  }
+  return `${intro ?? 'Sounds less robotic.'} A one-time download of about ${voice.sizeMb} MB, best on Wi-Fi (the voice file comes from ${voice.host}). It runs on this device and sends nothing. It uses eSpeak NG (GPL-3.0, source at github.com/espeak-ng/espeak-ng).`;
 };
 
 interface NaturalVoiceOptionProps {
   voice: NaturalVoice;
+  /** Says what the voice is for when another voice usually reads, in place of "Sounds less robotic." */
+  intro?: string;
 }
 
 /** The row that turns on the more natural reading voice that runs on the device, saying what it downloads and from where first, with its progress and a way to delete the download. Draws nothing where the page can't run it. */
-export function NaturalVoiceOption({ voice }: NaturalVoiceOptionProps) {
+export function NaturalVoiceOption({ voice, intro }: NaturalVoiceOptionProps) {
   if (!voice.isSupported) return null;
   const isBusy = voice.status === 'downloading' || voice.status === 'loading';
 
@@ -36,7 +42,7 @@ export function NaturalVoiceOption({ voice }: NaturalVoiceOptionProps) {
     <div>
       <ViewOptionSwitch
         label='More natural voice'
-        description={getDescription(voice)}
+        description={getDescription(voice, intro)}
         checked={voice.isOn}
         isDisabled={isBusy}
         onCheckedChange={(isOn) => (isOn ? voice.turnOn() : voice.turnOff())}

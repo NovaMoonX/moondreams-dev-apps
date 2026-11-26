@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { shallowEqual } from 'react-redux';
 
@@ -196,7 +197,7 @@ function StatsSummary({ householdId }: StatsSummaryProps) {
             </p>
             {activeLitterBoxes.length > 1 && (
               <div className='max-w-28'>
-                <Select
+                <AppSelect
                   options={activeLitterBoxes.map((box) => ({
                     text: box.name,
                     value: box.id,

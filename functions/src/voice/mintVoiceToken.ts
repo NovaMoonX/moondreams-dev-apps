@@ -10,7 +10,8 @@ import { createOptionalSecretReader } from '../imageSearch/optionalSecret.js';
 import { grantDeepgramToken } from './providers/deepgram.js';
 import { releaseListen, reserveListen, type ClosedListen } from './usage.js';
 import { VOICE_APPS } from './voiceApps.js';
-import { STT_MODEL, VOICE_TOKEN_TTL_SECONDS } from './voiceConfig.js';
+import { assertGateOpen } from '../gates/assertGateOpen.js';
+import { VOICE_TOKEN_TTL_SECONDS } from './voiceConfig.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -100,6 +101,15 @@ export const mintVoiceToken = onCall(
     if (limits === null) {
       throw new HttpsError('invalid-argument', 'Unknown app.');
     }
+    if (limits.gate !== null) {
+      await assertGateOpen(
+        request,
+        data.appId as string,
+        limits.gate.id,
+        limits.gate.defaultRollout,
+        'Voice is not turned on for you here.',
+      );
+    }
     const timeZone =
       typeof data.timeZone === 'string' && data.timeZone.length <= 64
         ? data.timeZone
@@ -138,7 +148,7 @@ export const mintVoiceToken = onCall(
         token: 'emulator',
         expiresAt: now + VOICE_TOKEN_TTL_SECONDS * 1000,
         provider: 'deepgram',
-        model: STT_MODEL,
+        model: limits.sttModel,
         mintId,
       };
     }
@@ -154,7 +164,7 @@ export const mintVoiceToken = onCall(
         token: granted.token,
         expiresAt: now + granted.expiresInSeconds * 1000,
         provider: 'deepgram',
-        model: STT_MODEL,
+        model: limits.sttModel,
         mintId,
       };
     } catch (error) {

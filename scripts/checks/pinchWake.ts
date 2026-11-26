@@ -95,6 +95,15 @@ const wakes: [string, string][] = [
   ['ok, hey pepper, repeat that', 'repeat that'],
   ['hey pepper pepper', 'pepper'],
   ['hey pepper pinch of salt?', 'pinch of salt'],
+  [
+    "Oh, Pepper, I can't recall the ingredients. Can you remind me?",
+    'i cant recall the ingredients can you remind me',
+  ],
+  ['okay pepper', ''],
+  ['ok, pepper, next', 'next'],
+  ['hi pepper', ''],
+  ['Hello Pepper, how long do I boil it?', 'how long do i boil it'],
+  ['yo pepper', ''],
 ];
 wakes.forEach(([heard, expected]) =>
   assert.equal(
@@ -114,9 +123,9 @@ const notWakes = [
   'peppers',
   'hey peppers',
   'hey peppers mill',
-  'okay pepper',
-  'ok, pepper, next',
   'yes pepper',
+  'oh peppers',
+  'hello peppermint',
   'hey',
   'hey there',
   'hey chap',
@@ -129,7 +138,6 @@ const notWakes = [
   'line it with paper',
   'say hey paper',
   'hey peppered it',
-  'hi pepper',
   'they pepper',
   'hay fever',
   'say hey pepper',
@@ -328,6 +336,57 @@ planCases.forEach(([phase, heard, kind, command]) => {
     `${phase}: "${heard.join('" / "')}" is ${kind}${command === null ? '' : ` ${command}`}`,
   );
 });
+
+// With Pepper on, words that are no command go to it: after the wake phrase in any phase, and anything said in a window (never room talk while kept open, never a bare wake phrase).
+type AskCase = [
+  phase: VoicePhase,
+  heard: string[],
+  kind: ReturnType<typeof planHeard>['kind'],
+  guesses: string[] | null,
+];
+const askCases: AskCase[] = [
+  ['WAITING', ['next'], 'IGNORE', null],
+  ['WAITING', ['can you pass the salt'], 'IGNORE', null],
+  ['WAITING', ['hey pepper'], 'WAKE', null],
+  ['WAITING', ['hey pepper next step'], 'WAKE', null],
+  ['WAITING', ['hey pepper how much garlic'], 'WAKE', null],
+  [
+    'WAITING',
+    ['hey pepper what temperature for chicken', 'hey paper what temperature'],
+    'ASK',
+    ['what temperature for chicken', 'what temperature'],
+  ],
+  ['WINDOW', ['next'], 'COMMAND', null],
+  ['WINDOW', ['hey pepper'], 'WAKE', null],
+  ['WINDOW', ['can you pass the salt'], 'ASK', ['can you pass the salt']],
+  [
+    'WINDOW',
+    ['hey pepper is this safe to eat'],
+    'ASK',
+    ['is this safe to eat'],
+  ],
+  ['LOCKED', ['next'], 'COMMAND', null],
+  ['LOCKED', ['the kids are loud'], 'CLEAR', null],
+  ['LOCKED', ['hey pepper'], 'CLEAR', null],
+  [
+    'LOCKED',
+    ['hey pepper how long does it keep'],
+    'ASK',
+    ['how long does it keep'],
+  ],
+];
+askCases.forEach(([phase, heard, kind, guesses]) => {
+  const plan = planHeard(phase, heard, context, true);
+  assert.deepEqual(
+    [plan.kind, plan.kind === 'ASK' ? plan.guesses : null],
+    [kind, guesses],
+    `${phase} with Pepper: "${heard.join('" / "')}" is ${kind}`,
+  );
+});
+// Asking changes nothing while it is off.
+askCases.forEach(([phase, heard]) =>
+  assert.notEqual(planHeard(phase, heard, context).kind, 'ASK'),
+);
 
 const at = 1_000_000;
 const stateOf = (

@@ -8,12 +8,17 @@ import type {
   SpeechPriority,
 } from '@/lib/speech/voice/types';
 
+const readVoiceName = (name: string | null) =>
+  name === null || name === '' ? {} : { voiceName: name };
+
 export type SpeechFetch =
   | {
       status: 'ready';
       body: ReadableStream<Uint8Array>;
       provider: string;
       contentType: string;
+      /** The voice the server spoke with, which can be a stand-in for the one asked for; absent when it didn't say. */
+      voiceName?: string;
     }
   | { status: 'held'; reason: SpeechHeldReason }
   | { status: 'unavailable'; detail: string };
@@ -136,6 +141,7 @@ export const createSpeechSource = ({
         body: response.body,
         provider: response.headers.get('X-Voice-Provider') ?? 'unknown',
         contentType: response.headers.get('Content-Type') ?? '',
+        ...readVoiceName(response.headers.get('X-Voice-Name')),
       };
     } catch (error) {
       return { status: 'unavailable', detail: describeThrown(error) };
@@ -166,6 +172,7 @@ interface CachedSpeech {
   chunks: Uint8Array[];
   provider: string;
   contentType: string;
+  voiceName?: string;
 }
 
 /** The last few lines' audio, kept for the session so a replay costs no request. */
@@ -207,6 +214,7 @@ export const withSpeechCache = (
         body: toStream(hit.chunks),
         provider: hit.provider,
         contentType: hit.contentType,
+        ...readVoiceName(hit.voiceName ?? null),
       };
     }
     const answer = await source.fetchSpeech(
@@ -232,6 +240,7 @@ export const withSpeechCache = (
                 chunks,
                 provider: answer.provider,
                 contentType: answer.contentType,
+                ...readVoiceName(answer.voiceName ?? null),
               });
             }
           },
