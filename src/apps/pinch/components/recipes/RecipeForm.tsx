@@ -150,6 +150,7 @@ import {
   describePepperChange,
   getAllLiveMarks,
   getPepperReason,
+  getRoundChangeKeys,
 } from '@apps/pinch/utils/pepperMarks';
 import {
   applyRevision,
@@ -1320,7 +1321,7 @@ function RecipeForm({
       }));
       return;
     }
-    changeFinder.goFirstOnNextChange();
+    changeFinder.goFirstOnNextChange(getRoundChangeKeys(marks, data.steps));
     seedForm(data);
     setPepper((current) => ({
       rounds: [

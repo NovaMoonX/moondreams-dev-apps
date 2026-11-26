@@ -27,6 +27,7 @@ import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { generateUuid } from '@/utils';
 import { clipAtWord } from '@/utils/stringUtils';
+import { getStepChangeKey } from '@apps/pinch/utils/pepperMarks';
 import {
   MAX_RECIPE_STEPS,
   MAX_STEP_LENGTH,
@@ -758,7 +759,7 @@ function RecipeSteps({
           'space-y-2',
           aiMarkedIndices.includes(index) && 'ai-changed -mx-2 rounded-lg px-2',
         )}
-        data-change-key={`step-${index}`}
+        data-change-key={getStepChangeKey(step)}
       >
         <div className='flex items-start gap-1'>
           {isEditing ? (

@@ -158,3 +158,20 @@ export function getPepperReason(asks: string[]) {
     ? `${text.slice(0, MAX_RECIPE_NOTE_LENGTH - 1)}…`
     : text;
 }
+
+/** The change key a step's row carries: its text, since a step's marks follow its text and it has no lasting id. */
+export const getStepChangeKey = (step: string) =>
+  `step:${step.replace(/\s+/g, ' ').trim().slice(0, 80)}`;
+
+/** The change keys of what one round of Pepper's changes marked, as the form's rows carry them. */
+export const getRoundChangeKeys = (marks: RevisionMarks, steps: string[]) => [
+  ...(
+    ['title', 'categories', 'servings', 'times', 'description'] as const
+  ).filter((field) => marks[field]),
+  ...[...marks.addedIngredientIds, ...marks.changedIngredientIds].map(
+    (id) => `ingredient-${id}`,
+  ),
+  ...marks.changedStepIndices.map((index) =>
+    getStepChangeKey(steps[index] ?? ''),
+  ),
+];

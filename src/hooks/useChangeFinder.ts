@@ -10,8 +10,8 @@ interface ChangeFinder {
   hasBelow: boolean;
   goAbove: () => void;
   goBelow: () => void;
-  /** Scrolls to the first newly marked item when the next round of marks appears. */
-  goFirstOnNextChange: () => void;
+  /** Arms a jump to the first of `changedKeys` (or any newly marked item) once the next round of marks appears, and makes those count as unseen again. */
+  goFirstOnNextChange: (changedKeys?: string[]) => void;
 }
 
 const SEEN_SHARE = 0.6;
@@ -49,9 +49,12 @@ export function useChangeFinder(
   const [edges, setEdges] = useState({ hasAbove: false, hasBelow: false });
   const [footerHeight, setFooterHeight] = useState(0);
   const seenRef = useRef<Set<string>>(seen);
-  const pendingJump = useRef<{ before: Set<string>; until: number } | null>(
-    null,
-  );
+  const pendingJump = useRef<{
+    before: Set<string>;
+    changed: Set<string>;
+    until: number;
+  } | null>(null);
+  const observedFooter = useRef<HTMLElement | null>(null);
 
   const getElements = useCallback(
     () =>
@@ -76,10 +79,10 @@ export function useChangeFinder(
       .filter(({ rect }) => rect.top < 0 || rect.bottom > visibleBottom);
     return {
       above: offScreen
-        .filter(({ rect }) => (rect.top + rect.bottom) / 2 < middle)
+        .filter(({ rect }) => rect.bottom <= middle)
         .map(({ element }) => element),
       below: offScreen
-        .filter(({ rect }) => (rect.top + rect.bottom) / 2 >= middle)
+        .filter(({ rect }) => rect.top >= middle)
         .map(({ element }) => element),
     };
   }, [rootRef, getElements]);
@@ -99,6 +102,16 @@ export function useChangeFinder(
     const root = rootRef.current;
     if (root === null) return;
     const frame = { id: 0 };
+    const resize = new ResizeObserver(() => schedule());
+    const watchFooter = () => {
+      const footer = getFooter(root);
+      if (footer === observedFooter.current) return;
+      if (observedFooter.current !== null) {
+        resize.unobserve(observedFooter.current);
+      }
+      observedFooter.current = footer;
+      if (footer !== null) resize.observe(footer);
+    };
     const read = () => {
       const elements = getElements();
       const next = elements.map(getKey);
@@ -108,6 +121,7 @@ export function useChangeFinder(
           ? current
           : next,
       );
+      watchFooter();
       setFooterHeight(getFooterHeight(root));
       measure();
       const jump = pendingJump.current;
@@ -116,9 +130,10 @@ export function useChangeFinder(
         pendingJump.current = null;
         return;
       }
-      const fresh = elements.filter(
-        (element) => !jump.before.has(getKey(element)),
-      );
+      const fresh = elements.filter((element) => {
+        const key = getKey(element);
+        return jump.changed.has(key) || !jump.before.has(key);
+      });
       if (fresh.length === 0) return;
       pendingJump.current = null;
       const freshKeys = new Set(fresh.map(getKey));
@@ -133,6 +148,7 @@ export function useChangeFinder(
       cancelAnimationFrame(frame.id);
       frame.id = requestAnimationFrame(read);
     };
+    watchFooter();
     schedule();
     const observer = new MutationObserver(schedule);
     observer.observe(root, {
@@ -142,13 +158,11 @@ export function useChangeFinder(
       attributes: true,
       attributeFilter: ['class'],
     });
-    const footer = getFooter(root);
-    const resize = new ResizeObserver(schedule);
-    if (footer !== null) resize.observe(footer);
     return () => {
       cancelAnimationFrame(frame.id);
       observer.disconnect();
       resize.disconnect();
+      observedFooter.current = null;
     };
   }, [rootRef, getElements, measure]);
 
@@ -214,9 +228,10 @@ export function useChangeFinder(
     hasBelow: edges.hasBelow,
     goAbove: () => go('above'),
     goBelow: () => go('below'),
-    goFirstOnNextChange: () => {
+    goFirstOnNextChange: (changedKeys = []) => {
       pendingJump.current = {
         before: new Set(getElements().map(getKey)),
+        changed: new Set(changedKeys),
         until: Date.now() + JUMP_WAIT_MS,
       };
     },
