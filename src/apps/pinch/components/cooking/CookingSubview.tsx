@@ -106,7 +106,10 @@ import {
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import { updateCook } from '@apps/pinch/store/actions/cookActions';
+import {
+  setCookTiming,
+  updateCook,
+} from '@apps/pinch/store/actions/cookActions';
 import { attachNotesToCook } from '@apps/pinch/store/actions/noteActions';
 import { announceCookingSession } from '@apps/pinch/lib/cookingSessionPresence';
 import {
@@ -126,6 +129,16 @@ import {
   applyResumePositions,
   buildCookingSnapshot,
 } from '@apps/pinch/utils/cookSession';
+import {
+  GATHER_CLOCK_KEY,
+  getCookStepTimes,
+  getStepClockKey,
+  moveStepClock,
+  readStepClock,
+  sumStepClock,
+  startStepClock,
+  type StepClockTotals,
+} from '@apps/pinch/utils/stepClock';
 import {
   getLastTimeNote,
   getSpokenEntries,
@@ -232,6 +245,7 @@ interface ChangeTarget {
 }
 
 const DONE_GUARD_MS = 600;
+const CLOCK_SAVE_MS = 20_000;
 /** A spoken command lands up to a couple of seconds after the words, so "next" or "dismiss" this soon after a Time's up was meant before it. */
 const VOICE_DONE_GUARD_MS = 2000;
 // A server left idle about 15 minutes starts cold, so both of Pepper's are woken on arrival and kept warm while cooking is open.
@@ -602,6 +616,38 @@ function CookingSession({
   const [sessionId] = useState(generateUuid);
   const [startedAt] = useState(() => resume?.startedAt ?? Date.now());
   const [cookedForMs, setCookedForMs] = useState<number | null>(null);
+  const stepClock = useRef(startStepClock(resume?.stepClock ?? {}));
+  const [clockStartedAt] = useState(
+    () => Date.now() - sumStepClock(resume?.stepClock ?? {}),
+  );
+  const clockKey = isFinished
+    ? null
+    : view === 'gather'
+      ? GATHER_CLOCK_KEY
+      : getStepClockKey(recipe.id, stepIndex);
+  useEffect(() => {
+    stepClock.current = moveStepClock(stepClock.current, clockKey, Date.now());
+  }, [clockKey]);
+  const [clockSaves, setClockSaves] = useState(0);
+  useEffect(() => {
+    const save = () => setClockSaves((count) => count + 1);
+    const saveWhenHidden = () => {
+      if (document.visibilityState === 'hidden') save();
+    };
+    const interval = window.setInterval(save, CLOCK_SAVE_MS);
+    document.addEventListener('visibilitychange', saveWhenHidden);
+    window.addEventListener('pagehide', save);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', saveWhenHidden);
+      window.removeEventListener('pagehide', save);
+    };
+  }, []);
+  const finishTiming = useRef<{
+    totals: StepClockTotals;
+    durationSeconds: number;
+  } | null>(null);
+  const undoneIds = useRef(new Set<string>());
   const [goingCount] = useState(createLiveCount);
   const isWide = useMediaQuery().isAtLeast('lg');
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -1086,7 +1132,10 @@ function CookingSession({
 
   const goBy = (direction: 1 | -1) => {
     if (isFinished) {
-      if (direction === -1) setIsFinished(false);
+      if (direction === -1) {
+        finishTiming.current = null;
+        setIsFinished(false);
+      }
       return;
     }
     const next = index + direction;
@@ -1158,6 +1207,7 @@ function CookingSession({
         positions: plate,
         captured: capture.captured,
         startedAt,
+        stepClock: readStepClock(stepClock.current, Date.now()),
         timers: timers.timers.map((timer): ResumeTimer => {
           const name = timer.recipeId === null ? timer.stepName : null;
           return timer.status === 'running'
@@ -1171,6 +1221,8 @@ function CookingSession({
     sessionId,
     startedAt,
     isFinished,
+    clockKey,
+    clockSaves,
     entries,
     openedRecipeId,
     plannedMealId,
@@ -1431,7 +1483,7 @@ function CookingSession({
   };
 
   const markCooked = async () => {
-    if (isMarking || !canMark || markable.length === 0) return;
+    if (isMarking || !canMark || markable.length === 0) return [];
     setMarkError(null);
     setIsMarking(true);
     try {
@@ -1442,9 +1494,39 @@ function CookingSession({
         ...Object.fromEntries(written),
       }));
       setIsMarking(false);
+      return written;
     } catch (error) {
       setMarkError(getErrorMessage(error, 'Unable to mark this as cooked.'));
       setIsMarking(false);
+      return [];
+    }
+  };
+
+  const saveTiming = async (
+    cooks: (readonly [string, string])[],
+    totals: StepClockTotals,
+    durationSeconds: number,
+  ) => {
+    if (cooks.length === 0) return;
+    try {
+      await dispatch(
+        setCookTiming({
+          uid,
+          timings: cooks.map(([recipeId, id]) => ({
+            id,
+            durationSeconds: durationSeconds > 0 ? durationSeconds : null,
+            stepTimes: getCookStepTimes(
+              totals,
+              recipeId,
+              entries.find((candidate) => candidate.recipe.id === recipeId)
+                ?.recipe.steps ?? [],
+            ),
+          })),
+        }),
+      ).unwrap();
+    } catch (error) {
+      if (cooks.every(([, id]) => undoneIds.current.has(id))) return;
+      setMarkError(getErrorMessage(error, 'Unable to save how long it took.'));
     }
   };
 
@@ -1453,6 +1535,7 @@ function CookingSession({
     if (ids.length === 0 || undoState !== null) return;
     setMarkError(null);
     setUndoState('PENDING');
+    ids.forEach((id) => undoneIds.current.add(id));
     try {
       await undoCooks(ids);
       setFollowUps({});
@@ -1463,6 +1546,7 @@ function CookingSession({
       );
       setUndoState(null);
     } catch (error) {
+      ids.forEach((id) => undoneIds.current.delete(id));
       setUndoState('FAILED');
       setMarkError(
         `Couldn't undo that. ${getErrorMessage(error, 'You can delete it from the cooking history.')}`,
@@ -1492,16 +1576,28 @@ function CookingSession({
     voice.stop();
     // eslint-disable-next-line react-hooks/purity -- runs from a tap; once the voice actions are connected the compiler flags every clock read here
     finishedAt.current = Date.now();
-    setCookedForMs(finishedAt.current - startedAt);
+    const totals = readStepClock(stepClock.current, finishedAt.current);
+    const cookedMs = sumStepClock(totals);
+    const durationSeconds = Math.round(cookedMs / 1_000);
+    finishTiming.current = { totals, durationSeconds };
+    setCookedForMs(cookedMs);
     setIsFinished(true);
     scrollToTop();
     focusPrimary();
-    records.forEach((record) => {
-      if (record.recordedCookId !== null) {
-        void saveServings(record.recordedCookId, record.servings);
-      }
+    const recorded = records.flatMap((record) =>
+      record.recordedCookId === null
+        ? []
+        : [[record.recipeId, record.recordedCookId] as const],
+    );
+    recorded.forEach(([recipeId, id]) => {
+      const record = records.find(
+        (candidate) => candidate.recipeId === recipeId,
+      );
+      if (record) void saveServings(id, record.servings);
     });
-    void markCooked();
+    void markCooked().then((written) =>
+      saveTiming([...recorded, ...written], totals, durationSeconds),
+    );
   };
 
   const handleDone = async () => {
@@ -3683,7 +3779,7 @@ function CookingSession({
                 isPepperOn && voice.isSupported ? 'gap-3' : 'gap-1',
               )}
             >
-              <CookStopwatch startedAt={startedAt} />
+              <CookStopwatch startedAt={clockStartedAt} />
               {voice.isSupported &&
                 (isPepperOn ? (
                   <PepperHeaderOrb voice={voice} state={pepperOrbState} />
@@ -3784,7 +3880,16 @@ function CookingSession({
                   onMark={
                     markable.length === 0 || undoState === 'PENDING'
                       ? null
-                      : () => void markCooked()
+                      : () =>
+                          void markCooked().then((written) =>
+                            finishTiming.current === null
+                              ? undefined
+                              : saveTiming(
+                                  written,
+                                  finishTiming.current.totals,
+                                  finishTiming.current.durationSeconds,
+                                ),
+                          )
                   }
                   problem={getRecordProblem()}
                 />

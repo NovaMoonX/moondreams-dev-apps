@@ -1,13 +1,12 @@
 import { Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 
-import Field from '@/components/forms/Field';
+import DurationField from '@/components/forms/DurationField';
 import SummaryEditor from '@/components/SummaryEditor';
 import {
   isValidMinutes,
   parseMinutes,
 } from '@apps/pinch/components/recipes/recipeFormModel';
 import {
-  MAX_MINUTES,
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_TITLE_LENGTH,
 } from '@apps/pinch/constants';
@@ -106,40 +105,12 @@ const getTimeProblem = (prep: string, cook: string) => {
     : `Use whole minutes for ${invalid.join(' and ')}`;
 };
 
-interface TimeInputProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}
-
-function TimeInput({ label, value, onChange }: TimeInputProps) {
-  return (
-    <Field label={label}>
-      {() => (
-        <div className='relative'>
-          <Input
-            type='number'
-            inputMode='numeric'
-            min={0}
-            step={1}
-            max={MAX_MINUTES}
-            variant='outline'
-            aria-label={`${label} in minutes`}
-            className='[appearance:textfield] pr-12! [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-          />
-          <span
-            className='text-muted-foreground pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm'
-            aria-hidden='true'
-          >
-            min
-          </span>
-        </div>
-      )}
-    </Field>
-  );
-}
+const toMinutes = (text: string) => {
+  const minutes = parseMinutes(text);
+  return minutes !== null && isValidMinutes(minutes) ? minutes : null;
+};
+const toText = (minutes: number | null) =>
+  minutes === null ? '' : String(minutes);
 
 interface TimesFieldProps {
   prep: string;
@@ -161,17 +132,19 @@ export function RecipeTimesField({ prep, cook, onChange }: TimesFieldProps) {
       placeholder='Add prep and cook time'
       problem={problem}
     >
-      <div className='grid grid-cols-2 gap-3'>
-        <TimeInput
-          label='Prep time'
-          value={prep}
-          onChange={(value) => onChange({ prep: value })}
-        />
-        <TimeInput
-          label='Cook time'
-          value={cook}
-          onChange={(value) => onChange({ cook: value })}
-        />
+      <div className='@container'>
+        <div className='grid gap-3 @min-[20rem]:grid-cols-2'>
+          <DurationField
+            label='Prep time'
+            minutes={toMinutes(prep)}
+            onChange={(next) => onChange({ prep: toText(next) })}
+          />
+          <DurationField
+            label='Cook time'
+            minutes={toMinutes(cook)}
+            onChange={(next) => onChange({ cook: toText(next) })}
+          />
+        </div>
       </div>
       {problem && <p className='text-destructive text-xs'>{problem}</p>}
     </SummaryEditor>
