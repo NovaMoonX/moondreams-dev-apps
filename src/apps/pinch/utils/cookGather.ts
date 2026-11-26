@@ -249,7 +249,10 @@ export const getGatherGroups = (dishes: GatherDish[]): GatherGroup[] => {
       label: group.replace(/^for\s+(the\s+)?/i, ''),
       rows: dish.rows.filter((row) => row.group === group).map(toRow),
     }));
-    return isPlate
+    const isDishAPart = parts.some(
+      (part) => part.label.toLowerCase() === dish.recipe.title.toLowerCase(),
+    );
+    return isPlate && !isDishAPart
       ? [
           {
             key: dish.recipe.id,

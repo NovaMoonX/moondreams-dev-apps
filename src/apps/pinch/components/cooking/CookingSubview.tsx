@@ -1156,12 +1156,13 @@ function CookingSession({
   /** The open step panel's body when it has more than fits, else the subview's own scroller. */
   const getScrollTarget = () => {
     const root = rootRef.current;
-    const sheets = Array.from(
+    const inSheet = Array.from(
       document.querySelectorAll<HTMLElement>('[role="dialog"]'),
-    ).filter((dialog) => root === null || !dialog.contains(root));
-    const sheet = sheets.length > 0 ? sheets[sheets.length - 1] : null;
-    const inSheet = sheet === null ? null : findScrollable(sheet);
-    if (inSheet !== null) return inSheet;
+    )
+      .filter((dialog) => root === null || !dialog.contains(root))
+      .map(findScrollable)
+      .find((found) => found !== null);
+    if (inSheet !== undefined && inSheet !== null) return inSheet;
     const panel = document.querySelector<HTMLElement>(
       '#cook-step-panel [data-cook-scroll]',
     );
