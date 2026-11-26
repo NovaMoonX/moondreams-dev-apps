@@ -15,7 +15,8 @@ Pepper changes a recipe on request. The owner first held links out (an assistant
 
 - The revision runs in a Pinch callable on Claude Haiku (`claude-haiku-5-5`, low effort), behind the `pepper-edits` switch checked on the server, with the basic web search tool capped at two searches; the answer comes back through a terminal tool shaped like the revision.
 - The prompt allows link changes only when the ask is about links or plainly needs one, never invented.
-- Every new link is opened with `fetchPageContent` before it reaches the form; one that fails is dropped, and Pepper's line says so.
+- A link is kept only if the search returned it (a server allowlist of the recipe's own links, the pages the search found and any the person typed); the rest are dropped on the server and counted, and Pepper's line says how many.
+- On the device a found link is also dropped when its page is clearly gone (`fetchPageContent` says 404, 410 or an unknown host), never for a timeout or a block, and the line says so.
 - A round that searched shows up to three of its sources in the change summary (`SearchSourcesNote`).
 - The disclosure line before the first ask says Pepper may search the web.
 
@@ -24,11 +25,11 @@ Pepper changes a recipe on request. The owner first held links out (an assistant
 - Price, from Anthropic's [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) page: "web search costs $10 USD per 1,000 searches, plus standard token costs for search-generated content. Search results count as input tokens", and "A web search that fails with an error is not billed." Haiku is $0.10 per million input tokens and $0.50 per million output tokens (Anthropic's model table, as cached in the claude-api reference on 2026-11-03). An ask that rewrites a recipe is a few thousand tokens each way, about a tenth of a cent; one that searches adds a cent per search plus the pages read.
 - The model decides: "Claude determines when to search based on the prompt", and `max_uses` caps it.
 - Display terms: "When displaying API outputs directly to end users, citations must be included to the original source." Pepper's reply and links draw on what it found, so the summary names the sources.
-- Checking each link loads closes the gap that held links out: an invented or dead address never reaches the form.
+- The allowlist closes the gap that held links out: a model writes a plausible address as readily as a real one, so only an address that came from the input or the search is kept, and checking that a kept one still opens catches a dead page.
 
 ## How it is held
 
-`docs/conventions/design-ux.md` "What an AI changed is marked where it changed…" (its search sentence), `.claude/rules/pinch.md` (Pepper's scope), the shared `SearchSourcesNote`, and the per-person assistant spend cap the callable reserves against.
+`docs/conventions/cloud-functions.md` "A model's reading never changes a person's record on its own word alone" (an address is kept only if it was in the input or the search, and what the server drops is reported in the reply), checked by `scripts/checks/pinchPepperRevision.ts` (`check:pinch-math`: an invented link dropped and counted, a `www` or `http` copy of a recipe link kept as the original); also `docs/conventions/design-ux.md` "What an AI changed is marked where it changed…" (its search sentence), `.claude/rules/pinch.md` (Pepper's scope), the shared `SearchSourcesNote`, and the per-person assistant spend cap the callable reserves against.
 
 ## When to revisit
 
@@ -39,3 +40,4 @@ Pepper changes a recipe on request. The owner first held links out (an assistant
 ## Changes
 
 - 2026-11-26: first built on Gemini with Google Search grounding; the owner asked "Is Haiku cheaper here?", and once the costs were compared chose Haiku, so the revision moved to a callable and Google's suggestion box was dropped.
+- 2026-11-26: the check on found links changed from "opened on the device, dropped if it fails" to a server allowlist (the search's own results, the recipe's links, the person's typed addresses) with the dropped count in the reply, and the device drops only a page that is clearly gone, since a timeout or a block says nothing about the page.

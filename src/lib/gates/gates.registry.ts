@@ -144,7 +144,7 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     defaultRollout: 'off',
     isServerEnforced: false,
     warning:
-      'Each change asked for sends the recipe and the request to Gemini, and costs a little. Spoken requests are heard by the browser’s speech service, never kept by Pinch.',
+      'Each change asked for sends the recipe and the request to Claude to change, which may search the web for a link, and costs a little. Spoken requests are heard by Deepgram, or by the browser’s own recognition when that can’t start; Pinch keeps nothing that is spoken.',
   },
 ];
 

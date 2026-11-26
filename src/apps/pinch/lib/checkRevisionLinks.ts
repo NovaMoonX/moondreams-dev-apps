@@ -17,15 +17,18 @@ const isGone = (error: unknown) => {
   );
 };
 
-/** Drops each link the revision added whose page clearly does not exist (gone or an unknown host), keeping any a timeout, a block or another failure leaves unsure; says so in the reply. */
+const toLeftOutNote = (leftOut: number, brought: number) =>
+  leftOut === 1 && brought === 1
+    ? "Couldn't confirm the link it found, so left it out."
+    : `Left out ${leftOut} ${leftOut === 1 ? 'link' : 'links'} it found that couldn't be confirmed.`;
+
+/** Drops each link the revision added whose page clearly does not exist (gone or an unknown host), keeping any a timeout, a block or another failure leaves unsure; the reply says how many links were left out, counting the ones the server already dropped. */
 export async function dropUnopenableLinks(
   revision: RecipeRevision,
   input: RevisionInput,
 ): Promise<RecipeRevision> {
   const known = new Set(input.links.map((link) => link.url));
   const added = revision.links.filter((link) => !known.has(link.url));
-  if (added.length === 0) return revision;
-
   const results = await Promise.allSettled(
     added.map((link) =>
       fetchPageContent(
@@ -42,14 +45,12 @@ export async function dropUnopenableLinks(
         : [];
     }),
   );
-  if (failed.size === 0) return revision;
+  const leftOut = revision.droppedLinks + failed.size;
+  if (leftOut === 0) return revision;
 
   return {
     ...revision,
     links: revision.links.filter((link) => !failed.has(link.url)),
-    reply:
-      failed.size === added.length
-        ? `${revision.reply} Couldn't open the link it found, so left it out.`
-        : `${revision.reply} Left out ${failed.size} ${failed.size === 1 ? 'link' : 'links'} it found that wouldn't open.`,
+    reply: `${revision.reply} ${toLeftOutNote(leftOut, leftOut + added.length - failed.size)}`,
   };
 }

@@ -48,6 +48,7 @@ const DICTATION_COPY = {
   formatting: 'Writing it down…',
   nothingHeard: "Didn't catch that. Tap the mic to try again, or type it.",
   listenFailed: "Couldn't listen just now. Type it instead.",
+  didNotFit: "Some of what you said didn't fit.",
 };
 
 const mintVoiceToken = httpsCallable<
@@ -160,8 +161,11 @@ function PepperDock({
                 weight: nameHints.length - index,
               })),
             ),
-    onWords: (spoken) =>
-      setText((typed) => appendDictated(typed, spoken, MAX_PEPPER_ASK_LENGTH)),
+    onWords: (spoken) => {
+      const next = appendDictated(text, spoken, MAX_PEPPER_ASK_LENGTH);
+      setText(next.text);
+      return next.isCut;
+    },
   });
   const isVoiceShown = dictation.phase !== 'idle';
 

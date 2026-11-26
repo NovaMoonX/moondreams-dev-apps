@@ -96,6 +96,8 @@ export interface RecipeRevision {
   source: string | null;
   collections: string[];
   links: RevisionLink[];
+  /** How many links the server left out because its search did not return them. */
+  droppedLinks: number;
 }
 
 /** A page the round's web search returned, which is shown beside what it found. */
@@ -221,6 +223,11 @@ export function normalizeRevision(
       ).values(),
     ].slice(0, MAX_RECIPE_COLLECTIONS),
     links,
+    droppedLinks:
+      typeof parsed.droppedLinks === 'number' &&
+      Number.isFinite(parsed.droppedLinks)
+        ? Math.max(0, Math.floor(parsed.droppedLinks))
+        : 0,
     ingredients,
     steps: steps.map((text, index) => ({
       text,

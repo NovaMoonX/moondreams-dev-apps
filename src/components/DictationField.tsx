@@ -38,6 +38,7 @@ interface DictationFieldProps {
     formatting: string;
     nothingHeard: string;
     listenFailed: string;
+    didNotFit: string;
   };
 }
 
@@ -67,12 +68,12 @@ function DictationField({
     field.setSelectionRange(field.value.length, field.value.length);
   }, [landed, fieldRef]);
 
-  const note =
-    dictation.note === 'nothing'
-      ? copy.nothingHeard
-      : dictation.note === 'failed'
-        ? copy.listenFailed
-        : null;
+  const notes = {
+    nothing: copy.nothingHeard,
+    failed: copy.listenFailed,
+    cut: copy.didNotFit,
+  };
+  const note = dictation.note === null ? null : notes[dictation.note];
 
   return (
     <>

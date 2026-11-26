@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
+import { clipAtWord } from '@/utils/stringUtils';
 import { readInputLevel } from '@/lib/speech/voice/inputLevel';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
 import type { VoiceTokenSource } from '@/lib/speech/voice/voiceToken';
@@ -17,16 +18,23 @@ interface UseDictationOptions {
   cloudListening: { tokenSource: VoiceTokenSource; isAllowed: boolean } | null;
   /** Names the recognizer should expect, asked at each listen. */
   getNameHints?: () => string[];
-  /** The finished, formatted words; the caller puts them in its box. Nothing is sent. */
-  onWords: (words: string) => void;
+  /** The finished, formatted words; the caller puts them in its box and says whether some did not fit. Nothing is sent. */
+  onWords: (words: string) => boolean;
 }
 
-/** Puts spoken words after what is already typed, trimmed and cut to `maxLength`. */
+type DictationNote = 'nothing' | 'failed' | 'cut';
+
+/** Puts spoken words after what is already typed, cut at the last word that fits `maxLength`; `isCut` is true when anything was left out. */
 export const appendDictated = (
   current: string,
   spoken: string,
   maxLength: number,
-) => `${current.trim()} ${spoken.trim()}`.trim().slice(0, maxLength);
+) => {
+  const joined = `${current.trim()} ${spoken.trim()}`.trim();
+  return joined.length <= maxLength
+    ? { text: joined, isCut: false }
+    : { text: clipAtWord(joined, maxLength), isCut: true };
+};
 
 /** Speaking into a text box: nothing is shown while the person talks but the level, the words arrive once, formatted, and the caller puts them in the box to read, fix and send. */
 export function useDictation({
@@ -38,10 +46,10 @@ export function useDictation({
 }: UseDictationOptions) {
   const [isAwaiting, setIsAwaiting] = useState(false);
   const [landed, setLanded] = useState(0);
-  const [note, setNote] = useState<'nothing' | 'failed' | null>(null);
+  const [note, setNote] = useState<DictationNote | null>(null);
   const [needsMicrophone, setNeedsMicrophone] = useState(false);
 
-  const end = (nextNote: 'nothing' | 'failed' | null) => {
+  const end = (nextNote: DictationNote | null) => {
     setIsAwaiting(false);
     setNote(nextNote);
   };
@@ -55,8 +63,7 @@ export function useDictation({
     onUtterance: (spoken) => {
       voice.settle();
       setIsAwaiting(false);
-      setNote(null);
-      onWords(spoken);
+      setNote(onWords(spoken) ? 'cut' : null);
       setLanded((count) => count + 1);
     },
     onNothingHeard: (isAsked) => end(isAsked ? 'nothing' : null),

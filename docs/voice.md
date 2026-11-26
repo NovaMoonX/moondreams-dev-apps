@@ -100,8 +100,8 @@ Audio said after a tap, or after a listen opens, always reaches a recognizer tha
 - **Cloud listening first, like the rest.** The cloud listens while it is allowed and online, with smart formatting and the app's name hints; the device's own recognition otherwise.
 - **The mic is there whenever the box is idle** and the browser can listen, also with text typed, because spoken words are added after what is already there.
 - **No words while speaking.** The row becomes a live wave and Stop. The wave follows the PCM input level, so it moves only with a real voice; on the browser route, which reports no level, it shows calm still bars.
-- **A brief "Writing it down…"** while the words are formatted. Stop before anything was heard returns to the box at once; a wait past 10 seconds is given up with a quiet line.
-- **The words land once** in the box after what is typed, with the caret at the end, to read, fix and send. They are never sent by themselves.
+- **A brief "Writing it down…"** while the words are formatted. Stop before the listen has started returns to the box at once (once listening, Stop may show the "nothing heard" line); a wait past 10 seconds is given up with a quiet line.
+- **The words land once** in the box after what is typed, with the caret at the end, to read, fix and send. They are never sent by themselves. Words past the box's limit are cut at the last word that fits and the box says "Some of what you said didn't fit."
 
 ## A spoken assistant
 

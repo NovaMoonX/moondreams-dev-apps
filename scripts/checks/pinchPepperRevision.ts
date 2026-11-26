@@ -15,6 +15,7 @@ import type {
 import {
   cleanRevision,
   readAllowedAddresses,
+  readRecipeUrls,
 } from '../../functions/src/apps/pinch/pepper/revisePinchRecipe.ts';
 import {
   applyRevision,
@@ -124,6 +125,7 @@ const same: RecipeRevision = {
   source: input.source,
   collections: input.collections,
   links: input.links,
+  droppedLinks: 0,
   ingredients: input.ingredients.map((line) => keep(line.ref)),
   steps: input.steps,
 };
@@ -484,15 +486,19 @@ const answerWith = (urls: string[]) => ({
   isChanged: true,
   links: urls.map(linkOf),
 });
+const recipeLinks = [linkOf('https://Mine.example.com/recipe/')];
 const allowed = readAllowedAddresses(
-  [linkOf('https://Mine.example.com/recipe/')],
+  recipeLinks,
   ['https://found.example.com/page#top'],
   ['see https://typed.example.com/x, please'],
 );
+const ownUrls = readRecipeUrls(recipeLinks);
 const keptUrls = (urls: string[]) =>
-  (cleanRevision(answerWith(urls), allowed)!.links as { url: string }[]).map(
-    (entry) => entry.url,
-  );
+  (
+    cleanRevision(answerWith(urls), allowed, ownUrls)!.links as {
+      url: string;
+    }[]
+  ).map((entry) => entry.url);
 assert.deepEqual(
   keptUrls(['https://invented.example.com/a']),
   [],
@@ -513,6 +519,43 @@ assert.equal(
   1,
   'a typed link stays',
 );
-assert.equal(cleanRevision(answerWith([]), new Set())!.links.length, 0);
+assert.equal(cleanRevision(answerWith([]), new Set(), [])!.links.length, 0);
+assert.deepEqual(
+  keptUrls(['http://www.mine.example.com/recipe']),
+  ['https://Mine.example.com/recipe/'],
+  'a www or http copy of an existing link comes back as the original',
+);
+assert.deepEqual(
+  keptUrls([
+    'https://Mine.example.com/recipe/',
+    'https://www.mine.example.com/recipe',
+  ]),
+  ['https://Mine.example.com/recipe/'],
+  'two copies of one link are one',
+);
+assert.deepEqual(
+  keptUrls(['https://mine.example.com/other']),
+  [],
+  'another page on the same site is not a copy',
+);
+const counted = cleanRevision(
+  answerWith([
+    'https://invented.example.com/a',
+    'https://invented.example.com/b',
+    'https://found.example.com/page',
+  ]),
+  allowed,
+  ownUrls,
+)!;
+assert.equal(counted.droppedLinks, 2, 'the links it removed are counted');
+assert.equal(counted.links.length, 1);
+assert.equal(
+  cleanRevision(
+    answerWith(['https://found.example.com/page']),
+    allowed,
+    ownUrls,
+  )!.droppedLinks,
+  0,
+);
 
 console.log('pinch pepper revision checks passed');

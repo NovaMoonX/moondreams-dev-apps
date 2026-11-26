@@ -64,6 +64,24 @@ export const normalizeAddress = (text: string) => {
   }
 };
 
+/** An address with the scheme, a leading `www.`, the hash and a trailing slash left out, so a trivially changed copy of a link compares equal. */
+const toLooseAddress = (text: string) => {
+  const address = normalizeAddress(text);
+  if (address === null) return null;
+  const url = new URL(address);
+  return `${url.host.replace(/^www\./, '')}${url.pathname}${url.search}`.replace(
+    /\/$/,
+    '',
+  );
+};
+
+/** The addresses written on the recipe's own links. */
+export const readRecipeUrls = (recipeLinks: unknown) =>
+  (Array.isArray(recipeLinks) ? recipeLinks : []).flatMap((entry) => {
+    const url = (entry as { url?: unknown } | null)?.url;
+    return typeof url === 'string' ? [url] : [];
+  });
+
 /** Every address the model may hand back: the recipe's own, the pages its search found and any the person wrote. */
 export const readAllowedAddresses = (
   recipeLinks: unknown,
@@ -72,9 +90,7 @@ export const readAllowedAddresses = (
 ) =>
   new Set(
     [
-      ...(Array.isArray(recipeLinks) ? recipeLinks : []).map(
-        (entry) => (entry as { url?: unknown } | null)?.url,
-      ),
+      ...readRecipeUrls(recipeLinks),
       ...foundUrls,
       ...typedTexts.flatMap((text) =>
         (text.match(URL_IN_TEXT) ?? []).map((link) =>
@@ -135,8 +151,12 @@ const toMessage = ({
       : ''
   }--- BEGIN ASK ---\n${ask}\n--- END ASK ---`;
 
-/** The model's answer with its links cleaned and capped and any address not in `allowed` dropped; null when it is not a revision. */
-export function cleanRevision(answer: unknown, allowed: ReadonlySet<string>) {
+/** The model's answer with its links cleaned and capped, a link that is only a trivial change of one of `ownUrls` given back as that one, and any address not in `allowed` dropped and counted in `droppedLinks`; null when it is not a revision. */
+export function cleanRevision(
+  answer: unknown,
+  allowed: ReadonlySet<string>,
+  ownUrls: readonly string[],
+) {
   if (!isObject(answer) || JSON.stringify(answer).length > MAX_ANSWER_CHARS) {
     return null;
   }
@@ -148,14 +168,26 @@ export function cleanRevision(answer: unknown, allowed: ReadonlySet<string>) {
   ) {
     return null;
   }
+  const own = new Map(
+    ownUrls.flatMap((url) => {
+      const key = toLooseAddress(url);
+      return key === null ? [] : [[key, url] as const];
+    }),
+  );
+  const checked = cleanLinks(answer.links).map(({ kind, label, url }) => {
+    const key = toLooseAddress(url);
+    return { kind, label, url: (key === null ? null : own.get(key)) ?? url };
+  });
+  const kept = checked.filter(({ url }) => {
+    const address = normalizeAddress(url);
+    return address !== null && allowed.has(address);
+  });
   return {
     ...answer,
-    links: cleanLinks(answer.links)
-      .filter(({ url }) => {
-        const address = normalizeAddress(url);
-        return address !== null && allowed.has(address);
-      })
-      .map(({ kind, label, url }) => ({ kind, label, url })),
+    links: kept.filter(
+      (link, index) => kept.findIndex(({ url }) => url === link.url) === index,
+    ),
+    droppedLinks: checked.length - kept.length,
   };
 }
 
@@ -238,6 +270,7 @@ export const revisePinchRecipe = onCall(
                 body.ask,
                 ...body.earlier,
               ]),
+              readRecipeUrls(body.recipe.links),
             )
           : null;
       logger.info('pepper.revise', {
