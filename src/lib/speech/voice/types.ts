@@ -24,6 +24,10 @@ export interface SttStartOptions {
   onReady?: () => void;
   /** The audio just before the tap, for adapters that keep a buffer; always null for now. */
   preRoll: Float32Array | null;
+  /** This recognizer will say when the person has finished (`onEndOfTurn`), even across a pause, so the caller's own quiet timer only guards against it never saying. */
+  onTurnDetection?: () => void;
+  /** The recognizer judged the person finished their turn. */
+  onEndOfTurn?: () => void;
 }
 
 /** A microphone already open and running through the capture worklet: the frames from just before it was handed over, then the live ones. */

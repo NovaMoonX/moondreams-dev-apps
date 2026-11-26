@@ -1,35 +1,9 @@
-import { getToken } from 'firebase/app-check';
-
 import { createSpeechSource } from '@/lib/speech/voice/speechSource';
 import { store } from '@/store';
 import {
-  app,
-  appCheck,
-  auth,
-  isUsingFirebaseEmulators,
-} from '@lib/firebase/config';
-
-const getSpeechUrl = () => {
-  const { projectId } = app.options;
-  return isUsingFirebaseEmulators
-    ? `http://${window.location.hostname}:5001/${projectId}/us-central1/streamSpeech`
-    : `https://us-central1-${projectId}.cloudfunctions.net/streamSpeech`;
-};
-
-const getSpeechHeaders = async () => {
-  await auth.authStateReady();
-  const { currentUser } = auth;
-  const check = appCheck;
-  if (!currentUser || !check) return null;
-  const [idToken, appCheckToken] = await Promise.all([
-    currentUser.getIdToken(),
-    getToken(check).catch(() => getToken(check, true)),
-  ]);
-  return {
-    Authorization: `Bearer ${idToken}`,
-    'X-Firebase-AppCheck': appCheckToken.token,
-  };
-};
+  getHttpFunctionUrl,
+  getSignedHeaders,
+} from '@lib/firebase/httpFunction';
 
 export const readHelmVoice = () => {
   const profile = store.getState().helm.profile;
@@ -42,7 +16,7 @@ export const readHelmVoice = () => {
 export const createHelmSpeechSource = () =>
   createSpeechSource({
     appId: 'helm',
-    url: getSpeechUrl(),
-    getHeaders: getSpeechHeaders,
+    url: getHttpFunctionUrl('streamSpeech'),
+    getHeaders: getSignedHeaders,
     readVoice: readHelmVoice,
   });

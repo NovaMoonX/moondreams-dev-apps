@@ -206,6 +206,8 @@ const WAKE_RETRIES = 2;
 const WAKE_RETRY_MS = 3000;
 // An end phrase still closing the words this long after it was last heard counts; "that's all I need" keeps going.
 const END_PHRASE_HOLD_MS = 900;
+// A recognizer that judges the end of a turn waits up to 4 s of silence itself; this only covers it never saying.
+const TURN_DETECTED_GUARD_MS = 6000;
 const BARGE_CONFIRM_MS = 1500;
 // A server left idle about 15 minutes starts cold (2 to 6 s), so it is woken on arrival and kept warm while the screen shows.
 const WARM_EVERY_MS = 10 * 60_000;
@@ -368,6 +370,8 @@ export function useVoiceConversation({
     hasSpokenCloud: false,
     lastLineAt: null as number | null,
     heardBy: 'browser',
+    isTurnDetected: false,
+    isTurnEnded: false,
     mode: createListeningState('TAP'),
     isCancelled: false,
     stopListening: null as (() => void) | null,
@@ -614,7 +618,9 @@ export function useVoiceConversation({
       finish,
       heardText.trim() === ''
         ? latest.current.quietMs
-        : readTurnEndDelay(heardText),
+        : run.current.isTurnDetected
+          ? TURN_DETECTED_GUARD_MS
+          : readTurnEndDelay(heardText),
     );
   };
 
@@ -630,7 +636,8 @@ export function useVoiceConversation({
     setIsListening(true);
     setIsThinking(false);
     setHeard('');
-    armQuiet();
+    if (run.current.isTurnEnded) finish();
+    else armQuiet();
   };
 
   /** Drops a listen that never confirmed a person: no utterance, no nothing-heard, no notice. */
@@ -905,6 +912,8 @@ export function useVoiceConversation({
     const { seed = '', adopt = null } = options;
     run.current.isUnasked = options.isUnasked === true;
     run.current.heardWords = '';
+    run.current.isTurnDetected = false;
+    run.current.isTurnEnded = false;
     run.current.listenId += 1;
     const listenId = run.current.listenId;
     // A listener stopped for an earlier listen can still report late; only this listen's own callbacks count.
@@ -949,6 +958,15 @@ export function useVoiceConversation({
       onError: (code: SttErrorCode) => {
         if (isCurrent()) handleError(code);
       },
+      onTurnDetection: () => {
+        if (isCurrent()) run.current.isTurnDetected = true;
+      },
+      onEndOfTurn: () => {
+        if (!isCurrent()) return;
+        // The cloud says a turn ended only once; over a line still being confirmed it is kept for the confirmation.
+        if (run.current.pending) run.current.isTurnEnded = true;
+        else finish();
+      },
       preRoll: null,
     };
     const startAdapter = (adapter: SttAdapter) => {
@@ -982,6 +1000,9 @@ export function useVoiceConversation({
     };
     const startDevice = (source: FrameSource | null) => {
       window.clearTimeout(run.current.quietId);
+      // The device recognizer judges no turn end of its own, so the cloud's wait no longer applies.
+      run.current.isTurnDetected = false;
+      run.current.isTurnEnded = false;
       if (latest.current.canHearOnDevice) {
         setIsPreparing(source === null && pendingText === undefined);
         startAdapter(createOnDeviceStt({ source }));

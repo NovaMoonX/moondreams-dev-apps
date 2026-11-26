@@ -4092,6 +4092,9 @@ const listenLimits = {
   voiceNames: ['A'],
   defaultVoice: 'A',
   speedRange: { min: 0.8, max: 1.2 },
+  sttModel: 'nova-3',
+  fallbackVoices: [],
+  gate: null,
 };
 const worstCase = listenCostMicros(VOICE_UTTERANCE_MS);
 const emptyUsage: ListenUsage = {

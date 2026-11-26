@@ -19,6 +19,10 @@ import {
 import type { VoiceTokenAnswer } from '@/lib/speech/voice/voiceToken';
 
 const LISTEN_URL = 'wss://api.deepgram.com/v1/listen';
+const TURN_LISTEN_URL = 'wss://api.deepgram.com/v2/listen';
+// How sure the turn model must be that the person finished, and the most silence it waits before calling it anyway.
+const TURN_END_THRESHOLD = '0.75';
+const TURN_END_TIMEOUT_MS = '4000';
 const OPEN_WAIT_MS = 3000;
 const CLOSE_WAIT_MS = 1500;
 const KEEP_ALIVE_MS = 5000;
@@ -114,6 +118,8 @@ interface DeepgramSttOptions {
 
 interface Heard {
   isFinal: boolean;
+  /** A turn model's end of turn: the person finished, not only a phrase. */
+  isTurnEnd: boolean;
   text: string;
   /** Seconds from the stream's first audio to the end of these words; infinite when the provider did not say. */
   end: number;
@@ -129,16 +135,33 @@ const readHeard = (data: unknown): Heard | null => {
       start,
       duration,
       channel,
+      event,
+      transcript,
+      audio_window_end: windowEnd,
     } = message as {
       type?: unknown;
       is_final?: unknown;
       start?: unknown;
       duration?: unknown;
       channel?: { alternatives?: { transcript?: unknown }[] };
+      event?: unknown;
+      transcript?: unknown;
+      audio_window_end?: unknown;
     };
+    if (type === 'TurnInfo') {
+      const isTurnEnd = event === 'EndOfTurn';
+      const windowSeconds = Number(windowEnd);
+      return {
+        isFinal: isTurnEnd,
+        isTurnEnd,
+        text: typeof transcript === 'string' ? transcript : '',
+        end: Number.isFinite(windowSeconds) ? windowSeconds : Infinity,
+      };
+    }
     if (type !== 'Results') return null;
     const text = channel?.alternatives?.[0]?.transcript;
     return {
+      isTurnEnd: false,
       isFinal: isFinal === true,
       text: typeof text === 'string' ? text : '',
       end:
@@ -163,11 +186,27 @@ const openSocket = (url: string, token: string) => {
   }
 };
 
+/** A model that judges the end of the person's turn itself (Deepgram Flux), on its own endpoint and parameters. */
+export const isTurnModel = (model: string) => model.startsWith('flux');
+
 export const toListenUrl = (
   model: string,
   lang: string,
   keyterms: string[] | null,
 ) => {
+  if (isTurnModel(model)) {
+    const params = new URLSearchParams({
+      model,
+      encoding: 'linear16',
+      sample_rate: String(PCM_SAMPLE_RATE),
+      eot_threshold: TURN_END_THRESHOLD,
+      eot_timeout_ms: TURN_END_TIMEOUT_MS,
+      mip_opt_out: 'true',
+      redact_usage: 'true',
+    });
+    keyterms?.forEach((term) => params.append('keyterm', term));
+    return `${TURN_LISTEN_URL}?${params.toString()}`;
+  }
   const params = new URLSearchParams({
     model,
     language: lang,
@@ -495,6 +534,8 @@ export const createDeepgramStt = ({
       }
 
       state.mintId = answer.mintId;
+      const isTurns = isTurnModel(answer.model);
+      if (isTurns) options.onTurnDetection?.();
       const opened = openSocket(
         toListenUrl(answer.model, lang, keyterms),
         answer.token,
@@ -531,10 +572,13 @@ export const createDeepgramStt = ({
           state.closeId = window.setTimeout(deliver, CLOSE_WAIT_MS);
           return;
         }
-        state.keepAliveId = window.setInterval(
-          () => socket.send(JSON.stringify({ type: 'KeepAlive' })),
-          KEEP_ALIVE_MS,
-        );
+        // The turn model takes no KeepAlive; the microphone's frames keep it open.
+        if (!isTurns) {
+          state.keepAliveId = window.setInterval(
+            () => socket.send(JSON.stringify({ type: 'KeepAlive' })),
+            KEEP_ALIVE_MS,
+          );
+        }
         state.limitId = window.setTimeout(stop, UTTERANCE_MS);
       };
       socket.onerror = () => {
@@ -557,9 +601,11 @@ export const createDeepgramStt = ({
         if (!state.isHeard) options.onSpeechStart();
         state.isHeard = true;
         const text = read();
-        if (text === state.lastText) return;
-        state.lastText = text;
-        options.onPartial(text);
+        if (text !== state.lastText) {
+          state.lastText = text;
+          options.onPartial(text);
+        }
+        if (heard.isTurnEnd && heard.text !== '') options.onEndOfTurn?.();
       };
     },
     stop: () => {
