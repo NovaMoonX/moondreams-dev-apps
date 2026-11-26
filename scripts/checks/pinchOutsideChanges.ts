@@ -568,20 +568,31 @@ for (const { existing, add } of mergeCases) {
     label: null,
     url: 'https://youtu.be/dQw4w9WgXcQ',
   };
-  const ids = (() => {
-    let n = 0;
-    return () => `n${++n}`;
-  })();
   const second = planAddedLinks(
     [howTo],
     [{ url: 'https://vimeo.com/123456789' }],
-    ids,
+    () => 'n1',
   );
   assert.equal(second.kind, 'ok');
   if (second.kind === 'ok') {
     assert.equal(second.value.added[0].kind, 'OTHER');
     assert.deepEqual(second.value.demoted, ['https://vimeo.com/123456789']);
   }
+  const sameVideo = planAddedLinks(
+    [howTo],
+    [{ url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' }],
+  );
+  assert.equal(sameVideo.kind, 'ok');
+  if (sameVideo.kind === 'ok') {
+    assert.equal(sameVideo.value.added.length, 0);
+    assert.equal(sameVideo.value.skipped.length, 1);
+  }
+  const otherCase = planAddedLinks(
+    [howTo],
+    [{ url: 'https://youtu.be/DQW4W9WGXCQ' }],
+  );
+  assert.equal(otherCase.kind, 'ok');
+  if (otherCase.kind === 'ok') assert.equal(otherCase.value.added.length, 1);
   assert.equal(planAddedLinks([], [{ url: 'not a link' }]).kind, 'refused');
   const full = Array.from({ length: 8 }, (_, index) => ({
     id: `f${index}`,

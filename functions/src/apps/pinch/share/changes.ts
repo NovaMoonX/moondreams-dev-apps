@@ -741,7 +741,7 @@ export const planAddedLinks = (
     };
   }
   const comparable = (url: string) =>
-    (getComparableUrl(url) ?? url).toLowerCase();
+    getInlineVideo(url)?.src.split('?')[0] ?? getComparableUrl(url) ?? url;
   const planned = input.reduce<AddedLinks>(
     (state, entry) => {
       const url = normalizeLinkUrl(entry.url) ?? '';
