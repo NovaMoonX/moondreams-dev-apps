@@ -289,6 +289,31 @@ const BACK_OFF = new Set([
   'keep it',
 ]);
 
+/** How long a removal waits for its yes. */
+const CONFIRM_MS = 60_000;
+
+/** The one removal waiting on a yes: a new question or a new removal replaces it, and an answer takes it once. */
+export const createRemovalWait = () => {
+  const wait = { id: null as string | null, at: 0 };
+  const isLive = (now: number) =>
+    wait.id !== null && now - wait.at <= CONFIRM_MS;
+  return {
+    ask: (id: string, now: number) => {
+      wait.id = id;
+      wait.at = now;
+    },
+    clear: () => {
+      wait.id = null;
+    },
+    isWaiting: isLive,
+    take: (now: number) => {
+      const id = isLive(now) ? wait.id : null;
+      wait.id = null;
+      return id;
+    },
+  };
+};
+
 /** What the person said to "Remove …?": yes, no ("never mind" and "skip" count as no), or null when it was neither, so it goes to Pepper as a new turn. */
 export const readConfirmAnswer = (heard: string): 'yes' | 'no' | null => {
   if (

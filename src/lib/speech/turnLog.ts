@@ -37,6 +37,7 @@ export interface TurnLogEntry {
 const KEPT = 300;
 const MAX_TEXT_CHARS = 1200;
 const KEY = 'speech:turn-log';
+const OWNER_KEY = 'speech:turn-log-owner';
 
 const KINDS: TurnLogKind[] = [
   'heard',
@@ -132,6 +133,19 @@ export const clearTurnLog = () => {
   store.entries = [];
   save();
   notify();
+};
+
+/** Keeps the log for one signed-in person: a different one, or nobody, starts it empty (the log holds what was said and done in someone's kitchen). */
+export const claimTurnLog = (uid: string | null) => {
+  try {
+    const owner = window.sessionStorage.getItem(OWNER_KEY);
+    if (owner === uid) return;
+    if (uid === null) window.sessionStorage.removeItem(OWNER_KEY);
+    else window.sessionStorage.setItem(OWNER_KEY, uid);
+  } catch {
+    // Without storage the log lives for this page only, so nothing outlives the person.
+  }
+  clearTurnLog();
 };
 
 /** Calls back whenever the log changes, for `useSyncExternalStore`. */

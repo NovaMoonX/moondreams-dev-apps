@@ -16,7 +16,8 @@ export function CookTurnLogRow({ onOpen }: { onOpen: () => void }) {
   return (
     <EntryTile
       icon={<ScrollText className='size-4' aria-hidden='true' />}
-      label={`Conversation log · ${count} ${count === 1 ? 'event' : 'events'}`}
+      label='Conversation log'
+      status={`${count} ${count === 1 ? 'event' : 'events'}`}
       onClick={onOpen}
     />
   );

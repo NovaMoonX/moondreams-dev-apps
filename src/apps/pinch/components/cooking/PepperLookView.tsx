@@ -36,7 +36,7 @@ interface PepperLookViewProps {
 function PepperLookView({ look, onChoose, onBack }: PepperLookViewProps) {
   return (
     <div className='space-y-3'>
-      <BackLink onBack={onBack} label='Voice control' />
+      <BackLink onBack={onBack} label='Back to voice control' />
       <div>
         <h3 className='text-sm font-medium'>Pepper’s look</h3>
         <p className='text-muted-foreground text-xs'>

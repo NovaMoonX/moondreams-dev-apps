@@ -316,7 +316,7 @@ html.pinch-theme.dark {
   }
 }
 
-/* Pepper's faces: each look is drawn in `PepperFace.tsx` and moves with the nearest `data-state` (the orb's, or a picker tile's) and `--assistant-orb-level`. */
+/* Pepper's faces: each look moves with the nearest orb state, the orb's own or a picker tile's, and with the voice level. */
 .pepper-face {
   display: grid;
   place-items: center;

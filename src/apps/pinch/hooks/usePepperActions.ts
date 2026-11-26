@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 
 import { useAppDispatch, type RootState } from '@/store';
 import { recordTurn, type TurnLogValue } from '@/lib/speech/turnLog';
 import { generateUuid } from '@/utils';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
 import type { PepperAction } from '@apps/pinch/hooks/usePepper';
 import type {
   CookActionCommand,
@@ -24,6 +25,7 @@ import type { RecipeNote } from '@apps/pinch/types';
 import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
 import {
   askToRemoveEntry,
+  createRemovalWait,
   getEntryWord,
   readConfirmAnswer,
   readPepperAction,
@@ -79,8 +81,6 @@ interface UndoEntry {
 }
 
 const MAX_UNDO = 10;
-/** How long a removal waits for its yes. */
-const CONFIRM_MS = 60_000;
 const NO_ENTRY = "I can't find that one.";
 
 const toSaid = (result: CookVoiceResult): PepperRun =>
@@ -100,7 +100,7 @@ export function usePepperActions(screen: PepperScreen) {
   const store = useStore<RootState>();
   const latest = useRef(screen);
   const undoStack = useRef<UndoEntry[]>([]);
-  const pendingRemoval = useRef<{ id: string; at: number } | null>(null);
+  const [removal] = useState(createRemovalWait);
   useEffect(() => {
     latest.current = screen;
   });
@@ -268,7 +268,7 @@ export function usePepperActions(screen: PepperScreen) {
       }
       const note = getNote(id);
       if (note === undefined) return { said: NO_ENTRY };
-      pendingRemoval.current = { id, at: Date.now() };
+      removal.ask(id, Date.now());
       return {
         said: askToRemoveEntry(
           note.kind as 'TIP' | 'NOTE' | 'CHANGE',
@@ -276,7 +276,7 @@ export function usePepperActions(screen: PepperScreen) {
         ),
       };
     },
-    [getNote],
+    [getNote, removal],
   );
 
   const addToShopping = useCallback(
@@ -355,7 +355,7 @@ export function usePepperActions(screen: PepperScreen) {
 
   const execute = useCallback(
     (command: PepperCommand): PepperRun => {
-      pendingRemoval.current = null;
+      removal.clear();
       switch (command.kind) {
         case 'cook':
           return runCook(command.command);
@@ -381,13 +381,18 @@ export function usePepperActions(screen: PepperScreen) {
           return { said: "I can't do that on the screen." };
       }
     },
-    [addEntry, addToShopping, askRemoval, editEntry, runCook, undo],
+    [addEntry, addToShopping, askRemoval, editEntry, removal, runCook, undo],
   );
 
   const run = useCallback(
     (action: Pick<PepperAction, 'name' | 'input'>): PepperRun => {
       const command = readPepperAction(action);
-      const result = execute(command);
+      const result: PepperRun = hasDialogOnTop()
+        ? {
+            said: 'Close what is open first, then ask me again.',
+            isRefused: true,
+          }
+        : execute(command);
       const isRefused =
         result.isRefused === true ||
         command.kind === 'invalid' ||
@@ -405,26 +410,25 @@ export function usePepperActions(screen: PepperScreen) {
               : 'said something',
           said: result.said ?? null,
           undoSteps: undoStack.current.length,
-          isConfirmWaiting: pendingRemoval.current !== null,
+          isConfirmWaiting: removal.isWaiting(Date.now()),
         },
       );
       return result;
     },
-    [execute],
+    [execute, removal],
   );
 
-  const hasPending = useCallback(() => {
-    const pending = pendingRemoval.current;
-    return pending !== null && Date.now() - pending.at <= CONFIRM_MS;
-  }, []);
+  const hasPending = useCallback(
+    () => removal.isWaiting(Date.now()),
+    [removal],
+  );
+
+  const clearPending = useCallback(() => removal.clear(), [removal]);
 
   const confirm = useCallback((): PepperRun => {
-    const pending = pendingRemoval.current;
-    pendingRemoval.current = null;
-    if (pending === null || Date.now() - pending.at > CONFIRM_MS) {
-      return { said: "There's nothing waiting on a yes." };
-    }
-    const note = getNote(pending.id);
+    const id = removal.take(Date.now());
+    if (id === null) return { said: "There's nothing waiting on a yes." };
+    const note = getNote(id);
     if (note === undefined) return { said: 'That one is already gone.' };
     const { uid, capture } = latest.current;
     const word = getEntryWord(note.kind as 'TIP' | 'NOTE' | 'CHANGE');
@@ -451,13 +455,12 @@ export function usePepperActions(screen: PepperScreen) {
       },
     });
     return { said: `Removed the ${word}.` };
-  }, [dispatch, fire, getNote, push]);
+  }, [dispatch, fire, getNote, push, removal]);
 
   const decline = useCallback((): PepperRun => {
-    const pending = pendingRemoval.current;
-    pendingRemoval.current = null;
-    return pending === null ? {} : { said: "Okay, I'll keep it." };
-  }, []);
+    const id = removal.take(Date.now());
+    return id === null ? {} : { said: "Okay, I'll keep it." };
+  }, [removal]);
 
   /** Settles a waiting removal from what was heard; null when nothing waits or the words were neither yes nor no. */
   const answerPending = useCallback(
@@ -470,7 +473,7 @@ export function usePepperActions(screen: PepperScreen) {
     [confirm, decline, hasPending],
   );
 
-  return { run, hasPending, confirm, decline, answerPending };
+  return { run, hasPending, clearPending, confirm, decline, answerPending };
 }
 
 const toLoggedInput = (input: unknown): TurnLogValue => {

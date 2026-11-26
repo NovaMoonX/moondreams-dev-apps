@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { PEPPER_TOOLS } from '../../functions/src/apps/pinch/pepper/pepperPrompt.ts';
 import {
   askToRemoveEntry,
+  createRemovalWait,
   readConfirmAnswer,
   readPepperAction,
 } from '../../src/apps/pinch/utils/pepperActions.ts';
 import { NO_TIMER_TARGET } from '../../src/apps/pinch/utils/cookVoice.ts';
+import { readAddressedGuesses } from '../../src/apps/pinch/utils/cookVoiceMode.ts';
 
 const read = (name: string, input: unknown) =>
   readPepperAction({ name, input });
@@ -285,6 +287,41 @@ assert.deepEqual(read('__proto__', {}), { kind: 'unknown' });
 );
 ['', 'start a timer for ten minutes', 'yes and add salt'].forEach((heard) =>
   assert.equal(readConfirmAnswer(heard), null, heard),
+);
+
+// A removal waits for its own yes: a new question clears it, an answer takes it once, and it runs out.
+const waiting = createRemovalWait();
+waiting.ask('n1', 0);
+assert.ok(waiting.isWaiting(1000), 'a removal waits for its yes');
+waiting.clear();
+assert.ok(!waiting.isWaiting(2000), 'a new question drops the waiting removal');
+assert.equal(waiting.take(2000), null, 'so a later yes removes nothing');
+waiting.ask('n1', 0);
+assert.equal(
+  waiting.take(1000),
+  'n1',
+  'the yes takes the entry it asked about',
+);
+assert.equal(waiting.take(1500), null, 'and only once');
+waiting.ask('n2', 0);
+assert.equal(
+  waiting.take(61_000),
+  null,
+  'a yes a minute later removes nothing',
+);
+
+// Only the best guess can say yes: a lower-ranked one never confirms.
+const top = (phase: 'WINDOW' | 'WAITING', alternatives: string[]) =>
+  readAddressedGuesses(phase, alternatives)[0];
+assert.equal(readConfirmAnswer(top('WINDOW', ['yes', 'guess']) ?? ''), 'yes');
+assert.equal(readConfirmAnswer(top('WINDOW', ['one sec', 'yes']) ?? ''), null);
+assert.equal(
+  readConfirmAnswer(top('WAITING', ['hey pepper yes', 'hey pepper no']) ?? ''),
+  'yes',
+);
+assert.equal(
+  readConfirmAnswer(top('WAITING', ['hey pepper hmm', 'hey pepper yes']) ?? ''),
+  null,
 );
 
 console.log('Pepper actions: ok');

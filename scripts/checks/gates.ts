@@ -61,7 +61,7 @@ console.log(`gates: ok (${cases.length} cases, ${calls.length} rule calls)`);
 
 // An app that never reads its switches sees only each one's default, so a person the admin let in stays out with no sign of why.
 const loadedApps = new Set(
-  execSync("git grep -h -o \"useLoadFeatureGates('[a-z-]*'\" -- 'src/apps'", { encoding: 'utf8' })
+  execSync("git grep -h -o -E \"^[[:space:]]*useLoadFeatureGates\\('[a-z-]*'\" -- 'src/apps'", { encoding: 'utf8' })
     .split('\n')
     .map((line) => /'([a-z-]+)'/.exec(line)?.[1])
     .filter((appId): appId is string => appId !== undefined),

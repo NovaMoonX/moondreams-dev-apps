@@ -143,6 +143,7 @@ export const createSpeechListener = (
     isWanted: false,
     isSpeaking: false,
     isHidden: false,
+    isTornDown: false,
     failures: 0,
     restartId: 0,
     idleId: 0,
@@ -443,7 +444,7 @@ export const createSpeechListener = (
       setStatus('off');
     },
     say: (text: string) => {
-      if (text.trim() === '' || !state.canSpeak) return;
+      if (text.trim() === '' || !state.canSpeak || state.isTornDown) return;
       stopReading();
       const token = state.speechToken;
       state.isSpeaking = true;
@@ -469,6 +470,8 @@ export const createSpeechListener = (
         },
       };
       const speakLine = state.options?.speak;
+      // A custom voice may take seconds to give a sound, and the recognizer is already closed: the status says so.
+      if (speakLine && state.isWanted) setStatus('speaking');
       state.stopReading = speakLine
         ? speakLine(text, handlers)
         : readAloud(text, {
@@ -501,7 +504,11 @@ export const createSpeechListener = (
       state.isHidden = false;
       beginSession();
     },
+    mount: () => {
+      state.isTornDown = false;
+    },
     teardown: () => {
+      state.isTornDown = true;
       state.isWanted = false;
       clearRestart();
       clearIdle();
@@ -575,6 +582,7 @@ export function useSpeechCommands({
   }, [isSupported]);
 
   useEffect(() => {
+    listener.mount();
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') listener.suspend();
     };

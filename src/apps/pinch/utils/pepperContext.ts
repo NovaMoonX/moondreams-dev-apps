@@ -2,7 +2,7 @@ import { formatClock } from '@/utils/durationUtils';
 import { clipAtWord } from '@/utils/stringUtils';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 
-/** The most a turn may carry, repeated from the server's reader (`check:pinch-voice` sends a built body through it). */
+/** The most a turn may carry, repeated from the server's reader; a check sends a built body through it. */
 export const PEPPER_BODY_LIMITS = {
   standing: 40_000,
   screen: 8_000,

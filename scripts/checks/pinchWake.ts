@@ -95,7 +95,10 @@ const wakes: [string, string][] = [
   ['ok, hey pepper, repeat that', 'repeat that'],
   ['hey pepper pepper', 'pepper'],
   ['hey pepper pinch of salt?', 'pinch of salt'],
-  ['Oh, Pepper, I can\'t recall the ingredients. Can you remind me?', 'i cant recall the ingredients can you remind me'],
+  [
+    "Oh, Pepper, I can't recall the ingredients. Can you remind me?",
+    'i cant recall the ingredients can you remind me',
+  ],
   ['okay pepper', ''],
   ['ok, pepper, next', 'next'],
   ['hi pepper', ''],

@@ -17,10 +17,12 @@ interface AssistantOrbProps {
   getLevel?: () => number;
   /** `sm` is a 24px pill for a line of text, `lg` the bigger disc and word for a laptop. */
   size?: 'sm' | 'md' | 'lg';
-  /** The assistant's name, for the button's label ("Pepper is listening."). */
+  /** The assistant's name, for the button's label ("Sage is listening."). */
   name?: string;
   /** What a tap does, in a sentence ("Tap to stop listening."); with `name` it completes the button's label. */
   actionHint?: string;
+  /** The widest word the caller may show, laid invisibly under `word` so the pill keeps one width in every state. */
+  reserveWord?: string;
   /** `header` is a pill that stands alone at the end of a title row: it is drawn while `off` too (resting, so a tap can wake it), its disc is the faced size with or without an avatar, and its word shows from `sm` up while a phone sees the disc alone. */
   placement?: 'line' | 'header';
   /** When given the whole pill is one button. */
@@ -47,6 +49,7 @@ export function AssistantOrbDrop() {
 function AssistantOrb({
   state,
   word,
+  reserveWord,
   avatar,
   getLevel,
   size = 'md',
@@ -101,7 +104,16 @@ function AssistantOrb({
         </span>
       </span>
       <span aria-hidden='true' className='assistant-orb-word'>
-        {word}
+        {reserveWord === undefined ? (
+          word
+        ) : (
+          <span className='grid'>
+            <span className='col-start-1 row-start-1 truncate'>{word}</span>
+            <span className='invisible col-start-1 row-start-1'>
+              {reserveWord}
+            </span>
+          </span>
+        )}
       </span>
       <span aria-hidden='true' className='assistant-orb-wave'>
         <i />
@@ -142,7 +154,7 @@ function AssistantOrb({
           className: join(
             size === 'sm' && placement === 'line' && '-inset-y-2!',
             placement === 'header' &&
-              '-inset-y-1! max-sm:-inset-x-1! sm:-inset-x-0.5!',
+              'rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--assistant-orb-accent,var(--color-primary))] -inset-y-1! max-sm:-inset-x-1! sm:-inset-x-0.5!',
           ),
         }}
       >

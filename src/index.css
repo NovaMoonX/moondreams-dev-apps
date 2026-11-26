@@ -656,26 +656,45 @@ html[data-pressing] * {
 .assistant-orb[data-state="waiting"] {
   padding-right: 12px;
 }
-/* The pill that ends a title row: the faced disc size with or without an avatar, resting while off, the word from `sm` up and the disc alone on a phone. */
+/* The pill that ends a title row: one width in every state (the caller reserves its widest word), the word from `sm` up and the disc alone on a phone. Each state reads from across a room by its ring, never by the wave. */
 .assistant-orb[data-size="sm"][data-placement="header"] {
   --orb-disc: var(--orb-disc-faced);
   padding: 1px 10px 1px 1px;
   margin-block: 0;
 }
-.assistant-orb[data-size="sm"][data-placement="header"][data-state="waiting"],
-.assistant-orb[data-size="sm"][data-placement="header"][data-state="off"] {
-  padding-right: 8px;
+.assistant-orb[data-size][data-placement="header"][data-state] {
+  padding-right: 10px;
+}
+.assistant-orb[data-placement="header"] .assistant-orb-disc {
+  transition: filter 0.2s, opacity 0.2s;
 }
 .assistant-orb[data-placement="header"][data-state="off"] .assistant-orb-disc {
-  opacity: 0.75;
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+.assistant-orb[data-placement="header"][data-state="listening"] .assistant-orb-disc,
+.assistant-orb[data-placement="header"][data-state="speaking"] .assistant-orb-disc {
+  box-shadow: 0 0 0 2.5px var(--orb-accent);
+}
+.assistant-orb[data-placement="header"][data-state="speaking"] .assistant-orb-disc {
+  animation: assistant-orb-beat 0.9s ease-in-out infinite;
+}
+.assistant-orb[data-placement="header"][data-state="thinking"] .assistant-orb-disc {
+  box-shadow: 0 0 0 2.5px color-mix(in oklab, var(--orb-accent) 25%, transparent);
+}
+.assistant-orb[data-size][data-placement="header"][data-state="thinking"] .assistant-orb-disc::before {
+  inset: -2.5px;
+  border-width: 2.5px;
+}
+.assistant-orb[data-placement="header"][data-state] .assistant-orb-wave {
+  display: none;
 }
 @media (max-width: 639.98px) {
   .assistant-orb[data-size][data-placement="header"][data-state] {
     gap: 0;
     padding: 1px;
   }
-  .assistant-orb[data-placement="header"] .assistant-orb-word,
-  .assistant-orb[data-placement="header"] .assistant-orb-wave {
+  .assistant-orb[data-placement="header"] .assistant-orb-word {
     display: none;
   }
 }
@@ -854,6 +873,11 @@ html[data-pressing] * {
     opacity: 0;
   }
 }
+@keyframes assistant-orb-beat {
+  50% {
+    box-shadow: 0 0 0 4.5px color-mix(in oklab, var(--orb-accent) 45%, transparent);
+  }
+}
 @keyframes assistant-orb-spin {
   to {
     transform: rotate(360deg);
@@ -875,5 +899,9 @@ html[data-pressing] * {
   }
   .assistant-orb-wave i {
     transition: none;
+  }
+  .assistant-orb[data-placement="header"] .assistant-orb-disc {
+    animation: none !important;
+    transition: none !important;
   }
 }

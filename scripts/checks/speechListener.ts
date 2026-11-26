@@ -370,8 +370,8 @@ const entries = (name: string) =>
   );
   assert.equal(
     seen.status,
-    'listening',
-    'the status stays as it was until the speaker says the line started',
+    'speaking',
+    'the status says so while a custom speaker is still getting its sound, since the recognizer is already closed',
   );
   line.handlers?.onStart();
   assert.equal(seen.status, 'speaking', 'the speaker starting ends listening');

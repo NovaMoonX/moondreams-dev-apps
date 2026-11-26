@@ -226,6 +226,10 @@ interface ChangeTarget {
 const DONE_GUARD_MS = 600;
 /** A spoken command lands up to a couple of seconds after the words, so "next" or "dismiss" this soon after a Time's up was meant before it. */
 const VOICE_DONE_GUARD_MS = 2000;
+// A server left idle about 15 minutes starts cold, so both of Pepper's are woken on arrival and kept warm while cooking is open.
+const PEPPER_WARM_MS = 10 * 60_000;
+/** How long after Pepper moves a step the change still counts as Pepper's, not a tap's. */
+const PEPPER_MOVE_MS = 2000;
 
 type PendingTimerVerb = 'PAUSE' | 'RESUME' | 'STOP' | 'EXTEND' | 'RENAME';
 
@@ -563,6 +567,7 @@ function CookingSession({
   const hasCoachedNext = useRef(false);
   const hasCoachedUndo = useRef(false);
   const isPepperRun = useRef(false);
+  const pepperMovedAt = useRef(0);
   const lastDictated = useRef<{
     id: string;
     at: number;
@@ -2854,13 +2859,18 @@ function CookingSession({
     }
     showStepsView();
     setStepIndex(step - 1);
+    pepperMovedAt.current = Date.now();
     scrollToTop();
     return done();
   };
   const runCookForPepper = (command: CookActionCommand) => {
     isPepperRun.current = true;
     try {
-      return runCookAction(command);
+      const result = runCookAction(command);
+      if (result.ok && (command.kind === 'NEXT' || command.kind === 'BACK')) {
+        pepperMovedAt.current = Date.now();
+      }
+      return result;
     } finally {
       isPepperRun.current = false;
     }
@@ -3024,17 +3034,45 @@ function CookingSession({
     isBusy: () =>
       pepperStatus.current === 'thinking' ||
       pepperStatus.current === 'speaking',
+    takeMove: () => {
+      const isMove = Date.now() - pepperMovedAt.current < PEPPER_MOVE_MS;
+      pepperMovedAt.current = 0;
+      return isMove;
+    },
     hasPending: pepperActions.hasPending,
     answerPending: pepperActions.answerPending,
+    clearPending: pepperActions.clearPending,
     ask: askPepper,
     cancel: pepper.cancel,
   };
   const { connectPepper } = voice;
   useEffect(() => connectPepper(isPepperOn ? pepperRoute : null));
   const { warm: warmPepper } = pepper;
+  const { warmSpeech } = voice;
   useEffect(() => {
-    if (isPepperOn) void warmPepper();
-  }, [isPepperOn, warmPepper]);
+    if (!isPepperOn) return;
+    const warmed = { at: 0 };
+    const warm = () => {
+      const isDue = Date.now() - warmed.at >= PEPPER_WARM_MS - 5000;
+      if (
+        !isDue ||
+        document.visibilityState !== 'visible' ||
+        !navigator.onLine
+      ) {
+        return;
+      }
+      warmed.at = Date.now();
+      void warmPepper();
+      void warmSpeech();
+    };
+    warm();
+    const id = window.setInterval(warm, PEPPER_WARM_MS);
+    document.addEventListener('visibilitychange', warm);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', warm);
+    };
+  }, [isPepperOn, warmPepper, warmSpeech]);
   const getPepperOrbState = (): AssistantOrbState => {
     if (!isPepperOn || !voice.isOn) return 'off';
     if (pepper.status === 'thinking') return 'thinking';
@@ -3720,6 +3758,9 @@ function CookingSession({
                 <CookVoiceLine
                   voice={voice}
                   isPepperOn={isPepperOn}
+                  isNextShown={
+                    isStepsView && focused === null && next.kind !== 'FINISH'
+                  }
                   ingredientExample={ingredientExample}
                   dishExample={dishExample}
                   className='[@media(max-height:500px)]:max-w-44 [@media(max-height:500px)]:shrink-0'

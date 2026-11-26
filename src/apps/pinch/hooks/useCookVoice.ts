@@ -10,15 +10,16 @@ import type { ListeningCue } from '@/lib/speech/listeningSound';
 import { readMicrophonePermission } from '@/lib/speech/microphonePermission';
 import { getNaturalVoiceState } from '@/lib/speech/naturalVoice/naturalVoiceEngine';
 import { recordTurn, type TurnLogData } from '@/lib/speech/turnLog';
+import {
+  createCloudSpeaker,
+  getDeviceLineWaitMs,
+} from '@/lib/speech/voice/cloudSpeaker';
 import type { SpeechPriority } from '@/lib/speech/voice/types';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import type { MeasureUnit } from '@/utils/measureUtils';
 import { COOK_WINDOW_MS } from '@apps/pinch/constants';
 import type { PepperLook } from '@apps/pinch/types';
-import {
-  createPepperSpeaker,
-  createPepperSpeechSource,
-} from '@apps/pinch/utils/pepperSpeech';
+import { createPepperSpeechSource } from '@apps/pinch/utils/pepperSpeech';
 import {
   getCookCommandKey,
   stepCookReading,
@@ -66,8 +67,6 @@ const DICTATION_PROMPT_WAIT_MS = 1600;
 const NOTES_LEAD = 'Your tips and notes for this step.';
 const MAX_QUOTE_CHARS = 22;
 const MAX_PEPPER_ALTERNATIVES = 4;
-/** How long a line may take to start before the next one goes ahead (a voice that is off never starts). */
-const LINE_START_WAIT_MS = 6000;
 const LINE_MS_PER_CHAR = 70;
 const WINDOW_HOLD_MS = 1000;
 
@@ -140,9 +139,13 @@ export interface CookVoiceActions {
 export interface CookPepperRoute {
   /** A turn is being worked out or spoken: the window for talking stays open and a step moved by Pepper isn't read over it. */
   isBusy: () => boolean;
+  /** Whether the step that just changed was moved by Pepper itself, and not by a tap; reading it settles the answer. */
+  takeMove: () => boolean;
   hasPending: () => boolean;
   /** Settles a waiting yes or no from one guess; null when none waits or the guess was neither. */
   answerPending: (heard: string) => { said?: string } | null;
+  /** Drops a waiting yes or no, for a turn that is not its answer. */
+  clearPending: () => void;
   /** Sends what was heard, best guess first, with the others after it. */
   ask: (heard: string, alternatives: string[]) => void;
   cancel: () => void;
@@ -273,8 +276,6 @@ const isExplainedStop = (stop: VoiceStop | null) =>
 const routed = (text: string, data?: TurnLogData) =>
   recordTurn('routed', text, data ?? null);
 
-const noStop = () => undefined;
-
 /** Why the natural voice didn't say a line: it was off, or on and not ready or too slow. */
 const getNaturalReason = (isNaturalWanted: boolean) => {
   const { status, problem } = getNaturalVoiceState();
@@ -379,9 +380,6 @@ export function useCookVoice({
   const isPepperOn = useIsGateOpen('pinch', 'pepper');
   const [speechSource] = useState(createPepperSpeechSource);
   const linePriority = useRef<SpeechPriority>('ack');
-  const pepperSpeaker = useRef<ReturnType<typeof createPepperSpeaker> | null>(
-    null,
-  );
   const [machine, setMachine] = useState(() =>
     createVoiceState(isWaitingPreferred ? 'WAKE' : 'TAP'),
   );
@@ -397,6 +395,10 @@ export function useCookVoice({
     listen: getListenLang(),
     speak: getPageLang(),
   }));
+  const naturalRef = useRef(natural.isOn);
+  const pepperSpeaker = useRef<ReturnType<typeof createCloudSpeaker> | null>(
+    null,
+  );
   const handlers = useRef<{
     run: (command: CookActionCommand) => CookVoiceResult;
     context: CookVoiceContext;
@@ -446,6 +448,7 @@ export function useCookVoice({
     const pending = [...(state.active ? [state.active] : []), ...state.items];
     lines.current = { ...state, items: [], active: null, hasStarted: false };
     pending.forEach((line) => line.resolve());
+    pepperRoute.current?.clearPending();
   }, []);
 
   const sayInOrder = useCallback(
@@ -490,6 +493,7 @@ export function useCookVoice({
       if (next.phase === 'OFF') {
         pepperRoute.current?.cancel();
         clearLines();
+        pepperSpeaker.current?.reset();
       }
       const effect = getVoiceEffect(previous, next);
       if (effect === 'START') controls.current.begin();
@@ -516,6 +520,7 @@ export function useCookVoice({
       return false;
     }
 
+    pepperRoute.current?.clearPending();
     const key = getCookCommandKey(command);
     const now = Date.now();
     if (
@@ -613,9 +618,8 @@ export function useCookVoice({
     }
     const { context: shown, run } = handlers.current;
     if (route !== null && route.hasPending() && !hasDialogOnTop()) {
-      const answered = readAddressedGuesses(heardPhase, alternatives).reduce<{
-        said?: string;
-      } | null>((found, guess) => found ?? route.answerPending(guess), null);
+      const [top] = readAddressedGuesses(heardPhase, alternatives);
+      const answered = top === undefined ? null : route.answerPending(top);
       if (answered !== null) return carryPepperRun(answered, route);
     }
     const plan = planHeard(heardPhase, alternatives, shown, route !== null);
@@ -681,7 +685,8 @@ export function useCookVoice({
         ...(voice === 'natural' ? {} : { why: getVoiceReason(natural.isOn) }),
       }),
     speak: isPepperOn
-      ? (text, handlers) => pepperSpeaker.current?.(text, handlers) ?? noStop
+      ? (text, handlers) =>
+          pepperSpeaker.current?.speak(text, handlers) ?? (() => undefined)
       : undefined,
     onHalt: (error) => {
       if (error !== 'idle') send({ type: 'ENGINE_STOPPED', reason: error });
@@ -689,10 +694,13 @@ export function useCookVoice({
   });
   const { say, quiet, stop, start, cue } = speech;
   useEffect(() => {
-    pepperSpeaker.current = createPepperSpeaker({
+    naturalRef.current = natural.isOn;
+  });
+  useEffect(() => {
+    pepperSpeaker.current = createCloudSpeaker({
       source: speechSource,
       lang: langs.speak,
-      isNatural: () => natural.isOn,
+      isNatural: () => naturalRef.current,
       getPriority: () => linePriority.current,
       onSpoken: (text, { voice, cloudFailure }) =>
         recordTurn('spoken', `“${text}”`, {
@@ -703,7 +711,7 @@ export function useCookVoice({
                 why: [
                   `cloud voice failed (${cloudFailure.stage}: ${cloudFailure.detail})`,
                   ...(voice === 'browser voice'
-                    ? [getNaturalReason(natural.isOn)]
+                    ? [getNaturalReason(naturalRef.current)]
                     : []),
                   ...(navigator.onLine ? [] : ['offline']),
                 ].join('; '),
@@ -715,7 +723,7 @@ export function useCookVoice({
           `cloud voice stopped partway (${cause.stage}: ${cause.detail})`,
         ),
     });
-  });
+  }, [speechSource, langs.speak]);
   const dictationKeyRef = useRef(dictationKey);
   const chime = useRef({
     isArmed: false,
@@ -753,7 +761,6 @@ export function useCookVoice({
     setExpiredStop(null);
     setMessage(null);
     onTurnOn?.();
-    if (isPepperOn) void speechSource.warm?.();
     start();
   };
 
@@ -791,7 +798,10 @@ export function useCookVoice({
         },
         speech.status === 'off'
           ? Math.max(1500, next.text.length * LINE_MS_PER_CHAR)
-          : LINE_START_WAIT_MS,
+          : isPepperOn
+            ? (pepperSpeaker.current?.getLineWaitMs() ??
+              getDeviceLineWaitMs(natural.isOn))
+            : getDeviceLineWaitMs(natural.isOn),
       );
     };
   });
@@ -914,11 +924,19 @@ export function useCookVoice({
   useEffect(() => {
     const previous = lastReading.current;
     lastReading.current = { isAloud: isReadingAloud, stepKey };
-    const isPepperBusy = pepperRoute.current?.isBusy() ?? false;
+    const route = pepperRoute.current;
+    const isBusy = route?.isBusy() ?? false;
+    const isPepperMove =
+      isBusy && previous.stepKey !== stepKey && route?.takeMove() === true;
+    // A tap on a step while Pepper is working or speaking cuts it off, and the step is read as usual.
+    if (isBusy && previous.stepKey !== stepKey && !isPepperMove) {
+      route?.cancel();
+      clearLines();
+    }
     if (isHearing && isReadingAloud && spoken !== null) {
       if (readStepKey.current === stepKey) return;
       readStepKey.current = stepKey;
-      if (isPepperBusy) return;
+      if (isPepperMove) return;
       notesQueue.current =
         isReadingNotes && segments.length > 0 && stepKey !== null
           ? {
@@ -936,7 +954,7 @@ export function useCookVoice({
     // Only a step that moved on or a setting that went off cuts a reading short: a spoken answer starting up flips the status too and must not be cancelled by it.
     if (
       stepKey !== null &&
-      !isPepperBusy &&
+      !isPepperMove &&
       (previous.isAloud !== isReadingAloud || previous.stepKey !== stepKey)
     ) {
       quiet();
@@ -950,8 +968,17 @@ export function useCookVoice({
     spoken,
     say,
     quiet,
+    clearLines,
     speech.status,
   ]);
+
+  useEffect(
+    () => () => {
+      clearLines();
+      pepperSpeaker.current?.reset();
+    },
+    [clearLines],
+  );
 
   // What was written for the step is its own reading, after the step has finished and a short pause, with its own lead-in, so it never runs into the instruction.
   useEffect(() => {
@@ -1057,6 +1084,8 @@ export function useCookVoice({
     closeSheet: () => setIsSheetOpen(false),
     connect,
     connectPepper,
+    /** Wakes the cloud voice's server ahead of the first line. */
+    warmSpeech: () => speechSource.warm?.(),
     /** Says a line after the ones before it, resolving once it has been said; `canAnswer` opens a window to answer it without the wake phrase. */
     speakInOrder: sayInOrder,
     cancelSpeech: () => {

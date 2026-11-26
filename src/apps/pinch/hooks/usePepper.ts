@@ -51,6 +51,8 @@ type PepperOptions = {
 };
 
 const ENDPOINT = 'pepperTurn';
+// A warm-up this recent still holds, so the next one is skipped.
+const WARM_FRESH_MS = 9 * 60_000;
 const ENDS_WITH_QUESTION = /\?["'”’)]*\s*$/;
 
 type Turn = { aborter: AbortController; key: number };
@@ -66,7 +68,8 @@ export function usePepper({
   const history = useRef<PepperLine[]>([]);
   const turn = useRef<Turn | null>(null);
   const lastKey = useRef(0);
-  const isWarmed = useRef(false);
+  const warmedAt = useRef(0);
+  const isWarming = useRef(false);
   const latest = useRef({ speak, onAction, onProblem, onTrace });
   useEffect(() => {
     latest.current = { speak, onAction, onProblem, onTrace };
@@ -103,15 +106,21 @@ export function usePepper({
   }, []);
 
   const warm = useCallback(async () => {
-    if (isWarmed.current) return;
-    isWarmed.current = true;
+    if (isWarming.current || Date.now() - warmedAt.current < WARM_FRESH_MS) {
+      return;
+    }
+    isWarming.current = true;
     const headers = await getSignedHeaders().catch(() => null);
-    if (headers === null) return;
-    await fetch(getHttpFunctionUrl(ENDPOINT), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify({ warm: true }),
-    }).catch(() => undefined);
+    const response =
+      headers === null
+        ? null
+        : await fetch(getHttpFunctionUrl(ENDPOINT), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...headers },
+            body: JSON.stringify({ warm: true }),
+          }).catch(() => null);
+    isWarming.current = false;
+    if (response?.ok === true) warmedAt.current = Date.now();
   }, []);
 
   const ask = useCallback(

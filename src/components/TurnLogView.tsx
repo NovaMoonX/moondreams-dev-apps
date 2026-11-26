@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Trash2 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 import CopyTextButton from '@components/CopyTextButton';
@@ -15,7 +16,7 @@ import {
 } from '@lib/speech/turnLog';
 
 interface TurnLogViewProps {
-  /** What the screen knows that the events don't say, one per line ("Pepper: on"), shown under Running. */
+  /** What the screen knows that the events don't say, one per line ("Sage: on"), shown under Running. */
   facts?: string[];
   /** What is expected to run, for before the events have said what did. */
   expected: TurnLogRunning;
@@ -57,13 +58,16 @@ function TurnLogView({ facts = [], expected, className }: TurnLogViewProps) {
           type='button'
           variant='tertiary'
           size='sm'
-          className='h-8 px-3 text-[13px]'
+          rounded='full'
+          className="text-muted-foreground! relative h-8 gap-1 px-3! text-[13px] after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']"
           disabled={entries.length === 0}
           onClick={clearTurnLog}
         >
+          <Trash2 className='h-3.5 w-3.5' aria-hidden='true' />
           Clear
         </Button>
       </div>
+      <p className='text-muted-foreground mb-1 text-xs font-medium'>Running</p>
       <ul className='bg-foreground/5 mb-2 space-y-0.5 rounded-xl p-3 text-xs'>
         {running.map((line) => (
           <li key={line} className='text-foreground wrap-break-word'>

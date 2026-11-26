@@ -8,9 +8,11 @@ import {
   Hand,
   Lock,
   Mic,
+  MicOff,
 } from 'lucide-react';
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -266,10 +268,17 @@ interface ListenRowsProps {
   voice: CookVoice;
   onChoose: (choice: ListenChoice) => void;
   selected: ListenChoice;
+  /** Pepper's face is the thing to tap, so no row points at a mic. */
+  isPepperOn: boolean;
 }
 
 /** The three ways the mic can listen, as rows with one chosen: a tap on a row changes it at once. The icon chip goes on the narrowest phones and on a phone held sideways, where the rows sit three across, so a row keeps a line for its title. */
-function ListenRows({ voice, onChoose, selected }: ListenRowsProps) {
+function ListenRows({
+  voice,
+  onChoose,
+  selected,
+  isPepperOn,
+}: ListenRowsProps) {
   return (
     <div
       role='group'
@@ -283,6 +292,8 @@ function ListenRows({ voice, onChoose, selected }: ListenRowsProps) {
             <>
               <LockCountdown endsAt={voice.lockEndsAt} /> left
             </>
+          ) : row.choice === 'TAP' && isPepperOn ? (
+            'Tap Pepper, then speak.'
           ) : (
             row.hint
           );
@@ -346,6 +357,14 @@ function CommandRows({ rows }: { rows: [string, string][] }) {
   );
 }
 
+/** The nearest ancestor that scrolls, which is the sheet's own scroller. */
+const getScroller = (from: HTMLElement | null) => {
+  for (let node = from?.parentElement; node; node = node.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(node).overflowY)) return node;
+  }
+  return null;
+};
+
 const PINNED_FOOTER =
   'bg-popover sticky bottom-0 -mx-6 -mb-6 rounded-b-lg px-6 pt-2 pb-4';
 
@@ -368,6 +387,17 @@ function CookVoiceSheet({
   const [isLookShown, setIsLookShown] = useState(false);
   const [isLogShown, setIsLogShown] = useState(false);
   const doneRef = useRef<HTMLButtonElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const keptScroll = useRef(0);
+  const isSwapped = isLookShown || isLogShown;
+  useLayoutEffect(() => {
+    const scroller = getScroller(bodyRef.current);
+    if (scroller) scroller.scrollTop = isSwapped ? 0 : keptScroll.current;
+  }, [isSwapped]);
+  const swapIn = (show: () => void) => {
+    keptScroll.current = getScroller(bodyRef.current)?.scrollTop ?? 0;
+    show();
+  };
   const close = () => {
     setIsSayShown(false);
     setIsMoreShown(false);
@@ -501,137 +531,151 @@ function CookVoiceSheet({
       title='Voice control'
       className='border-border border'
     >
-      {isLogShown && (
-        <CookTurnLogView voice={voice} onBack={() => setIsLogShown(false)} />
+      {isSwapped && (
+        <div className='text-left text-sm'>
+          {isLogShown ? (
+            <CookTurnLogView
+              voice={voice}
+              onBack={() => setIsLogShown(false)}
+            />
+          ) : (
+            <PepperLookView
+              look={voice.look}
+              onChoose={voice.setLook}
+              onBack={() => setIsLookShown(false)}
+            />
+          )}
+        </div>
       )}
       <div
-        className={join('space-y-3 text-left text-sm', isLogShown && 'hidden')}
+        ref={bodyRef}
+        className={join('space-y-3 text-left text-sm', isSwapped && 'hidden')}
       >
-        {isLookShown ? (
-          <PepperLookView
-            look={voice.look}
-            onChoose={voice.setLook}
-            onBack={() => setIsLookShown(false)}
+        {isBlocked && <MicrophoneAccess />}
+        {lastStop !== null && (
+          <p className='bg-muted/50 border-border rounded-xl border px-3 py-2'>
+            Last time: {lastStop}
+          </p>
+        )}
+        <ListenRows
+          voice={voice}
+          selected={selected}
+          onChoose={voice.choose}
+          isPepperOn={isPepperOn}
+        />
+        <p className='text-muted-foreground text-xs'>
+          {LISTEN_NOTES[selected]}
+        </p>
+        <div className='border-border grid border-t [@media(max-height:500px)]:grid-cols-2 [@media(max-height:500px)]:gap-x-6'>
+          <ViewOptionSwitch
+            label='Read steps aloud'
+            description={
+              isPepperOn
+                ? 'Reads each step as it appears, while Pepper is on.'
+                : 'Reads each step as it appears, while the mic is on.'
+            }
+            checked={voice.isReadingAloud}
+            onCheckedChange={voice.setIsReadingAloud}
           />
-        ) : (
+          <ViewOptionSwitch
+            label='Read tips, notes and changes after each step'
+            description='Once a step has been read, pauses a moment, then reads what you wrote for it.'
+            checked={voice.isReadingNotes}
+            isDisabled={!voice.isReadingAloud}
+            onCheckedChange={voice.setIsReadingNotes}
+          />
+          {isPepperOn && (
+            <Button
+              type='button'
+              variant='tertiary'
+              className='h-auto! min-h-0! w-full justify-between gap-3 px-0! py-3! text-left font-normal'
+              onClick={() => swapIn(() => setIsLookShown(true))}
+            >
+              <span className='min-w-0 flex-1'>
+                <span className='block text-sm font-medium'>Pepper’s look</span>
+                <span className='text-muted-foreground block text-xs'>
+                  {
+                    PEPPER_LOOKS.find((choice) => choice.value === voice.look)
+                      ?.label
+                  }
+                </span>
+              </span>
+              <PepperLookMark look={voice.look} className='size-7' />
+              <ChevronRight className='h-4 w-4 shrink-0' aria-hidden='true' />
+            </Button>
+          )}
+          <NaturalVoiceOption
+            voice={voice.natural}
+            intro={
+              isPepperOn
+                ? 'Pepper’s own voice does the talking. This one steps in when it can’t load.'
+                : undefined
+            }
+          />
+          <DisclosureLine
+            label='What to say'
+            isOpen={isSayShown}
+            onToggle={() => {
+              setIsSayShown((current) => !current);
+              setIsMoreShown(false);
+            }}
+          />
+        </div>
+        {isSayShown && (
           <>
-            {isBlocked && <MicrophoneAccess />}
-            {lastStop !== null && (
-              <p className='bg-muted/50 border-border rounded-xl border px-3 py-2'>
-                Last time: {lastStop}
-              </p>
-            )}
-            <ListenRows
-              voice={voice}
-              selected={selected}
-              onChoose={voice.choose}
+            <CommandRows rows={firstRows} />
+            <DisclosureLine
+              label='More commands'
+              isOpen={isMoreShown}
+              onToggle={() => setIsMoreShown((current) => !current)}
             />
-            <p className='text-muted-foreground text-xs'>
-              {LISTEN_NOTES[selected]}
-            </p>
-            <div className='border-border grid border-t [@media(max-height:500px)]:grid-cols-2 [@media(max-height:500px)]:gap-x-6'>
-              <ViewOptionSwitch
-                label='Read steps aloud'
-                description='Reads each step as it appears, while the mic is on.'
-                checked={voice.isReadingAloud}
-                onCheckedChange={voice.setIsReadingAloud}
-              />
-              <ViewOptionSwitch
-                label='Read tips, notes and changes after each step'
-                description='Once a step has been read, pauses a moment, then reads what you wrote for it.'
-                checked={voice.isReadingNotes}
-                isDisabled={!voice.isReadingAloud}
-                onCheckedChange={voice.setIsReadingNotes}
-              />
-              {isPepperOn && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='h-auto! min-h-0! w-full justify-between gap-3 px-0! py-3! text-left font-normal'
-                  onClick={() => setIsLookShown(true)}
-                >
-                  <span className='min-w-0 flex-1'>
-                    <span className='block text-sm font-medium'>
-                      Pepper’s look
-                    </span>
-                    <span className='text-muted-foreground block text-xs'>
-                      {
-                        PEPPER_LOOKS.find(
-                          (choice) => choice.value === voice.look,
-                        )?.label
-                      }
-                    </span>
-                  </span>
-                  <PepperLookMark look={voice.look} className='size-7' />
-                  <ChevronRight
-                    className='h-4 w-4 shrink-0'
-                    aria-hidden='true'
-                  />
-                </Button>
-              )}
-              <NaturalVoiceOption voice={voice.natural} />
-              <DisclosureLine
-                label='What to say'
-                isOpen={isSayShown}
-                onToggle={() => {
-                  setIsSayShown((current) => !current);
-                  setIsMoreShown(false);
-                }}
-              />
-            </div>
-            {isSayShown && (
-              <>
-                <CommandRows rows={firstRows} />
-                <DisclosureLine
-                  label='More commands'
-                  isOpen={isMoreShown}
-                  onToggle={() => setIsMoreShown((current) => !current)}
-                />
-                {isMoreShown && (
-                  <div className='space-y-3'>
-                    {moreGroups.map((group) => (
-                      <section key={group.label} className='space-y-1'>
-                        <h3 className='text-muted-foreground text-xs'>
-                          {group.label}
-                        </h3>
-                        <ul className='space-y-1'>
-                          {group.rows.map(([phrase, result]) => (
-                            <li key={phrase}>
-                              <span className='font-medium'>“{phrase}”</span>{' '}
-                              <span className='text-muted-foreground'>
-                                · {result}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
-                    ))}
-                  </div>
-                )}
-              </>
+            {isMoreShown && (
+              <div className='space-y-3'>
+                {moreGroups.map((group) => (
+                  <section key={group.label} className='space-y-1'>
+                    <h3 className='text-muted-foreground text-xs'>
+                      {group.label}
+                    </h3>
+                    <ul className='space-y-1'>
+                      {group.rows.map(([phrase, result]) => (
+                        <li key={phrase}>
+                          <span className='font-medium'>“{phrase}”</span>{' '}
+                          <span className='text-muted-foreground'>
+                            · {result}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
             )}
           </>
         )}
-        {!isLookShown && <CookTurnLogRow onOpen={() => setIsLogShown(true)} />}
+        <CookTurnLogRow onOpen={() => swapIn(() => setIsLogShown(true))} />
         <div
           className={join(
             PINNED_FOOTER,
-            'flex justify-end gap-2',
+            'flex items-center justify-between gap-2',
             isSayShown && 'border-border border-t',
           )}
         >
-          {voice.isOn && (
+          {voice.isOn ? (
             <Button
               type='button'
-              variant='secondary'
+              variant='tertiary'
               rounded='full'
+              className="text-muted-foreground! relative gap-1.5 px-3! after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']"
               onClick={() => {
                 voice.stop();
                 close();
               }}
             >
+              <MicOff className='h-4 w-4' aria-hidden='true' />
               Stop listening
             </Button>
+          ) : (
+            <span />
           )}
           <Button ref={doneRef} type='button' rounded='full' onClick={close}>
             Done
@@ -725,6 +769,8 @@ function StatusChip({ voice }: { voice: CookVoice }) {
 interface CookVoiceLineProps extends CookVoiceSheetProps {
   /** Pepper is on: its pill in the header shows where it is, so the line carries no chip. */
   isPepperOn?: boolean;
+  /** The footer has a Next that moves to another step, which cuts what is being said. */
+  isNextShown?: boolean;
   className?: string;
 }
 
@@ -734,6 +780,12 @@ const ORB_WORDS: Record<Exclude<AssistantOrbState, 'off'>, string> = {
   thinking: 'Thinking',
   speaking: 'Speaking',
 };
+
+const WIDEST_ORB_WORD = [
+  ...Object.values(ORB_WORDS),
+  'Starting…',
+  'Pepper',
+].reduce((widest, word) => (word.length > widest.length ? word : widest));
 
 /** Pepper's pill at the end of the title row, in the mic's place: resting while the voice is off (a tap turns it on, with the first-time explainer), and where Pepper is once it is on (a tap opens the voice sheet). A phone sees the disc alone. */
 export function PepperHeaderOrb({
@@ -752,6 +804,7 @@ export function PepperHeaderOrb({
       state={state}
       placement='header'
       word={getWord()}
+      reserveWord={WIDEST_ORB_WORD}
       name='Pepper'
       actionHint={voice.isOn ? 'Tap for voice options.' : 'Tap to talk.'}
       avatar={
@@ -767,6 +820,7 @@ export function PepperHeaderOrb({
 /** One line over the cooking footer's buttons: while the mic is on, its state as a chip (which opens the voice sheet) and what to say, or what it last heard or answered; after it stops by itself, why, for a few seconds. */
 export function CookVoiceLine({
   isPepperOn = false,
+  isNextShown = false,
   className,
   ...props
 }: CookVoiceLineProps) {
@@ -807,9 +861,8 @@ export function CookVoiceLine({
     if (message !== null) return message.text;
     if (status === 'starting') return 'Allow the microphone if asked.';
     if (status === 'speaking') {
-      return isPepperOn
-        ? 'Tap Next to skip'
-        : 'Reading aloud… tap Next to skip';
+      const lead = isPepperOn ? 'Pepper is talking' : 'Reading aloud';
+      return isNextShown ? `${lead}… tap Next to skip` : `${lead}…`;
     }
     if (voice.phase === 'WAITING') {
       return (

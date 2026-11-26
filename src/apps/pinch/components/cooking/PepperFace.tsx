@@ -1,3 +1,4 @@
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import type { ReactNode } from 'react';
 
 import type { PepperLook } from '@apps/pinch/types';
@@ -294,12 +295,12 @@ const FACES: Record<PepperFaceLook, () => ReactNode> = {
   ),
 };
 
-/** Pepper's face for the assistant orb's disc, one drawing per look; its colours and motion are `.pepper-face` and `.pepper-<look>` in `pinch.css`, driven by the nearest `data-state`. Add a look here, in `PEPPER_LOOKS` and in that CSS. */
+/** Pepper's face for the orb's disc, one drawing per look, coloured and moved by the app's stylesheet from the orb's state. */
 function PepperFace({ look }: PepperFaceProps) {
   return (
     <span
       aria-hidden='true'
-      className={`pepper-face pepper-${look.toLowerCase()}`}
+      className={join('pepper-face', `pepper-${look.toLowerCase()}`)}
     >
       <svg viewBox='0 0 100 100' aria-hidden='true' focusable='false'>
         <g className='whole'>{FACES[look]()}</g>
