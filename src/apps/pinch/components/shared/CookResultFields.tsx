@@ -25,7 +25,7 @@ interface CookResultFieldsProps {
   isLarge?: boolean;
 }
 
-/** How a cook turned out: a half-star rating and up to three photos in one row. Each is written the moment it is set, on its own, so the screen around it is never locked and nothing needs a Save. */
+/** How a cook turned out (half stars, up to three photos), each saved the moment it is set. */
 function CookResultFields({
   uid,
   cookId,

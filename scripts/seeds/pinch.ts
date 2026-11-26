@@ -182,8 +182,8 @@ const getSeedCookPhotos = (
   return { photoPath: null, photoPaths: photos.paths };
 };
 
-// The first adobo cook and the rice cook keep the shape from before ratings and photos (no `rating` or `photoPath` key); the other adobo cooks are rated, and two of them have photos (uploaded to the Storage emulator): one in the older one-photo shape, one with two. Adobo three times over the past weeks at different servings and rice once, all marked from the recipe, plus the dinner
-// Alex marked from his plan three days ago (the deterministic id of `seed-pinch-planned-1`). Nachos and the chili have none.
+// Older-shape cooks (no `rating` or `photoPath` key) sit beside rated ones, one photo cook in the
+// one-photo shape and one with two; plus Alex's dinner from his plan three days ago.
 const SEED_COOKS = [
   {
     id: 'seed-pinch-cook-1',

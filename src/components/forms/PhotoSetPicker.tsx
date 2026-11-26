@@ -99,7 +99,6 @@ interface DragState {
   x: number;
 }
 
-// A thumb plus the row's gap; thumbs shrink on the narrowest phones.
 const SLOT = 'calc(var(--thumb) + 0.5rem)';
 
 const thumbStyle = (
