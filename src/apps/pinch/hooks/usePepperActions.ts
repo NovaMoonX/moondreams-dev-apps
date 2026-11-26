@@ -498,6 +498,13 @@ const getInverse = (command: PepperCookCommand): CookActionCommand | null => {
   if (command.kind === 'RESUME_TIMER') {
     return { kind: 'PAUSE_TIMER', target: command.target };
   }
+  if (command.kind === 'MARK_ADDED') {
+    return {
+      kind: 'MARK_ADDED',
+      queries: command.queries,
+      isAdded: !command.isAdded,
+    };
+  }
   return null;
 };
 

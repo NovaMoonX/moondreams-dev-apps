@@ -137,6 +137,8 @@ export const stepCookReading = (
   };
 };
 
+export type CookScrollTo = 'DOWN' | 'UP' | 'TOP' | 'BOTTOM';
+
 export type CookCommand =
   | { kind: 'NEXT' }
   | { kind: 'BACK' }
@@ -181,6 +183,10 @@ export type CookCommand =
   | { kind: 'UNDO_ENTRY' }
   | { kind: 'START_COOKING' }
   | { kind: 'GOT_INGREDIENT'; queries: string[]; isOut: boolean }
+  /** "I added the flour": ticks what the shown step uses as put in, apart from the gather screen's got-out ticks. */
+  | { kind: 'MARK_ADDED'; queries: string[]; isAdded: boolean }
+  | { kind: 'MARK_ALL_ADDED' }
+  | { kind: 'SCROLL'; to: CookScrollTo }
   | { kind: 'TICK_ALL' }
   | { kind: 'UNTICK_ALL' }
   | { kind: 'READ_LEFT' }
@@ -221,6 +227,8 @@ export interface CookVoiceContext {
   /** The question waiting for an answer, if any; only then does a bare name, "the second one" or "ten minutes" mean something. */
   choice: CookVoiceChoice | null;
   isGathering?: boolean;
+  /** The steps are on screen with the step's amounts a tap away: only then does "I added the flour" mean anything. */
+  isStepView?: boolean;
 }
 
 type PlainKind =
@@ -631,6 +639,78 @@ const CYCLE_PHRASES: Record<string, 1 | -1> = {
   'previous recipe': -1,
   'previous dish': -1,
 };
+
+const SCROLL_PHRASES: Record<string, CookScrollTo> = Object.fromEntries(
+  (
+    [
+      [
+        'DOWN',
+        [
+          'scroll down',
+          'scroll down a bit',
+          'scroll down a little',
+          'scroll down a little bit',
+          'scroll down some',
+          'scroll down more',
+          'scroll down a bit more',
+          'scroll down the list',
+          'scroll down the page',
+          'scroll further down',
+          'scroll the list down',
+          'page down',
+        ],
+      ],
+      [
+        'UP',
+        [
+          'scroll up',
+          'scroll up a bit',
+          'scroll up a little',
+          'scroll up a little bit',
+          'scroll up some',
+          'scroll up more',
+          'scroll up a bit more',
+          'scroll up the list',
+          'scroll up the page',
+          'scroll further up',
+          'scroll the list up',
+          'page up',
+        ],
+      ],
+      [
+        'TOP',
+        [
+          'scroll to the top',
+          'scroll to top',
+          'scroll all the way up',
+          'scroll up to the top',
+          'go to the top',
+          'go to top',
+          'jump to the top',
+          'back to the top',
+          'top of the list',
+          'the top of the list',
+          'top of the page',
+        ],
+      ],
+      [
+        'BOTTOM',
+        [
+          'scroll to the bottom',
+          'scroll to bottom',
+          'scroll all the way down',
+          'scroll down to the bottom',
+          'go to the bottom',
+          'go to bottom',
+          'jump to the bottom',
+          'bottom of the list',
+          'the bottom of the list',
+          'bottom of the page',
+        ],
+      ],
+    ] as const
+  ).flatMap(([to, phrases]) => phrases.map((phrase) => [phrase, to] as const)),
+);
 
 const ADD_PHRASES: Record<string, CookEntryKind> = {
   'add a tip': 'TIP',
@@ -1850,6 +1930,126 @@ const parseGather = (
   );
 };
 
+const ADDED_ALL = new Set([
+  'added everything',
+  'i added everything',
+  'ive added everything',
+  'weve added everything',
+  'added it all',
+  'i added it all',
+  'added them all',
+  'i added them all',
+  'added all of it',
+  'all in',
+  'its all in',
+  'everything is in',
+  'everythings in',
+  'mark everything',
+  'mark all',
+  'mark them all',
+  'mark everything as added',
+  'tick off everything',
+  'tick everything',
+  'tick off all',
+  'tick off them all',
+]);
+const ADDED_PATTERNS = [
+  /^(?:(?:i|we) (?:have |just |already )?|ive |weve )?(?:added|put in|threw in) (?<query>.+)$/,
+  /^(?:i|we) (?:just |already )?put (?<query>.+?) in$/,
+  /^(?:mark(?: off)?|tick(?: off)?|check off|cross off) (?<query>.+?)(?: as added| added)?$/,
+  /^(?<query>.+?) (?:is|are) in$/,
+  /^(?<query>(?:(?:the|my) )?[a-z]+(?: [a-z]+)?)s in$/,
+];
+const UNADDED_PATTERNS = [
+  /^(?:unmark|untick|uncheck|un tick) (?<query>.+)$/,
+  /^(?:i |we )?(?:didnt|did not|havent|have not) (?:yet )?add(?:ed)? (?<query>.+?)(?: yet)?$/,
+];
+
+/** What a step's added ticks answer to: "I added the flour", "the butter's in", "mark off the eggs", "unmark the flour", "added everything". A name has to be one of the recipe's own lines, and a bare name never acts. */
+const parseAdded = (
+  transcript: string,
+  context: CookVoiceContext,
+): CookCommand | null => {
+  const text = normalizeTranscript(transcript.replace(/,/g, ' and '));
+  if (ADDED_ALL.has(text)) return { kind: 'MARK_ALL_ADDED' };
+  const isHeld = (query: string) =>
+    matchByName(query, context.lines).length > 0 ||
+    lineNameMatcher.match(query, context.lines) !== null;
+  const readQueries = (raw: string | undefined) => {
+    const readOne = (part: string) => {
+      const query = readTickQuery(part);
+      return query === null
+        ? null
+        : ([query, `${query}s`].find(isHeld) ?? null);
+    };
+    const parts = (raw ?? '').split(' and ').map(readOne);
+    return parts.length > 0 && parts.every((part) => part !== null)
+      ? Array.from(new Set(parts))
+      : [];
+  };
+  const read = (patterns: RegExp[], isAdded: boolean): CookCommand | null => {
+    const queries =
+      patterns
+        .map((pattern) => readQueries(text.match(pattern)?.groups?.query))
+        .find((found) => found.length > 0) ?? [];
+    return queries.length > 0 ? { kind: 'MARK_ADDED', queries, isAdded } : null;
+  };
+  return read(UNADDED_PATTERNS, false) ?? read(ADDED_PATTERNS, true);
+};
+
+/** The step's lines a spoken name stands for, and the names that belong to the recipe but not to this step. */
+export const readAddedLines = (
+  queries: string[],
+  lines: CookVoiceContext['lines'],
+) => {
+  const inStep = lines.filter((line) => line.isInStep);
+  const found = queries.map((query) => {
+    const exact = matchByName(query, inStep);
+    const near = lineNameMatcher.match(query, inStep);
+    return {
+      query,
+      ids:
+        exact.length > 0 ? exact.map((line) => line.id) : near ? [near.id] : [],
+    };
+  });
+  return {
+    lineIds: Array.from(new Set(found.flatMap(({ ids }) => ids))),
+    outside: found
+      .filter(({ ids }) => ids.length === 0)
+      .map(({ query }) => query),
+  };
+};
+
+const LIST_AND = new Intl.ListFormat('en-US', { type: 'conjunction' });
+
+const lowerFirst = (text: string) =>
+  `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+
+/** The answer to an added tick: the lines it changed, any name this step doesn't use, and how many of the step's lines are still to add. */
+export const describeAdded = (answer: {
+  names: string[];
+  outside: string[];
+  isAdded: boolean;
+  left: number;
+}) => {
+  const names = LIST_AND.format(answer.names.map(lowerFirst));
+  const outside = answer.outside
+    .map(
+      (name) =>
+        `${name.charAt(0).toUpperCase()}${name.slice(1)} isn't in this step.`,
+    )
+    .join(' ');
+  const changed =
+    answer.names.length === 0
+      ? ''
+      : !answer.isAdded
+        ? `Unmarked ${names}.`
+        : answer.left === 0
+          ? "That's everything for this step."
+          : `Got ${names} in. ${answer.left} to go.`;
+  return [changed, outside].filter(Boolean).join(' ');
+};
+
 const parseDishServings = (
   text: string,
   context: CookVoiceContext,
@@ -1922,6 +2122,9 @@ const parseOne = (
   if (Object.hasOwn(SHOW_PHRASES, text)) {
     return { kind: 'SHOW_ENTRIES', entryKind: SHOW_PHRASES[text] };
   }
+  if (Object.hasOwn(SCROLL_PHRASES, text)) {
+    return { kind: 'SCROLL', to: SCROLL_PHRASES[text] };
+  }
   if (Object.hasOwn(ADD_PHRASES, text)) {
     return { kind: 'ADD_ENTRY', entryKind: ADD_PHRASES[text] };
   }
@@ -1944,6 +2147,9 @@ const parseOne = (
       ? parseDishServings(text, context)
       : null) ??
     (isGathering && !isAsking ? parseGather(transcript, context) : null) ??
+    (context.isStepView === true && !isGathering && !isAsking
+      ? parseAdded(transcript, context)
+      : null) ??
     parseTimer(text, context) ??
     parseConvert(text, context) ??
     parseAmount(text, context) ??

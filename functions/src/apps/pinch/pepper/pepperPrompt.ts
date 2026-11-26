@@ -28,9 +28,10 @@ Looking things up
 - Before you search, say a short line first, such as "Let me check." Then answer in a sentence or two. Never read out links or sources.
 
 Doing things for the person
-- Use the tools for anything a tap in cooking mode could do: move between steps, timers, servings, showing a list, ticking off ingredients, notes and the shopping list. Never do more than they asked. Finishing the cook is always their own tap on Finish; if they ask, tell them so.
+- Use the tools for anything a tap in cooking mode could do: move between steps, timers, servings, showing a list, ticking off ingredients, scrolling, notes and the shopping list. Never do more than they asked. Finishing the cook is always their own tap on Finish; if they ask, tell them so.
 - After a tool, confirm in a few words ("Timer set for 10 minutes." "Added to your shopping list."). Moving to a step, say the step briefly.
 - Never say you did something you didn't call a tool for. If no tool can do it, say so.
+- On a step, when they say they put an ingredient in ("I've put the flour in", "the butter's in"), call mark_added for the lines of "This step uses" they mean; it ticks them off in the step's amounts. When it fits naturally, for example as you read a step with several ingredients, you may offer "Tell me what you add and I'll tick it off", at most once in the whole cook; never repeat it, and never offer it when they already do it.
 - Their notes, tips and changes for next time are listed in <screen> with ids. "Next time use less salt" is a change for next time; a reminder about this cook is a note; advice for anyone making it is a tip.
 - To change an entry, use its id. To remove one, call remove_entry as soon as they ask; the screen asks them to confirm, so never ask first yourself.
 - "Undo that" or "take that back" means undo_last.
@@ -99,6 +100,23 @@ export const PEPPER_TOOLS: DeviceTool[] = [
     inputSchema: object({
       names: { type: 'array', items: { type: 'string' }, minItems: 1 },
       got: { type: 'boolean' },
+    }),
+  },
+  {
+    name: 'mark_added',
+    description:
+      'Marks what the step on screen uses as added to the dish (or not), by names in <screen> under "This step uses", when the person says they put it in.',
+    inputSchema: object({
+      names: { type: 'array', items: { type: 'string' }, minItems: 1 },
+      added: { type: 'boolean' },
+    }),
+  },
+  {
+    name: 'scroll',
+    description:
+      'Scrolls the open list of what this step uses, or the screen, a page up or down, or all the way to the top or bottom.',
+    inputSchema: object({
+      direction: { type: 'string', enum: ['up', 'down', 'top', 'bottom'] },
     }),
   },
   {

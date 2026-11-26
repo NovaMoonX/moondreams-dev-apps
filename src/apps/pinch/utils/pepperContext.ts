@@ -122,8 +122,8 @@ export interface PepperScreenInput {
     status: 'running' | 'paused' | 'done';
     leftMs: number;
   }[];
-  /** What the step on screen uses, at the servings being made. */
-  stepLines: { name: string; amountText: string }[];
+  /** What the step on screen uses, at the servings being made, and whether the person has marked each as added. */
+  stepLines: { name: string; amountText: string; isAdded: boolean }[];
   /** The gather screen's lines per dish, or null elsewhere. */
   gather:
     | {
@@ -222,7 +222,9 @@ export const buildPepperScreen = (input: PepperScreenInput) => {
     },
     {
       heading: 'This step uses (amounts at the servings being made):',
-      lines: input.stepLines.map(getLineText),
+      lines: input.stepLines.map(
+        (line) => `${getLineText(line)}${line.isAdded ? ' (added)' : ''}`,
+      ),
     },
     ...(input.gather ?? []).flatMap((dish) => {
       const name = dish.dish === null ? '' : ` for ${plain(dish.dish)}`;

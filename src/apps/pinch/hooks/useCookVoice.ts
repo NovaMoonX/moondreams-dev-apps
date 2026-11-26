@@ -25,6 +25,7 @@ import {
   stepCookReading,
   type CookCommand,
   type CookEntryKind,
+  type CookScrollTo,
   type CookReadingQueue,
   type CookReadingSegment,
   type CookServingsChange,
@@ -129,6 +130,9 @@ export interface CookVoiceActions {
   undoEntry: () => CookVoiceResult;
   startCooking: () => CookVoiceResult;
   gotIngredient: (queries: string[], isOut: boolean) => CookVoiceResult;
+  markAdded: (queries: string[], isAdded: boolean) => CookVoiceResult;
+  markAllAdded: () => CookVoiceResult;
+  scroll: (to: CookScrollTo) => CookVoiceResult;
   tickAll: () => CookVoiceResult;
   untickAll: () => CookVoiceResult;
   readLeft: () => CookVoiceResult;
@@ -246,6 +250,12 @@ export const runCookCommand = (
       return actions.startCooking();
     case 'GOT_INGREDIENT':
       return actions.gotIngredient(command.queries, command.isOut);
+    case 'MARK_ADDED':
+      return actions.markAdded(command.queries, command.isAdded);
+    case 'MARK_ALL_ADDED':
+      return actions.markAllAdded();
+    case 'SCROLL':
+      return actions.scroll(command.to);
     case 'TICK_ALL':
       return actions.tickAll();
     case 'UNTICK_ALL':
@@ -322,6 +332,8 @@ interface UseCookVoiceOptions {
   dictationKey?: string | null;
   /** A timer has rung and waits to be dismissed: the listening chime stays quiet so it never masks the alarm. */
   isAlarmRinging: boolean;
+  /** A line to say after the step's own words, or null; asking for it is what uses it up, so it is asked for only as the step is read. */
+  takeStepOffer?: () => string | null;
 }
 
 /** Hands-free cooking: listens for the cooking commands in the way the person chose (one window per tap, waiting for the wake phrase, or kept open for fifteen minutes), runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered with the person's account (their choices here, in `PinchSettings.voice`, follow them to another device; an older choice kept on this device stands until they choose again), and again after a stop it has to explain. When the wake phrase was chosen on this device and the browser already holds the microphone permission, waiting starts by itself as cooking opens (quietly, with no chime), since the person chose it. */
@@ -335,6 +347,7 @@ export function useCookVoice({
   lastRingAt,
   isAlarmRinging,
   dictationKey = null,
+  takeStepOffer,
 }: UseCookVoiceOptions) {
   const { settings, save: saveSettings } = usePinchSettings(uid);
   const [localAgreed, setLocalAgreed] = useLocalStoragePreference(
@@ -428,6 +441,7 @@ export function useCookVoice({
   const notesQueue = useRef<CookReadingQueue | null>(null);
   const segmentsRef = useRef<CookReadingSegment[]>(NO_SEGMENTS);
   const onShowViewRef = useRef(onShowView);
+  const takeStepOfferRef = useRef(takeStepOffer);
   const openViewRef = useRef(openView);
   const isReadingRef = useRef({ isAloud: false, isNotes: false });
   const waitRef = useRef<{ enteredAt: number; spans: WakeBusySpan[] } | null>(
@@ -928,6 +942,7 @@ export function useCookVoice({
   useEffect(() => {
     segmentsRef.current = segments;
     onShowViewRef.current = onShowView;
+    takeStepOfferRef.current = takeStepOffer;
     openViewRef.current = openView;
     isReadingRef.current = { isAloud: isReadingAloud, isNotes: isReadingNotes };
   });
@@ -966,7 +981,8 @@ export function useCookVoice({
               segments: segmentsRef.current,
             }
           : null;
-      say(spoken);
+      const offer = takeStepOfferRef.current?.() ?? null;
+      say(offer === null ? spoken : `${spoken} ${offer}`);
       if (speech.status === 'speaking') stepSpokenKey.current = stepKey;
       return;
     }

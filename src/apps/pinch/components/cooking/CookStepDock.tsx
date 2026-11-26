@@ -1,4 +1,10 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -16,6 +22,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
 import { getAmountsSummary } from '@apps/pinch/utils/cooks';
+import { orderDryFirst } from '@apps/pinch/utils/measuringTools';
 import { getNoteSummary, leadWithAdvice } from '@apps/pinch/utils/notes';
 
 export type DockKind = 'TIP' | 'NOTE' | 'CHANGE';
@@ -38,7 +45,7 @@ interface BubbleProps {
   label: string;
   isOn?: boolean;
   isNudged?: boolean;
-  count?: number;
+  count?: number | string;
   isDashed?: boolean;
   isInline?: boolean;
   controls?: string;
@@ -104,6 +111,9 @@ function Bubble({
 
 interface CookStepDockProps {
   rows: CookRow[];
+  /** Which of the rows the person has put in, and the tick that changes it. */
+  added: Record<string, boolean>;
+  onToggleAdded: (id: string, isAdded: boolean) => void;
   isAmountNoteShown: boolean;
   /** Everything written for the step on screen (the whole recipe's too on the first), tips first. */
   entries: RecipeNote[];
@@ -135,6 +145,8 @@ interface CookStepDockProps {
  */
 function CookStepDock({
   rows,
+  added,
+  onToggleAdded,
   isAmountNoteShown,
   entries,
   onEdit,
@@ -179,10 +191,41 @@ function CookStepDock({
   };
   useBackStep(open !== null, () => onShow(null));
 
+  const bodyRef = useRef<HTMLDivElement>(null);
+  /** How many of the amounts rows lie below the visible part of the panel's body (0: something is, but no row), or null while it is all in view or scrolled to the end. */
+  const [hiddenBelow, setHiddenBelow] = useState<number | null>(null);
+  const measureBody = useCallback(() => {
+    const body = bodyRef.current;
+    if (body === null) return;
+    const bottom = body.getBoundingClientRect().bottom;
+    const isBelow = body.scrollHeight - body.clientHeight - body.scrollTop > 1;
+    setHiddenBelow(
+      isBelow
+        ? Array.from(body.querySelectorAll('li')).filter(
+            (item) => item.getBoundingClientRect().bottom > bottom + 1,
+          ).length
+        : null,
+    );
+  }, []);
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (body === null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measureBody);
+    observer.observe(body);
+    if (body.firstElementChild) observer.observe(body.firstElementChild);
+    return () => observer.disconnect();
+  }, [open, measureBody]);
+
   if (views.length === 0 && onAdd === null) return null;
 
   const isDismissed = lastTime?.isDismissed ?? true;
   const summary = rows.length > 0 ? getAmountsSummary(rows) : null;
+  const dryFirst = orderDryFirst(rows);
+  const addedCount = rows.filter((row) => added[row.id] === true).length;
+  const getAddedBadge = () => {
+    if (addedCount === 0) return undefined;
+    return addedCount === rows.length ? '✓' : `${addedCount}/${rows.length}`;
+  };
   const openKind: DockKind | null =
     open === 'TIP' || open === 'NOTE' || open === 'CHANGE' ? open : null;
   const openEntries =
@@ -221,7 +264,17 @@ function CookStepDock({
     if (open === 'AMOUNTS' && summary) {
       return (
         <div className='px-1'>
-          <CookAmountRows rows={rows} className='border-border border-t' />
+          <CookAmountRows
+            rows={dryFirst.rows}
+            added={added}
+            onToggleAdded={onToggleAdded}
+            className='border-border border-t'
+          />
+          {dryFirst.hint !== null && (
+            <p className='text-muted-foreground pt-1 text-xs sm:[@media(min-height:701px)]:text-sm'>
+              {dryFirst.hint}
+            </p>
+          )}
           {isAmountNoteShown && (
             <p className='text-muted-foreground pt-1 text-xs sm:[@media(min-height:701px)]:text-sm'>
               Amounts written in this step stay as they are.
@@ -333,8 +386,38 @@ function CookStepDock({
               </Bubble>
             </div>
           </div>
-          <div className='max-h-44 overflow-y-auto sm:[@media(min-height:701px)]:max-h-56 lg:[@media(min-height:701px)]:max-h-72 [@media(max-height:700px)]:max-h-32'>
-            {getBody()}
+          <div className='relative'>
+            <div
+              ref={bodyRef}
+              data-cook-scroll=''
+              onScroll={measureBody}
+              className='max-h-44 overflow-y-auto sm:[@media(min-height:701px)]:max-h-56 lg:[@media(min-height:701px)]:max-h-72 [@media(max-height:700px)]:max-h-32'
+            >
+              {getBody()}
+            </div>
+            {hiddenBelow !== null && (
+              <div className='from-popover pointer-events-none absolute inset-x-0 bottom-0 flex h-12 items-end justify-center bg-linear-to-t to-transparent pb-1'>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  aria-label={
+                    hiddenBelow > 0
+                      ? `Scroll down, ${hiddenBelow} more`
+                      : 'Scroll down, more below'
+                  }
+                  className='pointer-events-auto relative h-7 rounded-full px-3 text-xs before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-[""]'
+                  onClick={() =>
+                    bodyRef.current?.scrollBy({
+                      top: bodyRef.current.clientHeight,
+                      behavior: 'smooth',
+                    })
+                  }
+                >
+                  {hiddenBelow > 0 ? `${hiddenBelow} more` : 'More'}
+                  <span aria-hidden='true'> ↓</span>
+                </Button>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -358,8 +441,9 @@ function CookStepDock({
         )}
         {rows.length > 0 && (
           <Bubble
-            label='Amounts for this step'
+            label={`Amounts for this step${addedCount === 0 ? '' : `, ${addedCount} of ${rows.length} added`}`}
             isOn={open === 'AMOUNTS'}
+            count={getAddedBadge()}
             controls={panelId}
             view='AMOUNTS'
             onClick={() => toggle('AMOUNTS')}

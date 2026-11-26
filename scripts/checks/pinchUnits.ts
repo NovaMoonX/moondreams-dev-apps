@@ -10,7 +10,10 @@ import {
 } from '../../src/apps/pinch/utils/units.ts';
 import type { PinchUnitSettings } from '../../src/apps/pinch/types.ts';
 import { combineCookLines } from '../../src/apps/pinch/utils/combineCookLines.ts';
-import { getMeasuringTools } from '../../src/apps/pinch/utils/measuringTools.ts';
+import {
+  getMeasuringTools,
+  orderDryFirst,
+} from '../../src/apps/pinch/utils/measuringTools.ts';
 import { formatKitchenAmount } from '../../src/apps/pinch/utils/kitchenMeasure.ts';
 import { formatReadableSize } from '../../src/apps/pinch/utils/productFormat.ts';
 import {
@@ -442,4 +445,29 @@ assert.deepEqual(
   ['You have 2 lb 8 oz', 'You have 40 oz', '2 lb 8 oz', '40 oz'],
   "the pantry reads the person's way of weighing too",
 );
+
+const dryRow = (
+  id: string,
+  name: string,
+  isLiquid: boolean,
+  amount: number,
+  unit: 'TSP' | 'CUP' | 'G',
+) => ({ id, name, isLiquid, measure: { amount, unit, gramsPerMl: null } });
+const dryFirst = orderDryFirst([
+  dryRow('v', 'Vanilla', true, 1, 'TSP'),
+  dryRow('s', 'Baking soda', false, 1, 'TSP'),
+]);
+assert.deepEqual(
+  dryFirst.rows.map((row) => row.id),
+  ['s', 'v'],
+  'dry baking soda is measured before liquid vanilla in the same spoon',
+);
+assert.match(dryFirst.hint ?? '', /Baking soda.*Vanilla/);
+const apart = [
+  dryRow('m', 'Milk', true, 1, 'CUP'),
+  dryRow('f', 'Flour', false, 200, 'G'),
+];
+const unchanged = orderDryFirst(apart);
+assert.deepEqual(unchanged.rows, apart, 'a cup and a weight share no measure');
+assert.equal(unchanged.hint, null);
 console.log('pinch units: ok');
