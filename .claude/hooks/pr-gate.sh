@@ -95,6 +95,14 @@ if [[ -f "$sync_script" ]]; then
   sync_line=$(timeout 8 bash "$sync_script" "$current_branch:$pr_base" 2>/dev/null | head -1)
 fi
 
+# A push whose code lines are all comments counts like a docs-only push.
+code_delta=$(echo "$delta_files" | grep -E "$code_re" || true)
+if [[ -n "$code_delta" ]]; then
+  changed_code=$(git diff -U0 "$since" HEAD -- $code_delta | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' \
+    | sed -E 's/^[+-][[:space:]]*//' | grep -vE '^$|^(//|/\*|\*|#)' || true)
+  [[ -z "$changed_code" ]] && delta_files=$(echo "$delta_files" | grep -vE "$code_re" || true)
+fi
+
 steps=("Make sure an open pull request exists for '$current_branch'; if none, open it as a DRAFT with its patch/minor label and a 'Resolves #N' line per issue it delivers.")
 if has "$delta_files" "$code_re" || has "$delta_files" "$rules_re" || has "$delta_files" '^functions/'; then
   steps+=("Run the validator agent over the PR.")
@@ -108,7 +116,7 @@ if has "$delta_files" "$code_re" || has "$delta_files" "$rules_re" || has "$delt
   fi
   steps+=("Review at size $size ($pr_lines changed lines of code in the PR) per orchestrate 'Sizing the review', covering only what changed since the last review if one ran.")
 else
-  steps+=("This push changed no code (docs or config only): no screenshots or review agents; check the PR body still matches.")
+  steps+=("This push changed no code (docs, config or comments only): no screenshots or review agents; check the PR body still matches.")
 fi
 case "$sync_line" in
   *CONFLICTS*) steps+=("The branch conflicts with '$pr_base' ($sync_line): merge '$pr_base' in and resolve it by orchestrate 'Keeping your PRs current' (never rebase or force-push, never ask the owner to resolve it), validate, push, and say what you chose in the status comment.") ;;
