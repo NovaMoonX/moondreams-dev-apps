@@ -9,6 +9,7 @@ import type {
   PinchVoiceSettings,
   PinchSettings,
   PinchUnitSettings,
+  IngredientPick,
   MealItem,
   Meal,
   PlannedSnapshot,
@@ -104,6 +105,12 @@ const PINCH_UNIT_SETTINGS_FIELDS = {
   volume: 'notUseful',
   keepSpoons: 'notUseful',
 } satisfies Record<keyof PinchUnitSettings, ShareDecision>;
+
+const INGREDIENT_PICK_FIELDS = {
+  name: 'notUseful',
+  ingredientId: 'notUseful',
+  pickedAt: 'notUseful',
+} satisfies Record<keyof IngredientPick, ShareDecision>;
 
 const PINCH_SETTINGS_FIELDS = {
   fridgeDays: 'notUseful',
@@ -392,6 +399,7 @@ export const SHARE_FIELDS = {
   PinchVoiceSettings: PINCH_VOICE_SETTINGS_FIELDS,
   PinchSettings: PINCH_SETTINGS_FIELDS,
   PinchUnitSettings: PINCH_UNIT_SETTINGS_FIELDS,
+  IngredientPick: INGREDIENT_PICK_FIELDS,
   MealItem: MEAL_ITEM_FIELDS,
   Meal: MEAL_FIELDS,
   PlannedSnapshot: PLANNED_SNAPSHOT_FIELDS,
