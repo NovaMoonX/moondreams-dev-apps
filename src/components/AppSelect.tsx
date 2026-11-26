@@ -102,11 +102,9 @@ function AppSelect({ dropdownClassName, ...props }: AppSelectProps) {
   useEffect(() => {
     const box = boxRef.current;
     if (!box) return;
-    const frame = { id: 0 };
     const follow = (event: Event) => {
       if (event.target instanceof Node && box.contains(event.target)) return;
-      cancelAnimationFrame(frame.id);
-      frame.id = requestAnimationFrame(() => place(box));
+      place(box);
     };
     const listen = (isOn: boolean) => {
       const method = isOn ? 'addEventListener' : 'removeEventListener';
@@ -127,7 +125,6 @@ function AppSelect({ dropdownClassName, ...props }: AppSelectProps) {
     observer.observe(box, { childList: true });
     return () => {
       observer.disconnect();
-      cancelAnimationFrame(frame.id);
       if (state.isOpen) listen(false);
     };
   }, []);
