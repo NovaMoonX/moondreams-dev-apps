@@ -66,9 +66,7 @@ function EmailConfirmNotice({
   if (url !== null && isTapped) {
     return (
       <div className='space-y-2'>
-        <p className='text-muted-foreground text-sm'>
-          {WORDS.confirmWaiting(name)}
-        </p>
+        <p className='text-muted-foreground text-sm'>{WORDS.confirmWaiting}</p>
         <LinkRow label={WORDS.confirmAgain} url={url} />
       </div>
     );

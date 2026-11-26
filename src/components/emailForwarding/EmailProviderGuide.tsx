@@ -1,5 +1,7 @@
 import { type ComponentType, type ReactNode, useState } from 'react';
 
+import { AtSign, BookOpen, Search } from 'lucide-react';
+
 import {
   GmailMark,
   ICloudMark,
@@ -45,7 +47,11 @@ const OPTIONS: readonly PillOption<ProviderChoice>[] = [
         guide.paidPlan === null
           ? undefined
           : WORDS.paidAria(guide.name, guide.paidPlan),
-      icon: <Mark className='size-4' />,
+      icon: (
+        <span className='inline-flex rounded-full bg-white p-0.5'>
+          <Mark className='size-3.5' />
+        </span>
+      ),
     };
   }),
   { value: 'other', label: WORDS.otherProvider },
@@ -54,14 +60,19 @@ const OPTIONS: readonly PillOption<ProviderChoice>[] = [
 const toSearch = ({ sender, phrase }: EmailFilterSuggestion) =>
   `from:(${sender}) "${phrase}"`;
 
-function Step({ number, children }: { number: number; children: ReactNode }) {
+interface GuidePartProps {
+  icon: ComponentType<{ className?: string }>;
+  children: ReactNode;
+}
+
+function GuidePart({ icon: Icon, children }: GuidePartProps) {
   return (
     <li className='flex gap-3'>
       <span
-        className='bg-muted text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'
+        className='bg-muted text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-full'
         aria-hidden='true'
       >
-        {number}
+        <Icon className='size-3.5' />
       </span>
       <div className='min-w-0 flex-1 space-y-2 pt-0.5 text-sm'>{children}</div>
     </li>
@@ -103,8 +114,8 @@ function EmailProviderGuide({
           />
         </div>
         {choice !== null && (
-          <ol className='space-y-4'>
-            <Step number={1}>
+          <ul className='space-y-4'>
+            <GuidePart icon={BookOpen}>
               {guide === null ? (
                 <p>{WORDS.otherStep}</p>
               ) : (
@@ -129,8 +140,8 @@ function EmailProviderGuide({
                   )}
                 </>
               )}
-            </Step>
-            <Step number={2}>
+            </GuidePart>
+            <GuidePart icon={AtSign}>
               <p>{WORDS.addressStep}</p>
               <p className='border-border rounded-xl border px-2.5 py-2 text-xs font-semibold break-words select-all'>
                 <EmailAddressText address={address} prefix={prefix} />
@@ -149,8 +160,8 @@ function EmailProviderGuide({
                   {WORDS.copyFailed}
                 </p>
               )}
-            </Step>
-            <Step number={3}>
+            </GuidePart>
+            <GuidePart icon={Search}>
               {filter === null ? (
                 <p>{WORDS.noSearchStep}</p>
               ) : (
@@ -180,8 +191,8 @@ function EmailProviderGuide({
                   </p>
                 </>
               )}
-            </Step>
-          </ol>
+            </GuidePart>
+          </ul>
         )}
       </div>
     </DetailSheet>

@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check, CircleHelp, LoaderCircle, CircleCheck } from 'lucide-react';
 
@@ -70,7 +71,7 @@ interface EmailSetupStepsProps {
   onShowGuide: () => void;
 }
 
-/** The setup as four general steps any email service fits: copy, forward, confirm if asked, first email; each ticks itself from what the app sees. */
+/** The setup as four general steps any email service fits: copy, forward, confirm if asked, first email; each ticks itself from what the app sees, or on the person's word. */
 function EmailSetupSteps({
   appName,
   forwarding,
@@ -79,6 +80,8 @@ function EmailSetupSteps({
 }: EmailSetupStepsProps) {
   const { confirm, confirmAt, isTapped, onConfirmTapped, lastReceivedAt } =
     forwarding;
+  const [isForwardSaid, setIsForwardSaid] = useState(false);
+  const [isConfirmSkipped, setIsConfirmSkipped] = useState(false);
   const shownConfirm =
     confirm !== null && hasConfirmNotice(confirm) ? confirm : null;
   const isConfirmPending =
@@ -86,10 +89,12 @@ function EmailSetupSteps({
   const hasFirstEmail =
     lastReceivedAt !== null &&
     (confirmAt === null || lastReceivedAt > confirmAt);
-  const isForwarding = confirmAt !== null || lastReceivedAt !== null;
+  const isForwarding =
+    confirmAt !== null || lastReceivedAt !== null || isForwardSaid;
   const isConfirmSettled =
-    (shownConfirm !== null && !isConfirmPending) ||
-    (shownConfirm === null && hasFirstEmail);
+    shownConfirm === null
+      ? hasFirstEmail || isConfirmSkipped
+      : !isConfirmPending;
   const isAllSet = hasFirstEmail && !isConfirmPending;
 
   const stateOf = (isDone: boolean, isCurrent: boolean): StepState => {
@@ -99,10 +104,7 @@ function EmailSetupSteps({
   const copyState = stateOf(isCopied || isForwarding, true);
   const forwardState = stateOf(isForwarding, copyState === 'done');
   const confirmState = stateOf(isConfirmSettled, forwardState === 'done');
-  const firstState = stateOf(
-    isAllSet,
-    forwardState === 'done' && !isConfirmPending,
-  );
+  const firstState = stateOf(isAllSet, confirmState === 'done');
 
   return (
     <div className='space-y-4'>
@@ -121,6 +123,14 @@ function EmailSetupSteps({
                 onClick={onShowGuide}
                 hasChevron
               />
+              <Button
+                type='button'
+                variant='secondary'
+                className='w-full'
+                onClick={() => setIsForwardSaid(true)}
+              >
+                {WORDS.forwardOnButton}
+              </Button>
             </>
           )}
         </Step>
@@ -135,13 +145,25 @@ function EmailSetupSteps({
           )}
           {shownConfirm === null && confirmState === 'done' && (
             <p className='text-muted-foreground text-sm'>
-              {WORDS.stepConfirmDone}
+              {isConfirmSkipped && !hasFirstEmail
+                ? WORDS.stepConfirmSkipped
+                : WORDS.stepConfirmDone}
             </p>
           )}
           {shownConfirm === null && confirmState === 'current' && (
-            <p className='text-muted-foreground text-sm'>
-              {WORDS.stepConfirmLine}
-            </p>
+            <>
+              <p className='text-muted-foreground text-sm'>
+                {WORDS.stepConfirmLine}
+              </p>
+              <Button
+                type='button'
+                variant='tertiary'
+                className='w-full'
+                onClick={() => setIsConfirmSkipped(true)}
+              >
+                {WORDS.skipConfirm}
+              </Button>
+            </>
           )}
         </Step>
         <Step number={4} title={WORDS.stepFirst} state={firstState}>

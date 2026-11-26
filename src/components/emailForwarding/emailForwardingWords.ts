@@ -33,6 +33,10 @@ export const EMAIL_FORWARDING_WORDS = {
   stepConfirmLine:
     'Some email services send a confirmation to your address first. If yours does, it shows here.',
   stepConfirmDone: 'Nothing left to confirm',
+  forwardOnButton: 'I’ve turned it on',
+  skipConfirm: 'My email didn’t ask',
+  stepConfirmSkipped:
+    'Skipped. If a confirmation comes in anyway, it shows here.',
   stepFirst: 'Your first email comes in',
   stepDone: 'Done',
   allSetTitle: 'You’re all set',
@@ -59,10 +63,8 @@ export const EMAIL_FORWARDING_WORDS = {
   copyCode: 'Copy code',
   confirmedBy: (appName: string, provider: string) =>
     `${appName} confirmed ${provider}’s forwarding`,
-  confirmWaiting: (provider: string | null) =>
-    provider === null
-      ? 'Once you’ve confirmed it, this clears when the next forwarded email comes through.'
-      : `Once you’ve confirmed it in ${provider}, this clears when ${provider} forwards its next email.`,
+  confirmWaiting:
+    'Once you’ve confirmed it, this clears when your next forwarded email comes in.',
   confirmAgain: 'Confirm again',
   emailTitle: 'Email',
   from: 'From',
