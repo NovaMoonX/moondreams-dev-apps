@@ -135,7 +135,7 @@ export const getCookPhotoPaths = (
   return cook.photoPath ? [cook.photoPath] : [];
 };
 
-/** The rules want every key on the merged document, so an edit writes back the one an older cook lacks; an older cook's one photo becomes its list. */
+/** Every key a cook now carries, filled in for an older cook on its next write; an older cook's one photo becomes its list. */
 export const getMissingCookFields = (existing: Partial<Cook>) => ({
   ...('plannedMealId' in existing ? {} : { plannedMealId: null }),
   ...('rating' in existing ? {} : { rating: null }),
