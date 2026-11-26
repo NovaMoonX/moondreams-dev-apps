@@ -27,6 +27,6 @@ The convention or rule the decision produced links the record (`Why, what else w
 
 ## Records
 
-- [2026-11-25 How apps offer tools to assistants](2026-11-25-assistant-tools.md): the same three tools per app (read, add, save), switched-off reads listed and marked, change tools hidden when the assistant can't change.
+- [2026-11-25 How apps offer tools to assistants](2026-11-25-assistant-tools.md): the same three tools per app (read, add, save), switched-off reads and changes listed and marked with the switch that opens them.
 - [2026-11-25 How a spoken assistant hears, answers and speaks](2026-11-25-spoken-assistant-turns.md): the wake phrase on the device, Flux for the question, Claude Haiku streamed sentence by sentence, device tools and a capped web search.
 - [2026-11-26 How an AI's changes are shown](2026-11-26-showing-ai-changes.md): one summary that names who changed what with its Undo, a tint-and-edge mark on each changed item in the app's own accent, one fade with no motion under reduced motion.

@@ -24,7 +24,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import ActionRow from '@/components/ActionRow';
 import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
 import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
-import EmailForwardingProgress from '@/components/emailForwarding/EmailForwardingProgress';
 import EmailSetupView from '@/components/emailForwarding/EmailSetupView';
 import FallbackImage from '@/components/FallbackImage';
 import FormSheet from '@/components/FormSheet';
@@ -376,6 +375,7 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
     >
       {isSetupShown ? (
         <EmailSetupView
+          appName='Runway'
           setupLine={EMAIL_WORDS.setupLine}
           prefix={EMAIL_ADDRESS_PREFIX}
           address={intake.address}
@@ -383,22 +383,19 @@ function EmailPurchasesScreen({ onClose }: EmailPurchasesScreenProps) {
           isFailed={intake.isFailed}
           isBusy={isBusy}
           error={error}
-          progress={
-            <EmailForwardingProgress
-              appName='Runway'
-              confirm={shownConfirm}
-              isTapped={
-                shownConfirm !== null &&
-                (isConfirmTappedBefore || confirmTappedAt === shownConfirm.at)
-              }
-              onConfirmTapped={() => {
-                if (shownConfirm === null) return;
-                writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
-                setConfirmTappedAt(shownConfirm.at);
-              }}
-              lastReceivedAt={intake.lastReceivedAt}
-            />
-          }
+          forwarding={{
+            confirm: shownConfirm,
+            confirmAt,
+            isTapped:
+              shownConfirm !== null &&
+              (isConfirmTappedBefore || confirmTappedAt === shownConfirm.at),
+            onConfirmTapped: () => {
+              if (shownConfirm === null) return;
+              writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
+              setConfirmTappedAt(shownConfirm.at);
+            },
+            lastReceivedAt: intake.lastReceivedAt,
+          }}
           onGetAddress={() => void getNewAddress()}
           onRetry={intake.retry}
           onDone={backToStatus}

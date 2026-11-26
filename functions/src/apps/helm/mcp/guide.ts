@@ -33,9 +33,9 @@ export const helmGuideFor = (
       changes.length === 0
         ? ''
         : !canChangeApps
-          ? ` It can't be changed here: "Change things in your apps" is off for this assistant (Helm > Settings > Connected assistants).`
+          ? ` Changing it needs "Change things in your apps" on for this assistant (Helm > Settings > Connected assistants).`
           : off.length === new Set(changes.map(({ permission }) => permission?.id)).size
-            ? ` It can't be changed here: every kind of change is switched off (${where}).`
+            ? ` Every kind of change is switched off (${where}).`
             : off.length > 0
               ? ` Switched off: ${off.join(', ')} (${where}).`
               : '';
@@ -44,6 +44,7 @@ export const helmGuideFor = (
   const canChangeSome =
     canChangeApps &&
     apps.some((app) => changesOf(app).some(({ isOn }) => isOn));
+  const hasChanges = apps.some((app) => changesOf(app).length > 0);
   return [
     `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
     `Helm reaches the person's topics and procedures (list_topics, get_topic, search_procedures), tasks (search_tasks), calendar (get_calendar)${appLines.length > 0 ? ` and the apps they connected: ${appLines.join(' ')}` : '.'} Whenever the conversation touches their own life (their things, people, plans or routines), check Helm on your own, without waiting to be told. Use only what the tools return; if they find nothing, say so rather than guessing.`,
@@ -51,8 +52,10 @@ export const helmGuideFor = (
       ? 'For anything in a connected app, call its tools directly, never ask_helm. Each call checks what the person shares and allows at that moment.'
       : '',
     canChangeSome
-      ? `Helm can also change what the person allowed in their apps, never delete. A change applies at once, and the person can undo it in the app and in Helm, so say what you are about to change and get their go-ahead first, then tell them what it did from its summary. A kind of change turned on after you connected appears the next time you connect. A change answers switchedOff when that kind of change is off, and assistantCannotChange when this assistant may not change apps; say exactly that and don't try another way.`
-      : '',
+      ? `Helm can also change what the person allowed in their apps, never delete. A change applies at once, and the person can undo it in the app and in Helm, so say what you are about to change and get their go-ahead first, then tell them what it did from its summary. Each call checks the switches live, so one the person turns on while you talk works at once. A change answers switchedOff when that kind of change is off, and assistantCannotChange when this assistant may not change apps; say exactly that and don't try another way.`
+      : hasChanges
+        ? `An app's change tools stay listed while their switches are off. When the person asks to change something in an app whose switch is off, tell them exactly which switch to turn on and where (the tool's description and its switchedOff answer name it); never say it can't be done.`
+        : '',
     `Every tool says plainly when something is held back: a result with status switchedOff names the switch that is off and where the person turns it on, and assistantCannotRead names the permission to turn on for this assistant. Tell the person exactly that, in those words, and never work around it with ask_helm.`,
     canWrite
       ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm: tell_helm passes on something for ${name} to file or do (a task, a date, anything to do), ask_helm asks ${name} a question that needs more than a lookup (it files a turn, which is why it is not read-only), and save_to_helm saves what they learned or researched in this chat.`
