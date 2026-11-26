@@ -281,7 +281,9 @@ function LinksEditor({ value, onChange, onRemoved }: LinksEditorProps) {
           isLabelHidden
           value={howTo.url}
           placeholder='Paste a YouTube or other video link'
-          onChange={(url) => onChange({ ...value, howTo: { ...howTo, url } })}
+          onChange={(url) =>
+            onChange({ ...value, howTo: { ...howTo, url, label: null } })
+          }
         />
         <p className='text-muted-foreground text-xs'>
           A YouTube or Vimeo link plays at the bottom of the recipe. Any other
