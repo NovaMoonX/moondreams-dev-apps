@@ -511,6 +511,9 @@ export const MAX_RECIPE_DESCRIPTION_LENGTH = 2000;
 export const MAX_STEP_LENGTH = 2000;
 export const MAX_NOTE_LENGTH = 200;
 export const MAX_AMOUNT_TEXT_LENGTH = 40;
+export const MAX_PEPPER_ASK_LENGTH = 500;
+export const MAX_PEPPER_REPLY_LENGTH = 140;
+export const MAX_PEPPER_ROUNDS = 12;
 export const MAX_SHOPPING_NOTE_LENGTH = 300;
 /** The client's cap on the heading a recipe line sits under ("For the sauce"); the rules don't check a line's fields. */
 export const MAX_INGREDIENT_GROUP_LENGTH = 40;
