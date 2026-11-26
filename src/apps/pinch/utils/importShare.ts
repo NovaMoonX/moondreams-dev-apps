@@ -357,6 +357,8 @@ const toTips = (
         ...getStepAnchor(recipe.steps, step),
         reason: null,
         previous: null,
+        resolvedAt: null,
+        resolvedBy: null,
         by: null,
         createdAt: now,
         updatedAt: now,

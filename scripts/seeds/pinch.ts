@@ -333,6 +333,49 @@ const SEED_STEP_NOTES = [
   },
 ];
 
+/** Changes written after a cook without being linked to it (the cook page offers to link them), and one an edit already took care of. */
+const SEED_LOOSE_CHANGES = [
+  {
+    id: 'seed-pinch-change-adobo-simmer',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'CHANGE',
+    text: 'Simmer ten minutes longer before uncovering.',
+    changes: [],
+    cookId: null,
+    stepIndex: 1,
+    reason: 'The chicken was still a little firm.',
+    daysAgo: 9,
+    hour: 21,
+  },
+  {
+    id: 'seed-pinch-change-adobo-pepper',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'CHANGE',
+    text: 'Crack the peppercorns instead of leaving them whole.',
+    changes: [],
+    cookId: null,
+    stepIndex: null,
+    reason: null,
+    daysAgo: 9,
+    hour: 21,
+  },
+];
+const SEED_DONE_CHANGES = [
+  {
+    id: 'seed-pinch-change-adobo-vinegar',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'CHANGE',
+    text: 'Use less vinegar. The sauce was too sharp.',
+    changes: [],
+    cookId: 'seed-pinch-cook-2',
+    stepIndex: null,
+    reason: null,
+    resolvedBy: 'seed-pinch-note-adobo-tweak',
+    daysAgo: 17,
+    hour: 20,
+  },
+];
+
 type SeedPackageEventKind = 'ADDED' | 'USED' | 'MOVED' | 'TOSSED' | 'EDITED';
 
 /** Eight packages over five ingredients, each its own document: two cartons of milk with different dates and amounts, a tray of chicken past its date beside a frozen one, a bag of rice with no date, and herbs and greens due soon. `expiresInDays` is from the seed's day, null for no date; the amount is what is left. */
@@ -1592,6 +1635,29 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
           updatedAt: at,
         });
     }),
+    ...[...SEED_LOOSE_CHANGES, ...SEED_DONE_CHANGES].map(
+      ({ daysAgo, hour, ...entry }) => {
+        const at = today - daysAgo * DAY_MS + hour * 3_600_000;
+        const steps =
+          SEED_RECIPES.find((recipe) => recipe.id === entry.recipeId)?.steps ??
+          [];
+        const resolvedBy = 'resolvedBy' in entry ? entry.resolvedBy : null;
+        const tweak = SEED_NOTES.find((note) => note.id === resolvedBy);
+        return kitchenRef
+          .collection('notes')
+          .doc(entry.id)
+          .set({
+            ...entry,
+            ...getStepAnchor(steps, entry.stepIndex),
+            resolvedBy,
+            resolvedAt: tweak
+              ? today - tweak.daysAgo * DAY_MS + tweak.hour * 3_600_000
+              : null,
+            createdAt: at,
+            updatedAt: at,
+          });
+      },
+    ),
     ...SEED_SHOPPING.map((entry, index) =>
       kitchenRef
         .collection('shoppingItems')
@@ -1708,6 +1774,8 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_PACKAGES.length +
       SEED_NOTES.length +
       SEED_STEP_NOTES.length +
+      SEED_LOOSE_CHANGES.length +
+      SEED_DONE_CHANGES.length +
       SEED_IDEAS.length +
       SEED_INGREDIENTS.length +
       SEED_PRODUCTS.length +

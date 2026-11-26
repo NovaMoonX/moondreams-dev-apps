@@ -790,6 +790,10 @@ export const RECIPE_NOTES_FIRST_PAGE = 5;
 export const RECIPE_NOTES_PAGE_SIZE = 50;
 /** How many of a recipe's latest cooks the note sheet offers as answers. */
 export const NOTE_COOK_CHOICES = 4;
+/** How long after a cook an entry with no cook is taken to be about it, for the cook's page's offer to link it. */
+export const COOK_LINK_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** How many recent edits "Mark done" offers as the one that took care of a change. */
+export const RESOLVE_EDIT_CHOICES = 5;
 /** The most meals one day can have priced again in the one transaction that does it, under Firestore's 500 writes: the action's limit, not the rules'. */
 export const MAX_REPRICE_MEALS = 400;
 

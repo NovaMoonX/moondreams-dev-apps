@@ -20,7 +20,12 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
-import { formatChangeWhen, getUndoableTweakIds } from '@apps/pinch/utils/notes';
+import {
+  formatChangeWhen,
+  getChangesDoneBy,
+  getUndoableTweakIds,
+  resolveNoteStep,
+} from '@apps/pinch/utils/notes';
 
 const NO_NOTES: RecipeNote[] = [];
 
@@ -32,7 +37,7 @@ interface ChangeEntryViewProps {
   onBack: () => void;
 }
 
-/** One recorded change, swapped into the sheet that lists it: what changed, Undo while it is the latest and the recipe is as it left it, and "Go back to before this change". */
+/** One recorded change, swapped into the sheet that lists it: what changed, Undo while it is the latest and the recipe is as it left it, and "Go back to before this edit". */
 function ChangeEntryView({
   uid,
   recipeId,
@@ -58,19 +63,20 @@ function ChangeEntryView({
       <div className='space-y-3'>
         <BackLink onBack={onBack} />
         <p className='text-muted-foreground text-sm'>
-          This change is no longer in the history.
+          This edit is no longer in the history.
         </p>
       </div>
     );
   }
 
+  const tookCareOf = getChangesDoneBy(notes, note.id);
   const day = formatDateShort(note.createdAt);
   const canGoBack = note.previous != null;
   const canUndo = undoableIds.includes(note.id);
   const heading =
     note.by == null || note.by.kind === 'you'
-      ? 'Your change'
-      : `Change by ${note.by.name ?? 'an assistant'}`;
+      ? 'Your edit'
+      : `Edit by ${note.by.name ?? 'an assistant'}`;
   const run = async (action: () => Promise<unknown>, done: string) => {
     setIsWorking(true);
     setError(null);
@@ -101,6 +107,29 @@ function ChangeEntryView({
         </div>
       </div>
       <ChangeList changes={note.changes ?? []} />
+      {tookCareOf.length > 0 && (
+        <div className='space-y-2'>
+          <p className='text-foreground text-sm font-medium'>Took care of</p>
+          <ul className='space-y-2'>
+            {tookCareOf.map((change) => {
+              const step = resolveNoteStep(change, recipe.steps);
+              return (
+                <li key={change.id} className='space-y-0.5'>
+                  <p className='text-muted-foreground text-xs'>
+                    {step === null ? 'Whole recipe' : `Step ${step + 1}`}
+                  </p>
+                  <p className='text-sm wrap-break-word'>{change.text}</p>
+                  {(change.reason ?? '') !== '' && (
+                    <p className='text-muted-foreground text-sm wrap-break-word'>
+                      Why: {change.reason}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       <ActionGroup isRoomy>
         {canUndo && (
           <ActionRow
@@ -108,7 +137,7 @@ function ChangeEntryView({
             isRoomy
             icon={<Undo2 />}
             label='Undo'
-            subtitle='Takes this change back and removes it from the history'
+            subtitle='Takes this edit back and removes it from the history'
             isDisabled={isWorking}
             onClick={() =>
               void run(
@@ -116,7 +145,7 @@ function ChangeEntryView({
                   dispatch(
                     undoRecipeChange({ uid, recipeId, noteIds: undoableIds }),
                   ).unwrap(),
-                `Undid the change from ${day}`,
+                `Undid the edit from ${day}`,
               )
             }
           />
@@ -126,8 +155,8 @@ function ChangeEntryView({
             isGrouped
             isRoomy
             icon={<History />}
-            label='Go back to before this change'
-            subtitle='Put the recipe back as it was before this change'
+            label='Go back to before this edit'
+            subtitle='Put the recipe back as it was before this edit'
             isDisabled={isWorking}
             onClick={() =>
               void run(
@@ -140,7 +169,7 @@ function ChangeEntryView({
                       seenUpdatedAt: recipe.updatedAt,
                     }),
                   ).unwrap(),
-                `Went back to before the ${day} change`,
+                `Went back to before the ${day} edit`,
               )
             }
           />
@@ -148,12 +177,12 @@ function ChangeEntryView({
       </ActionGroup>
       {!canUndo && (
         <p className='text-muted-foreground text-sm'>
-          Only the latest change can be undone.
+          Only the latest edit can be undone.
         </p>
       )}
       {!canGoBack && (
         <p className='text-muted-foreground text-sm'>
-          This change was saved without a copy of the recipe before it, so the
+          This edit was saved without a copy of the recipe before it, so the
           recipe can't go back to it.
         </p>
       )}
