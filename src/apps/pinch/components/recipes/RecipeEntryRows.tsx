@@ -14,16 +14,21 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
-import { resolveNoteStep } from '@apps/pinch/utils/notes';
+import { isOpenChange, resolveNoteStep } from '@apps/pinch/utils/notes';
 
 const NO_NOTES: RecipeNote[] = [];
 const NO_STEPS: string[] = [];
 
-type EntryKind = 'TIP' | 'NOTE';
+type EntryKind = 'TIP' | 'NOTE' | 'CHANGE';
 
 const KIND_TEXT: Record<EntryKind, { title: string; one: string; add: string }> = {
   TIP: { title: 'Tips', one: 'Tip', add: 'Add a tip' },
   NOTE: { title: 'Notes', one: 'Note', add: 'Add a note' },
+  CHANGE: {
+    title: 'Planned changes',
+    one: 'Planned change',
+    add: 'Plan a change',
+  },
 };
 
 interface RecipeEntryRowsProps {
@@ -33,7 +38,7 @@ interface RecipeEntryRowsProps {
 }
 
 /**
- * The person's own tips and their own notes at the foot of the recipe, each kind its own row of cards that scrolls sideways and snaps to a card, the last card adding another. A tip is advice for the dish; a note is about a cook, so it is dated. Planned changes and the records of edits are not here: they come from a cook and live with it, behind the clock.
+ * The person's own tips, notes and open planned changes at the foot of the recipe, each kind its own row of cards that scrolls sideways and snaps to a card, the last card adding another. A tip is advice for the dish; a note is about a cook, so it is dated; a planned change is something to do to the recipe, and leaves here once it is done. The records of edits are not here: they live behind the clock.
  */
 function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
@@ -47,16 +52,21 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
   const canAdd = notes.length < SOFT_MAX_RECIPE_NOTES;
   const getEntries = (kind: EntryKind) =>
     notes
-      .filter((note) => note.kind === kind && (note.text ?? '') !== '')
+      .filter(
+        (note) =>
+          (kind === 'CHANGE' ? isOpenChange(note) : note.kind === kind) &&
+          (note.text ?? '') !== '',
+      )
       .map((note) => ({ note, step: resolveNoteStep(note, steps) }))
       .sort((a, b) =>
-        kind === 'TIP'
+        kind !== 'NOTE'
           ? (a.step ?? -1) - (b.step ?? -1) ||
             a.note.createdAt - b.note.createdAt
           : b.note.createdAt - a.note.createdAt,
       );
   const tips = getEntries('TIP');
   const written = getEntries('NOTE');
+  const changes = getEntries('CHANGE');
 
   const getSlimAdd = (label: string, kind: WrittenNoteKind | null) =>
     canAdd && (
@@ -71,10 +81,10 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
       </Button>
     );
 
-  if (tips.length === 0 && written.length === 0) {
+  if (tips.length === 0 && written.length === 0 && changes.length === 0) {
     return canAdd ? (
-      <FormSection title='Tips and notes'>
-        {getSlimAdd('Add a tip or note', null)}
+      <FormSection title='Tips, notes and changes'>
+        {getSlimAdd('Add a tip, note or change', null)}
       </FormSection>
     ) : null;
   }
@@ -85,6 +95,7 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
   ) => {
     const text = KIND_TEXT[kind];
     if (entries.length === 0) {
+      if (kind === 'CHANGE') return null;
       return (
         <FormSection key={kind} title={text.title}>
           {getSlimAdd(text.add, kind)}
@@ -99,7 +110,13 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
           className='-mx-1 flex snap-x snap-mandatory scroll-px-1 items-stretch gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
         >
           {entries.map(({ note, step }) => {
-            const where = step === null ? '' : `Step ${step + 1}`;
+            const isChange = kind === 'CHANGE';
+            const where =
+              step === null
+                ? isChange
+                  ? 'Whole recipe'
+                  : ''
+                : `Step ${step + 1}`;
             const when = kind === 'NOTE' ? formatDateShort(note.createdAt) : '';
             return (
               <li
@@ -113,7 +130,7 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
                     .filter(Boolean)
                     .join(', ')}
                   className='text-foreground! h-auto w-full flex-col items-start justify-start gap-1.5 rounded-2xl px-3 py-3 text-left font-normal whitespace-normal'
-                  onClick={() => onOpen(note.id, null)}
+                  onClick={() => onOpen(note.id, isChange ? 'CHANGE' : null)}
                 >
                   {(where !== '' || when !== '') && (
                     <span className='text-muted-foreground flex w-full items-center gap-1.5 text-xs'>
@@ -125,6 +142,11 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
                   <span className='line-clamp-4 w-full text-sm wrap-break-word'>
                     {note.text}
                   </span>
+                  {isChange && (note.reason ?? '') !== '' && (
+                    <span className='text-muted-foreground line-clamp-2 w-full text-xs wrap-break-word'>
+                      Why: {note.reason}
+                    </span>
+                  )}
                 </Button>
               </li>
             );
@@ -151,6 +173,7 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
     <>
       {getRow('TIP', tips)}
       {getRow('NOTE', written)}
+      {getRow('CHANGE', changes)}
     </>
   );
 }

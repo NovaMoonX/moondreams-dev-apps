@@ -20,7 +20,12 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
-import { formatChangeWhen, getUndoableTweakIds } from '@apps/pinch/utils/notes';
+import {
+  formatChangeWhen,
+  getChangesDoneBy,
+  getUndoableTweakIds,
+  resolveNoteStep,
+} from '@apps/pinch/utils/notes';
 
 const NO_NOTES: RecipeNote[] = [];
 
@@ -64,6 +69,7 @@ function ChangeEntryView({
     );
   }
 
+  const tookCareOf = getChangesDoneBy(notes, note.id);
   const day = formatDateShort(note.createdAt);
   const canGoBack = note.previous != null;
   const canUndo = undoableIds.includes(note.id);
@@ -101,6 +107,29 @@ function ChangeEntryView({
         </div>
       </div>
       <ChangeList changes={note.changes ?? []} />
+      {tookCareOf.length > 0 && (
+        <div className='space-y-2'>
+          <p className='text-foreground text-sm font-medium'>Took care of</p>
+          <ul className='space-y-2'>
+            {tookCareOf.map((change) => {
+              const step = resolveNoteStep(change, recipe.steps);
+              return (
+                <li key={change.id} className='space-y-0.5'>
+                  <p className='text-muted-foreground text-xs'>
+                    {step === null ? 'Whole recipe' : `Step ${step + 1}`}
+                  </p>
+                  <p className='text-sm wrap-break-word'>{change.text}</p>
+                  {(change.reason ?? '') !== '' && (
+                    <p className='text-muted-foreground text-sm wrap-break-word'>
+                      Why: {change.reason}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       <ActionGroup isRoomy>
         {canUndo && (
           <ActionRow
