@@ -464,7 +464,7 @@ export interface Cook {
 export interface CookStepTimes {
   /** On "Get your ingredients out" before the first step; 0 when it was skipped (a picked-up cook, a recipe with no ingredients). */
   gatherSeconds: number;
-  /** One per step of the recipe as it was cooked, in order; `text` is the step's opening words (`getStepAnchor`), so the breakdown still reads after the recipe changes. 0 seconds means the step was never shown. */
+  /** One per step of the recipe as it was cooked, in order; `text` is the step's opening words (`getStepAnchor`), so the breakdown still reads after the recipe changes. 0 seconds means the step was never shown; a shown step reads at least 1. */
   steps: { text: string; seconds: number }[];
 }
 

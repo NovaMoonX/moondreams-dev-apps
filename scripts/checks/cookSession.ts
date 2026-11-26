@@ -36,6 +36,7 @@ import {
 import {
   GATHER_CLOCK_KEY,
   getCookStepTimes,
+  sumStepClock,
   getStepClockKey,
   moveStepClock,
   readStepClock,
@@ -982,12 +983,25 @@ assert.equal(
     [step(1), 156 * SEC],
     [step(0), 400 * SEC],
     [step(3), 405 * SEC],
+    [step(2), 465 * SEC],
+    [step(3), 465.2 * SEC],
   ];
   const clock = visits.reduce(
     (current, [key, at]) => moveStepClock(current, key, NOW + at),
     startStepClock({}),
   );
-  const totals = readStepClock(moveStepClock(clock, null, NOW + 465 * SEC), 0);
+  const totals = readStepClock(moveStepClock(clock, null, NOW + 465.2 * SEC), 0);
+  assert.equal(
+    getCookStepTimes(totals, 'adobo', ['a', 'b', 'c', 'd', 'e']).steps[4]
+      .seconds,
+    0,
+    'a step never shown reads 0',
+  );
+  assert.equal(
+    Math.round(sumStepClock(totals) / SEC),
+    465,
+    'the whole cook is the sum of its places',
+  );
   const times = getCookStepTimes(totals, 'adobo', [
     'Marinate the chicken.',
     'Simmer it covered.',
@@ -997,20 +1011,20 @@ assert.equal(
   assert.equal(times.gatherSeconds, 90, 'the gather screen is counted');
   assert.deepEqual(
     times.steps.map((entry) => entry.seconds),
-    [60 + 3 + 5, 3 + 244, 0, 60],
-    'returning to a step adds to what it had, and a skipped step reads 0',
+    [60 + 3 + 5, 3 + 244, 1, 60],
+    'returning to a step adds to what it had, and a step only flicked past still reads as shown',
   );
   assert.equal(times.steps[2].text, 'Reduce the sauce.');
   assert.equal(
-    readStepClock(moveStepClock(clock, null, NOW + 465 * SEC), NOW + 999 * SEC)[
+    readStepClock(moveStepClock(clock, null, NOW + 465.2 * SEC), NOW + 999 * SEC)[
       step(3)
     ],
     60 * SEC,
     'nothing is counted after Finish',
   );
   assert.equal(
-    readStepClock(clock, NOW + 410 * SEC)[step(3)],
-    5 * SEC,
+    readStepClock(clock, NOW + 470.2 * SEC)[step(3)],
+    65 * SEC,
     'reading the clock counts the place in progress without moving it',
   );
 

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
   Button,
@@ -146,6 +146,7 @@ function CookPageView({
     };
   });
   const [isEditing, setIsEditing] = useState(cook === null);
+  const readRef = useRef<HTMLDivElement>(null);
   const [formToken, setFormToken] = useState(0);
   const [date, setDate] = useState(start.date);
   const [time, setTime] = useState(start.time);
@@ -232,7 +233,7 @@ function CookPageView({
         label: '',
         renderComponent: () => (
           <div className='@container'>
-            <div className='grid gap-3 @min-[19rem]:grid-cols-2'>
+            <div className='grid items-end gap-3 @min-[19rem]:grid-cols-2'>
               <div className='min-w-0 space-y-1'>
                 <Label className='text-muted-foreground text-xs'>
                   Servings
@@ -394,7 +395,7 @@ function CookPageView({
   const took = cook.durationSeconds ?? null;
 
   return (
-    <div className='space-y-4'>
+    <div ref={readRef} className='scroll-mt-4 space-y-4'>
       <BackLink onBack={onBack} />
       {heading(planNote)}
       <PhotoStrip photos={photos} label={`${recipeTitle}, as cooked`} />
@@ -439,7 +440,13 @@ function CookPageView({
       {error && <p className='text-destructive text-sm'>{error}</p>}
       <ModalFooterActions
         rightActions={
-          <Button type='button' onClick={() => setIsEditing(true)}>
+          <Button
+            type='button'
+            onClick={() => {
+              readRef.current?.scrollIntoView({ block: 'start' });
+              setIsEditing(true);
+            }}
+          >
             Edit
           </Button>
         }

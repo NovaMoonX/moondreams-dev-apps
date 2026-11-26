@@ -62,9 +62,13 @@ export const parseStepClock = (value: unknown): StepClockTotals => {
   return entries.length > MAX_CLOCK_KEYS ? {} : Object.fromEntries(entries);
 };
 
+/** The whole cook: every place's time added up, so it matches the breakdown and leaves out time the session sat closed. */
+export const sumStepClock = (totals: StepClockTotals) =>
+  Object.values(totals).reduce((sum, ms) => sum + ms, 0);
+
 const toSeconds = (ms: number | undefined) => Math.round((ms ?? 0) / 1_000);
 
-/** Where one recipe's cook went: the gather time (shared by a plate's recipes) and each step's total, 0 for a step never shown. */
+/** Where one recipe's cook went: the gather time (shared by a plate's recipes) and each step's total, at least 1 for a step shown and 0 only for one never shown. */
 export const getCookStepTimes = (
   totals: StepClockTotals,
   recipeId: string,
@@ -73,6 +77,9 @@ export const getCookStepTimes = (
   gatherSeconds: toSeconds(totals[GATHER_CLOCK_KEY]),
   steps: steps.map((step, index) => ({
     text: getStepAnchorText(step),
-    seconds: toSeconds(totals[getStepClockKey(recipeId, index)]),
+    seconds:
+      getStepClockKey(recipeId, index) in totals
+        ? Math.max(1, toSeconds(totals[getStepClockKey(recipeId, index)]))
+        : 0,
   })),
 });

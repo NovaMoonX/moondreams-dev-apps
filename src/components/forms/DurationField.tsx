@@ -108,8 +108,8 @@ function DurationField({
     >
       <legend
         className={join(
-          'mb-1 block font-medium',
-          isCompact && 'text-muted-foreground text-xs',
+          'block font-medium',
+          isCompact ? 'text-muted-foreground text-xs' : 'mb-1',
         )}
       >
         {label}

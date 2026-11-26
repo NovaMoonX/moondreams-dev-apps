@@ -135,6 +135,7 @@ import {
   getStepClockKey,
   moveStepClock,
   readStepClock,
+  sumStepClock,
   startStepClock,
   type StepClockTotals,
 } from '@apps/pinch/utils/stepClock';
@@ -243,6 +244,7 @@ interface ChangeTarget {
 }
 
 const DONE_GUARD_MS = 600;
+const CLOCK_SAVE_MS = 20_000;
 /** A spoken command lands up to a couple of seconds after the words, so "next" or "dismiss" this soon after a Time's up was meant before it. */
 const VOICE_DONE_GUARD_MS = 2000;
 // A server left idle about 15 minutes starts cold, so both of Pepper's are woken on arrival and kept warm while cooking is open.
@@ -614,6 +616,9 @@ function CookingSession({
   const [startedAt] = useState(() => resume?.startedAt ?? Date.now());
   const [cookedForMs, setCookedForMs] = useState<number | null>(null);
   const stepClock = useRef(startStepClock(resume?.stepClock ?? {}));
+  const [clockStartedAt] = useState(
+    () => Date.now() - sumStepClock(resume?.stepClock ?? {}),
+  );
   const clockKey = isFinished
     ? null
     : view === 'gather'
@@ -622,6 +627,26 @@ function CookingSession({
   useEffect(() => {
     stepClock.current = moveStepClock(stepClock.current, clockKey, Date.now());
   }, [clockKey]);
+  const [clockSaves, setClockSaves] = useState(0);
+  useEffect(() => {
+    const save = () => setClockSaves((count) => count + 1);
+    const saveWhenHidden = () => {
+      if (document.visibilityState === 'hidden') save();
+    };
+    const interval = window.setInterval(save, CLOCK_SAVE_MS);
+    document.addEventListener('visibilitychange', saveWhenHidden);
+    window.addEventListener('pagehide', save);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', saveWhenHidden);
+      window.removeEventListener('pagehide', save);
+    };
+  }, []);
+  const finishTiming = useRef<{
+    totals: StepClockTotals;
+    durationSeconds: number;
+  } | null>(null);
+  const undoneIds = useRef(new Set<string>());
   const [goingCount] = useState(createLiveCount);
   const isWide = useMediaQuery().isAtLeast('lg');
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -1193,6 +1218,7 @@ function CookingSession({
     startedAt,
     isFinished,
     clockKey,
+    clockSaves,
     entries,
     openedRecipeId,
     plannedMealId,
@@ -1495,6 +1521,7 @@ function CookingSession({
         }),
       ).unwrap();
     } catch (error) {
+      if (cooks.every(([, id]) => undoneIds.current.has(id))) return;
       setMarkError(getErrorMessage(error, 'Unable to save how long it took.'));
     }
   };
@@ -1504,6 +1531,7 @@ function CookingSession({
     if (ids.length === 0 || undoState !== null) return;
     setMarkError(null);
     setUndoState('PENDING');
+    ids.forEach((id) => undoneIds.current.add(id));
     try {
       await undoCooks(ids);
       setFollowUps({});
@@ -1543,14 +1571,14 @@ function CookingSession({
     voice.stop();
     // eslint-disable-next-line react-hooks/purity -- runs from a tap; once the voice actions are connected the compiler flags every clock read here
     finishedAt.current = Date.now();
-    setCookedForMs(finishedAt.current - startedAt);
+    const totals = readStepClock(stepClock.current, finishedAt.current);
+    const cookedMs = sumStepClock(totals);
+    const durationSeconds = Math.round(cookedMs / 1_000);
+    finishTiming.current = { totals, durationSeconds };
+    setCookedForMs(cookedMs);
     setIsFinished(true);
     scrollToTop();
     focusPrimary();
-    const totals = readStepClock(stepClock.current, finishedAt.current);
-    const durationSeconds = Math.round(
-      (finishedAt.current - startedAt) / 1_000,
-    );
     const recorded = records.flatMap((record) =>
       record.recordedCookId === null
         ? []
@@ -3747,7 +3775,7 @@ function CookingSession({
                 isPepperOn && voice.isSupported ? 'gap-3' : 'gap-1',
               )}
             >
-              <CookStopwatch startedAt={startedAt} />
+              <CookStopwatch startedAt={clockStartedAt} />
               {voice.isSupported &&
                 (isPepperOn ? (
                   <PepperHeaderOrb voice={voice} state={pepperOrbState} />
@@ -3848,7 +3876,16 @@ function CookingSession({
                   onMark={
                     markable.length === 0 || undoState === 'PENDING'
                       ? null
-                      : () => void markCooked()
+                      : () =>
+                          void markCooked().then((written) =>
+                            finishTiming.current === null
+                              ? undefined
+                              : saveTiming(
+                                  written,
+                                  finishTiming.current.totals,
+                                  finishTiming.current.durationSeconds,
+                                ),
+                          )
                   }
                   problem={getRecordProblem()}
                 />
