@@ -49,7 +49,10 @@ export const getReadNotice = (
     usedPicks.length > 0;
   const details = [
     recipe.unread.length > 0
-      ? { icon: '⚠️', text: `We couldn’t read: ${recipe.unread.join(', ')}.` }
+      ? {
+          icon: '⚠️',
+          text: `We couldn’t read: ${recipe.unread.join(', ')}. Check it against your recipe.`,
+        }
       : null,
     recipe.guided.length > 0
       ? {
@@ -67,6 +70,10 @@ export const getReadNotice = (
           )}.`,
         }
       : null,
+    ...recipe.finished.map((item) => ({
+      icon: '👩‍🍳',
+      text: toSentence(item),
+    })),
     recipe.isServingsEstimate && recipe.servings !== null
       ? {
           icon: '🍽️',
@@ -85,10 +92,6 @@ export const getReadNotice = (
           text: 'We estimated how long it keeps and how to reheat it.',
         }
       : null,
-    ...recipe.finished.map((item) => ({
-      icon: '👩‍🍳',
-      text: toSentence(item),
-    })),
   ].filter((detail) => detail !== null);
   const headline =
     recipe.guided.length > 0

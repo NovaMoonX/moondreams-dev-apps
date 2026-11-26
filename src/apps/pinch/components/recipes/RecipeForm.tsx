@@ -1456,7 +1456,7 @@ function RecipeForm({
   };
 
   const sendToPepper = async (askText: string) => {
-    const context = { sources, collections };
+    const context = { sources, collections, picks: ingredientPicks };
     const { input, refMap } = toRevisionInput(
       latestData.current,
       ingredientsById,
@@ -1734,7 +1734,7 @@ function RecipeForm({
               className='bg-background! border-border mt-3 rounded-full border'
               onClick={() => setIsReadDetailOpen(true)}
             >
-              {`See all ${readNotice.details.length} changes`}
+              {`See all ${readNotice.details.length}`}
             </Button>
           ) : (
             readNotice.footer !== null && (
@@ -1746,7 +1746,7 @@ function RecipeForm({
           <DetailSheet
             isOpen={isReadDetailOpen}
             onClose={() => setIsReadDetailOpen(false)}
-            title='What we changed'
+            title='What we did'
           >
             <ul className='space-y-3 text-sm'>
               {readNotice.details.map((detail) => (

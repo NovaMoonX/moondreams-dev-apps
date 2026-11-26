@@ -91,9 +91,9 @@ const both = getReadNotice(
 assert.deepEqual(
   both.details.map((d) => d.text),
   [
+    'Added a step to cook the bacon.',
     'We estimated a time the recipe didn’t give, from its steps.',
     'We estimated how long it keeps and how to reheat it.',
-    'Added a step to cook the bacon.',
   ],
   'the estimate lines and the finished items are both shown, never merged away',
 );

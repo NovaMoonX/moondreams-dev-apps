@@ -207,6 +207,52 @@ function FreeLineOffer({ onClick }: { onClick: () => void }) {
 
 const MAX_SIDE_AMOUNT_TEXT = 10;
 
+function LongAmountLine({ text, note }: { text: string; note: string | null }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isCut, setIsCut] = useState(false);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const measure = (element: HTMLSpanElement | null) => {
+    observerRef.current?.disconnect();
+    if (!element) return;
+    const observer = new ResizeObserver(() =>
+      setIsCut(element.scrollWidth > element.clientWidth + 1),
+    );
+    observer.observe(element);
+    observerRef.current = observer;
+  };
+  const isToggle = isCut || isOpen;
+  return (
+    <div className='-mt-1.5 pb-1.5 text-xs'>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        aria-expanded={isToggle ? isOpen : undefined}
+        aria-label={isToggle ? `Amount: ${text}` : undefined}
+        disabled={!isToggle}
+        className="text-foreground/80 relative h-auto min-h-0 w-full justify-start gap-1 px-0! py-0.5 text-left text-xs font-medium before:absolute before:inset-x-0 before:-inset-y-2 before:content-[''] disabled:opacity-100"
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <span
+          ref={measure}
+          className={join(
+            'min-w-0 flex-1',
+            isOpen ? 'break-words' : 'truncate',
+          )}
+        >
+          {text}
+        </span>
+        {isToggle && (
+          <span className='text-primary shrink-0'>
+            {isOpen ? 'less' : 'more'}
+          </span>
+        )}
+      </Button>
+      {note && <p className='text-muted-foreground wrap-break-word'>{note}</p>}
+    </div>
+  );
+}
+
 interface AmountWordsFieldProps {
   id: string;
   value: string;
@@ -1531,12 +1577,7 @@ function RecipeIngredients({
                           {FREE_LINE_LABEL}
                         </span>
                       )}
-                      {isLongAmount && (
-                        <span className='text-foreground/80 line-clamp-1 text-xs font-medium break-words'>
-                          {label}
-                        </span>
-                      )}
-                      {row.note && (
+                      {row.note && !isLongAmount && (
                         <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
                           {row.note}
                         </span>
@@ -1572,6 +1613,9 @@ function RecipeIngredients({
                     <X className='h-4 w-4' aria-hidden='true' />
                   </Button>
                 </div>
+                {isLongAmount && (
+                  <LongAmountLine text={label} note={row.note} />
+                )}
               </div>
             );
           }}
