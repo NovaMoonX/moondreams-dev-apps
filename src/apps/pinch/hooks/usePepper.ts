@@ -45,8 +45,19 @@ type PepperOptions = {
     options: { turnKey: number; canAnswer: boolean },
   ) => Promise<unknown> | void;
   onAction: (action: PepperAction) => void;
-  /** Pepper's finished reply, as the person heard it. */
-  onReply?: (text: string) => void;
+  /** A question was sent; `turnKey` names it in the calls that follow. */
+  onStart?: (turn: { turnKey: number; heard: string }) => void;
+  /** The reply so far as it streams in, and whether Pepper is searching the web for it. */
+  onText?: (turn: {
+    turnKey: number;
+    text: string;
+    isSearching: boolean;
+  }) => void;
+  /** Pepper's finished reply, as the person heard it, and whether the turn changed something on screen. */
+  onReply?: (
+    text: string,
+    turn: { turnKey: number; hasAction: boolean },
+  ) => void;
   /** A turn that got no answer: `held` is the server's reason when a limit stopped it, null when it failed. */
   onProblem: (held: string | null) => void;
   onTrace?: (entry: PepperTrace) => void;
@@ -63,6 +74,8 @@ type Turn = { aborter: AbortController; key: number };
 export function usePepper({
   speak,
   onAction,
+  onStart,
+  onText,
   onReply,
   onProblem,
   onTrace,
@@ -73,9 +86,25 @@ export function usePepper({
   const lastKey = useRef(0);
   const warmedAt = useRef(0);
   const isWarming = useRef(false);
-  const latest = useRef({ speak, onAction, onReply, onProblem, onTrace });
+  const latest = useRef({
+    speak,
+    onAction,
+    onStart,
+    onText,
+    onReply,
+    onProblem,
+    onTrace,
+  });
   useEffect(() => {
-    latest.current = { speak, onAction, onReply, onProblem, onTrace };
+    latest.current = {
+      speak,
+      onAction,
+      onStart,
+      onText,
+      onReply,
+      onProblem,
+      onTrace,
+    };
   });
 
   const trace = useCallback(
@@ -140,6 +169,7 @@ export function usePepper({
       const isCurrent = () => turn.current === current;
       const startedAt = Date.now();
       setStatus('thinking');
+      latest.current.onStart?.({ turnKey: current.key, heard });
       trace('request', `asked Pepper: “${heard}”`, {
         alternatives,
         historyPairs: history.current.length / 2,
@@ -162,6 +192,7 @@ export function usePepper({
         isFirstText: true,
         isSpeaking: false,
         isFlushing: false,
+        hasAction: false,
       };
       const feed = createSentenceFeed((line) => {
         if (!isCurrent()) return;
@@ -185,9 +216,22 @@ export function usePepper({
           }
           state.text += event.text;
           feed.push(event.text);
+          latest.current.onText?.({
+            turnKey: current.key,
+            text: state.text,
+            isSearching: false,
+          });
         }
-        if (event.type === 'searching') trace('note', 'Pepper is searching');
+        if (event.type === 'searching') {
+          trace('note', 'Pepper is searching');
+          latest.current.onText?.({
+            turnKey: current.key,
+            text: state.text,
+            isSearching: true,
+          });
+        }
         if (event.type === 'action') {
+          state.hasAction = true;
           trace('action', event.name, null, false);
           latest.current.onAction(event);
         }
@@ -218,7 +262,10 @@ export function usePepper({
           history.current = trimHistory(appendExchange(history.current, done));
         }
         trace('reply', done.assistant);
-        latest.current.onReply?.(done.assistant);
+        latest.current.onReply?.(done.assistant, {
+          turnKey: current.key,
+          hasAction: state.hasAction,
+        });
         trace('done', done.endedBy, {
           ms: done.ms,
           searches: done.searches,

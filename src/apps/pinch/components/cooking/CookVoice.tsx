@@ -20,6 +20,7 @@ import {
   type RefObject,
 } from 'react';
 
+import LatestWordsLine from '@/components/LatestWordsLine';
 import AssistantOrb, {
   type AssistantOrbState,
 } from '@/components/AssistantOrb';
@@ -775,6 +776,8 @@ interface CookVoiceLineProps extends CookVoiceSheetProps {
   isPepperOn?: boolean;
   /** The footer has a Next that moves to another step, which cuts what is being said. */
   isNextShown?: boolean;
+  /** Pepper's answer is on screen, so the line offers hearing it again or closing it. */
+  isAnswerShown?: boolean;
   className?: string;
 }
 
@@ -825,6 +828,7 @@ export function PepperHeaderOrb({
 export function CookVoiceLine({
   isPepperOn = false,
   isNextShown = false,
+  isAnswerShown = false,
   className,
   ...props
 }: CookVoiceLineProps) {
@@ -859,8 +863,10 @@ export function CookVoiceLine({
     );
   }
 
-  const { message, status } = voice;
+  const { message, status, liveWords } = voice;
   const isHint = message === null && status === 'listening';
+  const isHeardMessage =
+    message !== null && (message.tone === 'HEARD' || message.tone === 'MISSED');
   const getText = () => {
     if (message !== null) return message.text;
     if (status === 'starting') return 'Allow the microphone if asked.';
@@ -879,6 +885,7 @@ export function CookVoiceLine({
         </>
       );
     }
+    if (isAnswerShown) return 'Say “repeat that” or “close that”';
     return (
       <>
         <span className='text-xs sm:hidden'>
@@ -896,7 +903,7 @@ export function CookVoiceLine({
       <div
         role='status'
         className={join(
-          'flex min-h-6 items-center gap-2 [@media(max-height:500px)]:self-center',
+          'flex min-h-6 items-center gap-2 lg:min-h-8 [@media(max-height:500px)]:self-center',
           className,
         )}
       >
@@ -910,19 +917,31 @@ export function CookVoiceLine({
               <span className='sr-only'>Kept open</span>
             </span>
           )}
-        <p
-          className={join(
-            'min-w-0 flex-1 truncate text-sm [@media(max-height:500px)]:line-clamp-2 [@media(max-height:500px)]:whitespace-normal',
-            isHint && '[@media(max-height:500px)]:sr-only',
-            message === null ||
-              message.tone === 'HEARD' ||
-              message.tone === 'MISSED'
-              ? 'text-muted-foreground'
-              : 'text-foreground font-medium',
-          )}
-        >
-          {getText()}
-        </p>
+        {liveWords !== null && (
+          <LatestWordsLine
+            text={liveWords}
+            className='text-foreground text-base font-medium lg:text-xl'
+          />
+        )}
+        {liveWords === null && isHeardMessage && (
+          <LatestWordsLine
+            text={message.text}
+            className='text-muted-foreground text-sm sm:text-base lg:text-lg'
+          />
+        )}
+        {liveWords === null && !isHeardMessage && (
+          <p
+            className={join(
+              'min-w-0 flex-1 truncate text-sm sm:text-base lg:text-lg [@media(max-height:500px)]:line-clamp-2 [@media(max-height:500px)]:whitespace-normal',
+              isHint && '[@media(max-height:500px)]:sr-only',
+              message === null
+                ? 'text-muted-foreground'
+                : 'text-foreground font-medium',
+            )}
+          >
+            {getText()}
+          </p>
+        )}
       </div>
       {sheet}
     </>

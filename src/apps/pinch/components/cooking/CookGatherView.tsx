@@ -6,6 +6,7 @@ import Stepper from '@/components/Stepper';
 import { useAppSelector } from '@/store';
 import CookIngredientsView, {
   CookIngredientRow,
+  TickAllRow,
   type CookRow,
 } from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookToolsStrip from '@apps/pinch/components/cooking/CookToolsStrip';
@@ -142,26 +143,34 @@ function AllTogetherList({
 
   return (
     <div>
-      <div className='flex h-10 items-center justify-between gap-3'>
-        <p className='text-muted-foreground text-sm'>
-          {outCount === 0
+      <TickAllRow
+        label='everything'
+        doneCount={outCount}
+        total={lines.length}
+        onToggleAll={(isOut) =>
+          lines.forEach((line) => toggle(line.key, isOut))
+        }
+        text={
+          outCount === 0
             ? "Tick what you've got out · tap an amount for other units"
-            : `${outCount} of ${lines.length} got out`}
-        </p>
-        {outCount > 0 && (
-          <ActionChips
-            actions={[
-              {
-                key: 'reset',
-                icon: <RotateCcw className='h-4 w-4' />,
-                label: 'Reset',
-                onClick: () =>
-                  dishes.forEach((dish) => onReset(dish.recipe.id)),
-              },
-            ]}
-          />
-        )}
-      </div>
+            : `${outCount} of ${lines.length} got out`
+        }
+        trailing={
+          outCount > 0 && (
+            <ActionChips
+              actions={[
+                {
+                  key: 'reset',
+                  icon: <RotateCcw className='h-4 w-4' />,
+                  label: 'Reset',
+                  onClick: () =>
+                    dishes.forEach((dish) => onReset(dish.recipe.id)),
+                },
+              ]}
+            />
+          )
+        }
+      />
       <ul className='divide-border divide-y'>
         {lines.map((line) => {
           const conversion =
@@ -264,6 +273,7 @@ function CookGatherView({
                 isServingsShown={false}
                 isHintShown={index === 0}
                 isToolsShown={false}
+                isTickAllShown
               />
             </section>
           ))
