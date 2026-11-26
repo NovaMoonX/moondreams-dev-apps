@@ -86,6 +86,7 @@ export function useGrowingTextarea(
     return () => {
       window.visualViewport?.removeEventListener('resize', refit);
       observer.current?.disconnect();
+      fitted.current.field = null;
     };
   }, []);
 }
