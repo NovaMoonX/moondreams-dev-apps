@@ -240,7 +240,9 @@ export function orderDryFirst<T extends SharedMeasureRow>(
     .filter(({ row }) => row.isLiquid)
     .flatMap((liquid) =>
       dry.flatMap((solid) => {
-        const size = liquid.sizes.find((each) => solid.sizes.includes(each));
+        const size = sortSizes(
+          liquid.sizes.filter((each) => solid.sizes.includes(each)),
+        ).at(-1);
         return size === undefined
           ? []
           : [{ liquid: liquid.row, solid: solid.row, size }];
@@ -261,7 +263,9 @@ export function orderDryFirst<T extends SharedMeasureRow>(
     ...moved,
     ...rest.slice(lastSolid + 1),
   ];
-  const solids = rest.filter((row) => solidIds.has(row.id)).map((row) => row.name);
+  const solids = rest
+    .filter((row) => solidIds.has(row.id))
+    .map((row) => row.name);
   const liquids = moved.map((row) => row.name);
   const sizes = Array.from(new Set(pairs.map((pair) => pair.size)));
   const measure = sizes.length === 1 ? `the ${sizes[0]}` : 'the same measures';

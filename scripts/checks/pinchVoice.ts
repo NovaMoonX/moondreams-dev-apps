@@ -2959,20 +2959,85 @@ assert.deepEqual(
   'only the step lines are marked; others are outside',
 );
 assert.equal(
-  describeAdded({ names: ['Flour'], outside: [], isAdded: true, left: 2 }),
-  'Got flour in. 2 to go.',
+  describeAdded({
+    names: ['Flour'],
+    already: [],
+    outside: [],
+    isAdded: true,
+    left: 2,
+  }),
+  'Ticked the flour. 2 left.',
 );
 assert.equal(
-  describeAdded({ names: ['Butter'], outside: [], isAdded: true, left: 0 }),
+  describeAdded({
+    names: ['Butter'],
+    already: [],
+    outside: [],
+    isAdded: true,
+    left: 0,
+  }),
   "That's everything for this step.",
 );
 assert.equal(
-  describeAdded({ names: [], outside: ['flour'], isAdded: true, left: 3 }),
+  describeAdded({
+    names: [],
+    already: [],
+    outside: [{ name: 'flour', step: null }],
+    isAdded: true,
+    left: 3,
+  }),
   "Flour isn't in this step.",
 );
 assert.equal(
-  describeAdded({ names: ['Flour'], outside: [], isAdded: false, left: 3 }),
-  'Unmarked flour.',
+  describeAdded({
+    names: [],
+    already: [],
+    outside: [{ name: 'Salt', step: 6 }],
+    isAdded: true,
+    left: 3,
+  }),
+  'The salt is for step 6.',
+);
+assert.equal(
+  describeAdded({
+    names: ['Flour'],
+    already: [],
+    outside: [],
+    isAdded: false,
+    left: 3,
+  }),
+  'Unticked the flour. 3 left.',
+);
+assert.equal(
+  describeAdded({
+    names: [],
+    already: ['Flour'],
+    outside: [],
+    isAdded: true,
+    left: 3,
+  }),
+  "The flour's already ticked.",
+);
+assert.equal(
+  describeAdded({
+    names: [],
+    already: ['Flour'],
+    outside: [],
+    isAdded: false,
+    left: 3,
+  }),
+  "The flour's already unticked.",
+);
+const dillView: CookVoiceContext = {
+  ...stepView,
+  lines: [{ id: 'dill', names: ['Dill'], isInStep: true }],
+};
+['mark done', 'tick off done', 'put in ten minutes'].forEach((phrase) =>
+  assert.equal(
+    parseS(phrase, dillView)?.kind === 'MARK_ADDED',
+    false,
+    `not an added tick beside dill: "${phrase}"`,
+  ),
 );
 
 console.log('pinchVoice: all checks passed');

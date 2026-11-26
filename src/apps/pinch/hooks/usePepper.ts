@@ -45,6 +45,8 @@ type PepperOptions = {
     options: { turnKey: number; canAnswer: boolean },
   ) => Promise<unknown> | void;
   onAction: (action: PepperAction) => void;
+  /** Pepper's finished reply, as the person heard it. */
+  onReply?: (text: string) => void;
   /** A turn that got no answer: `held` is the server's reason when a limit stopped it, null when it failed. */
   onProblem: (held: string | null) => void;
   onTrace?: (entry: PepperTrace) => void;
@@ -61,6 +63,7 @@ type Turn = { aborter: AbortController; key: number };
 export function usePepper({
   speak,
   onAction,
+  onReply,
   onProblem,
   onTrace,
 }: PepperOptions) {
@@ -70,9 +73,9 @@ export function usePepper({
   const lastKey = useRef(0);
   const warmedAt = useRef(0);
   const isWarming = useRef(false);
-  const latest = useRef({ speak, onAction, onProblem, onTrace });
+  const latest = useRef({ speak, onAction, onReply, onProblem, onTrace });
   useEffect(() => {
-    latest.current = { speak, onAction, onProblem, onTrace };
+    latest.current = { speak, onAction, onReply, onProblem, onTrace };
   });
 
   const trace = useCallback(
@@ -215,6 +218,7 @@ export function usePepper({
           history.current = trimHistory(appendExchange(history.current, done));
         }
         trace('reply', done.assistant);
+        latest.current.onReply?.(done.assistant);
         trace('done', done.endedBy, {
           ms: done.ms,
           searches: done.searches,

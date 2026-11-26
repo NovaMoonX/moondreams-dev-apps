@@ -1956,12 +1956,14 @@ const ADDED_ALL = new Set([
 const ADDED_PATTERNS = [
   /^(?:(?:i|we) (?:have |just |already )?|ive |weve )?(?:added|put in|threw in) (?<query>.+)$/,
   /^(?:i|we) (?:just |already )?put (?<query>.+?) in$/,
-  /^(?:mark(?: off)?|tick(?: off)?|check off|cross off) (?<query>.+?)(?: as added| added)?$/,
   /^(?<query>.+?) (?:is|are) in$/,
   /^(?<query>(?:(?:the|my) )?[a-z]+(?: [a-z]+)?)s in$/,
 ];
+const MARKED_PATTERNS = [
+  /^(?:mark(?: off)?|tick(?: off)?|check off|cross off) (?<query>.+?)(?: as added| added)?$/,
+];
+const UNMARKED_PATTERNS = [/^(?:unmark|untick|uncheck|un tick) (?<query>.+)$/];
 const UNADDED_PATTERNS = [
-  /^(?:unmark|untick|uncheck|un tick) (?<query>.+)$/,
   /^(?:i |we )?(?:didnt|did not|havent|have not) (?:yet )?add(?:ed)? (?<query>.+?)(?: yet)?$/,
 ];
 
@@ -1972,10 +1974,10 @@ const parseAdded = (
 ): CookCommand | null => {
   const text = normalizeTranscript(transcript.replace(/,/g, ' and '));
   if (ADDED_ALL.has(text)) return { kind: 'MARK_ALL_ADDED' };
-  const isHeld = (query: string) =>
-    matchByName(query, context.lines).length > 0 ||
-    lineNameMatcher.match(query, context.lines) !== null;
-  const readQueries = (raw: string | undefined) => {
+  const readQueries = (raw: string | undefined, isLoose: boolean) => {
+    const isHeld = (query: string) =>
+      matchByName(query, context.lines).length > 0 ||
+      (isLoose && lineNameMatcher.match(query, context.lines) !== null);
     const readOne = (part: string) => {
       const query = readTickQuery(part);
       return query === null
@@ -1987,14 +1989,25 @@ const parseAdded = (
       ? Array.from(new Set(parts))
       : [];
   };
-  const read = (patterns: RegExp[], isAdded: boolean): CookCommand | null => {
+  const read = (
+    patterns: RegExp[],
+    isAdded: boolean,
+    isLoose: boolean,
+  ): CookCommand | null => {
     const queries =
       patterns
-        .map((pattern) => readQueries(text.match(pattern)?.groups?.query))
+        .map((pattern) =>
+          readQueries(text.match(pattern)?.groups?.query, isLoose),
+        )
         .find((found) => found.length > 0) ?? [];
     return queries.length > 0 ? { kind: 'MARK_ADDED', queries, isAdded } : null;
   };
-  return read(UNADDED_PATTERNS, false) ?? read(ADDED_PATTERNS, true);
+  return (
+    read(UNMARKED_PATTERNS, false, false) ??
+    read(UNADDED_PATTERNS, false, true) ??
+    read(MARKED_PATTERNS, true, false) ??
+    read(ADDED_PATTERNS, true, true)
+  );
 };
 
 /** The step's lines a spoken name stands for, and the names that belong to the recipe but not to this step. */
@@ -2028,26 +2041,36 @@ const lowerFirst = (text: string) =>
 /** The answer to an added tick: the lines it changed, any name this step doesn't use, and how many of the step's lines are still to add. */
 export const describeAdded = (answer: {
   names: string[];
-  outside: string[];
+  already: string[];
+  outside: { name: string; step: number | null }[];
   isAdded: boolean;
   left: number;
 }) => {
-  const names = LIST_AND.format(answer.names.map(lowerFirst));
+  const say = (names: string[]) =>
+    `the ${LIST_AND.format(names.map(lowerFirst))}`;
+  const cap = (text: string) =>
+    `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
   const outside = answer.outside
-    .map(
-      (name) =>
-        `${name.charAt(0).toUpperCase()}${name.slice(1)} isn't in this step.`,
+    .map(({ name, step }) =>
+      step === null
+        ? `${cap(name)} isn't in this step.`
+        : `The ${lowerFirst(name)} is for step ${step}.`,
     )
     .join(' ');
+  const state = answer.isAdded ? 'ticked' : 'unticked';
+  const already =
+    answer.already.length === 0
+      ? ''
+      : answer.already.length === 1
+        ? cap(`${say(answer.already)}'s already ${state}.`)
+        : cap(`${say(answer.already)} are already ${state}.`);
   const changed =
     answer.names.length === 0
       ? ''
-      : !answer.isAdded
-        ? `Unmarked ${names}.`
-        : answer.left === 0
-          ? "That's everything for this step."
-          : `Got ${names} in. ${answer.left} to go.`;
-  return [changed, outside].filter(Boolean).join(' ');
+      : answer.isAdded && answer.left === 0
+        ? "That's everything for this step."
+        : `${answer.isAdded ? 'Ticked' : 'Unticked'} ${say(answer.names)}. ${answer.left} left.`;
+  return [changed, already, outside].filter(Boolean).join(' ');
 };
 
 const parseDishServings = (

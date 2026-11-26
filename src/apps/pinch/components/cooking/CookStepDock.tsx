@@ -394,6 +394,9 @@ function CookStepDock({
               className='max-h-44 overflow-y-auto sm:[@media(min-height:701px)]:max-h-56 lg:[@media(min-height:701px)]:max-h-72 [@media(max-height:700px)]:max-h-32'
             >
               {getBody()}
+              {hiddenBelow !== null && (
+                <div className='h-10' aria-hidden='true' />
+              )}
             </div>
             {hiddenBelow !== null && (
               <div className='from-popover pointer-events-none absolute inset-x-0 bottom-0 flex h-12 items-end justify-center bg-linear-to-t to-transparent pb-1'>

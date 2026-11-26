@@ -168,7 +168,7 @@ export const getCookStartServings = (
     Math.max(recipeServings > 0 ? recipeServings : 1, plannedServings ?? 0),
   );
 
-/** Where one recipe of a cooking session is: the step on screen, its servings, what has been ticked as got out and, apart from that, what the person has added while cooking a step. */
+/** Where one recipe of a cooking session is: the step on screen, its servings, what has been ticked as got out and, apart from that, what the person has added while cooking a step, keyed `${stepIndex}:${lineId}` so a line used in two steps is ticked in each. */
 export interface PlateCookState {
   stepIndex: number;
   servings: number;

@@ -157,6 +157,7 @@ import {
 import {
   describeAdded,
   describeAmounts,
+  matchByName,
   readAddedLines,
   toSpokenAmount,
   describeTimerGuess,
@@ -259,6 +260,7 @@ const VOICE_WHILE_WRITING = new Set<CookActionCommand['kind']>([
   'START_TIMER',
   'TIMER_ANSWER',
 ]);
+const TICK_OFFER_WORDS = /tick (it|them) off|mark (it|them) off/i;
 const ADD_OFFER = "Tell me what you add and I'll tick it off.";
 const ENTRY_WORDS: Record<CookEntryKind, string> = {
   TIP: 'tip',
@@ -542,7 +544,12 @@ function CookingSession({
     entries.find((candidate) => candidate.recipe.id === currentId) ??
     entries[0];
   const { recipe, isRemoved, plannedServings } = entry;
-  const { stepIndex, servings, gotOut, added } = plate[recipe.id] ?? {
+  const {
+    stepIndex,
+    servings,
+    gotOut,
+    added: addedAll,
+  } = plate[recipe.id] ?? {
     stepIndex: 0,
     servings: getCookStartServings(recipe.servings, plannedServings),
     gotOut: {},
@@ -840,6 +847,9 @@ function CookingSession({
       : stepMatch.lineIds
           .map((id) => rows.find((row) => row.id === id))
           .filter((row) => row !== undefined);
+  const added = Object.fromEntries(
+    stepRows.map((row) => [row.id, addedAll[`${index}:${row.id}`] === true]),
+  );
   const stepText = hasSteps ? recipe.steps[index] : '';
   const stepDurations = useMemo(
     () =>
@@ -1014,10 +1024,12 @@ function CookingSession({
             notesSegments: getSpokenSegments(),
           }
         : null,
-    takeStepOffer: () => {
-      if (isAddOfferMade.current || isWide || stepRows.length < 2) return null;
+    peekStepOffer: () =>
+      isAddOfferMade.current || isWide || stepRows.length < 2
+        ? null
+        : ADD_OFFER,
+    commitStepOffer: () => {
       isAddOfferMade.current = true;
-      return ADD_OFFER;
     },
     onTurnOn: timers.prepareSound,
     isAlarmRinging: timers.timers.some((timer) => timer.status === 'done'),
@@ -1533,7 +1545,7 @@ function CookingSession({
           }
         : current;
     });
-  const setAddedIds = (ids: string[], isAdded: boolean) =>
+  const setAddedIds = (ids: string[], isAdded: boolean, step = index) =>
     setPlate((current) => {
       const known = current[recipe.id];
       return known
@@ -1543,7 +1555,9 @@ function CookingSession({
               ...known,
               added: {
                 ...known.added,
-                ...Object.fromEntries(ids.map((id) => [id, isAdded])),
+                ...Object.fromEntries(
+                  ids.map((id) => [`${step}:${id}`, isAdded]),
+                ),
               },
             },
           }
@@ -2725,20 +2739,34 @@ function CookingSession({
         return refuse('Go to a step to mark what you added.');
       }
       const { lineIds, outside } = readAddedLines(queries, voiceContext.lines);
+      isAddOfferMade.current = true;
       const hit = stepRows.filter((row) => lineIds.includes(row.id));
+      const changing = hit.filter(
+        (row) => (added[row.id] === true) !== isAdded,
+      );
       const isAddedAfter = (row: CookRow) =>
         hit.some((each) => each.id === row.id)
           ? isAdded
           : added[row.id] === true;
+      const getNames = (list: CookRow[]) =>
+        Array.from(new Set(list.map((row) => row.name)));
       const text = describeAdded({
-        names: Array.from(new Set(hit.map((row) => row.name))),
-        outside,
+        names: getNames(changing),
+        already: getNames(hit.filter((row) => !changing.includes(row))),
+        outside: outside.map((name) => {
+          const lineId = matchByName(name, voiceContext.lines)[0]?.id;
+          const at = stepMatches.findIndex(
+            (match, matchIndex) =>
+              matchIndex !== index && match.lineIds.includes(lineId ?? ''),
+          );
+          return { name, step: at === -1 ? null : at + 1 };
+        }),
         isAdded,
         left: stepRows.filter((row) => !isAddedAfter(row)).length,
       });
-      if (hit.length === 0) return refuse(text);
+      if (changing.length === 0) return refuse(text);
       setAddedIds(
-        hit.map((row) => row.id),
+        changing.map((row) => row.id),
         isAdded,
       );
       return done(text, text);
@@ -2750,6 +2778,7 @@ function CookingSession({
       if (stepRows.length === 0) {
         return refuse("This step doesn't name any ingredients.");
       }
+      isAddOfferMade.current = true;
       setAddedIds(
         stepRows.map((row) => row.id),
         true,
@@ -3013,6 +3042,21 @@ function CookingSession({
       lines.forEach(({ recipeId, lineId }) =>
         toggleGotOutFor(recipeId, lineId, isOut),
       ),
+    getAddedChanges: (queries, isAdded) => {
+      if (!isOnStep || isWide) return null;
+      const { lineIds } = readAddedLines(queries, voiceContext.lines);
+      return {
+        step: index,
+        lineIds: stepRows
+          .filter(
+            (row) =>
+              lineIds.includes(row.id) && (added[row.id] === true) !== isAdded,
+          )
+          .map((row) => row.id),
+      };
+    },
+    setAdded: (change, isAdded) =>
+      setAddedIds(change.lineIds, isAdded, change.step),
     goToStep: goToStepForPepper,
     say: (text) => voice.speak(text),
     capture,
@@ -3037,6 +3081,9 @@ function CookingSession({
       void voice.speakInOrder(result.said, {
         canAnswer: pepperActions.hasPending(),
       });
+    },
+    onReply: (text) => {
+      if (TICK_OFFER_WORDS.test(text)) isAddOfferMade.current = true;
     },
     onProblem: (held) => {
       void voice.speakInOrder(getPepperProblemLine(held), {
@@ -3077,6 +3124,7 @@ function CookingSession({
       })),
     );
     const screen = buildPepperScreen({
+      isAddOffered: isAddOfferMade.current,
       view: pepperView,
       recipeTitle: voiceStep.recipe.title,
       step: isStepShown

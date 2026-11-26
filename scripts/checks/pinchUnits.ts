@@ -463,6 +463,14 @@ assert.deepEqual(
   'dry baking soda is measured before liquid vanilla in the same spoon',
 );
 assert.match(dryFirst.hint ?? '', /Baking soda.*Vanilla/);
+assert.match(
+  orderDryFirst([
+    dryRow('v', 'Vanilla', true, 0.5, 'TSP'),
+    dryRow('s', 'Baking soda', false, 0.5, 'TSP'),
+  ]).hint ?? '',
+  /the ½ tsp stays dry/,
+  'the hint names the smallest shared size',
+);
 const apart = [
   dryRow('m', 'Milk', true, 1, 'CUP'),
   dryRow('f', 'Flour', false, 200, 'G'),

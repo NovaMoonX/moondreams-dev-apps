@@ -79,6 +79,7 @@ assert.ok(
 );
 
 const base: PepperScreenInput = {
+  isAddOffered: false,
   view: 'steps',
   recipeTitle: 'Adobo chicken',
   step: { number: 2, count: 6, text: 'Brown the chicken.', section: 'Cook' },
@@ -117,6 +118,12 @@ assert.ok(screen.includes('- Rice: 2:05 left, running'));
 assert.ok(screen.includes('- Pasta water: rang, waiting to be dismissed'));
 assert.ok(screen.includes('- 3 lb chicken thigh'));
 assert.ok(screen.includes('- 2 tbsp soy sauce (added)'));
+assert.ok(!screen.includes('already offered'));
+assert.ok(
+  buildPepperScreen({ ...base, isAddOffered: true }).includes(
+    'already offered',
+  ),
+);
 assert.ok(!screen.includes('chicken thigh (added)'));
 assert.ok(screen.includes('id n-here, tip, step 2: Do not crowd the pan'));
 assert.ok(

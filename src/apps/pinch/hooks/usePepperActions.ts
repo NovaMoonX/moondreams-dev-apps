@@ -52,6 +52,15 @@ export interface PepperScreen {
     lines: { recipeId: string; lineId: string }[],
     isOut: boolean,
   ) => void;
+  /** The lines a spoken added-tick would newly change on the step shown, with that step, or null when no step is shown. */
+  getAddedChanges: (
+    queries: string[],
+    isAdded: boolean,
+  ) => { step: number; lineIds: string[] } | null;
+  setAdded: (
+    change: { step: number; lineIds: string[] },
+    isAdded: boolean,
+  ) => void;
   /** Speaks a line after the fact, for a write that failed once the answer was given. */
   say: (text: string) => void;
   capture: Pick<CookCapture, 'quickAdd' | 'removeById'>;
@@ -163,8 +172,24 @@ export function usePepperActions(screen: PepperScreen) {
         command.kind === 'GOT_INGREDIENT'
           ? screenNow.getTickChanges(command.queries, command.isOut)
           : [];
+      const addedChange =
+        command.kind === 'MARK_ADDED'
+          ? screenNow.getAddedChanges(command.queries, command.isAdded)
+          : null;
       const result = screenNow.runCook(command);
       if (!result.ok) return toSaid(result);
+      if (command.kind === 'MARK_ADDED') {
+        if (addedChange !== null && addedChange.lineIds.length > 0) {
+          push({
+            cannot: 'that',
+            undo: () => {
+              latest.current.setAdded(addedChange, !command.isAdded);
+              return 'Took that back.';
+            },
+          });
+        }
+        return {};
+      }
       if (command.kind === 'GOT_INGREDIENT') {
         if (ticked.length > 0) {
           push({
@@ -497,13 +522,6 @@ const getInverse = (command: PepperCookCommand): CookActionCommand | null => {
   }
   if (command.kind === 'RESUME_TIMER') {
     return { kind: 'PAUSE_TIMER', target: command.target };
-  }
-  if (command.kind === 'MARK_ADDED') {
-    return {
-      kind: 'MARK_ADDED',
-      queries: command.queries,
-      isAdded: !command.isAdded,
-    };
   }
   return null;
 };
