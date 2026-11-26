@@ -170,9 +170,11 @@ function CookEditView({
               renderComponent: () => (
                 <ActionRow
                   icon={<NotebookPen className='h-4 w-4' />}
-                  label='Add a note'
+                  label='Write something down'
                   subtitle={
-                    isChanged ? 'Save your changes first' : 'About this cook'
+                    isChanged
+                      ? 'Save your changes first'
+                      : 'A tip, a note or a change for next time'
                   }
                   isDisabled={isChanged || isSubmitting}
                   onClick={onAddNote}

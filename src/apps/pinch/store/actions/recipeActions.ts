@@ -34,7 +34,10 @@ import {
   isUnrestoredLine,
 } from '@apps/pinch/utils/recipeChanges';
 import {
+  getMissingNoteFields,
   getTweakReason,
+  isDoneChange,
+  isOpenChange,
   planGoBack,
   planTweakUndo,
 } from '@apps/pinch/utils/notes';
@@ -157,7 +160,7 @@ export interface RecipeDraft {
   fromIdeaId: string | null;
   /** Why the person changed the recipe, for the tweak a save of a cooked recipe records; ignored when none is recorded. */
   tweakReason: string;
-  /** The planned changes this edit applies. When the edit changed the recipe, the oldest of them becomes the tweak that records it (same entry, no new one) and the rest are taken off; when it changed nothing they stay planned. */
+  /** The planned changes this edit takes care of. When the edit changed the recipe, each is marked done by the tweak that records it, right after the save; when it changed nothing they stay planned. */
   appliesChangeIds: string[];
 }
 
@@ -174,10 +177,10 @@ interface SaveRecipeResult {
 type TweakPlan =
   | { kind: 'NONE' }
   | { kind: 'NEW'; note: RecipeNote }
-  /** `note` is the planned change that becomes the tweak; `absorbedIds` are the others the same edit applied. */
-  | { kind: 'APPLY'; note: RecipeNote; absorbedIds: string[] };
+  /** `applied` are the planned changes the tweak marks done. */
+  | { kind: 'APPLY'; note: RecipeNote; applied: RecipeNote[] };
 
-/** Compared with the recipe as this device last saw it, so an edit made elsewhere in between can show up in the lines. A planned change the edit applies turns into the tweak itself, so applying it leaves one entry. */
+/** Compared with the recipe as this device last saw it, so an edit made elsewhere in between can show up in the lines. The planned changes the edit takes care of stay as entries, marked done by the tweak, so the history keeps what was asked beside what was done. */
 const getTweakPlan = (
   state: RootState,
   existing: Recipe | null,
@@ -189,7 +192,7 @@ const getTweakPlan = (
     .filter(
       (note) =>
         draft.appliesChangeIds.includes(note.id) &&
-        note.kind === 'CHANGE' &&
+        isOpenChange(note) &&
         note.recipeId === existing.id,
     )
     .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
@@ -208,7 +211,7 @@ const getTweakPlan = (
   if (changes.length === 0) return { kind: 'NONE' };
 
   const tweak: RecipeNote = {
-    id: isApplying ? planned[0].id : generateUuid(),
+    id: generateUuid(),
     recipeId: existing.id,
     kind: 'TWEAK',
     text: getTweakReason(draft.tweakReason),
@@ -220,17 +223,15 @@ const getTweakPlan = (
     previous: changes.every(isUnrestoredLine)
       ? null
       : getRecipeSnapshot(existing),
+    resolvedAt: null,
+    resolvedBy: null,
     by: { kind: 'you', name: null },
     createdAt: now,
     updatedAt: now,
   };
 
   return isApplying
-    ? {
-        kind: 'APPLY',
-        note: tweak,
-        absorbedIds: planned.slice(1).map((note) => note.id),
-      }
+    ? { kind: 'APPLY', note: tweak, applied: planned }
     : { kind: 'NEW', note: tweak };
 };
 
@@ -370,9 +371,6 @@ export const saveRecipe = createAsyncThunk<
         if (tweakPlan.kind !== 'NONE') {
           batch.set(noteDoc(uid, tweakPlan.note.id), tweakPlan.note);
         }
-        if (tweakPlan.kind === 'APPLY') {
-          tweakPlan.absorbedIds.forEach((id) => batch.delete(noteDoc(uid, id)));
-        }
       } else {
         const recipe: Recipe = {
           id: recipeId,
@@ -391,11 +389,23 @@ export const saveRecipe = createAsyncThunk<
         await deleteFile(path).catch(() => undefined);
       }
       return rejectWithValue(
-        tweakPlan.kind === 'APPLY' &&
-          error instanceof FirebaseError &&
-          error.code === 'permission-denied'
-          ? 'That change was already applied or taken off on another device. Close this and open the recipe again.'
-          : getWriteMessage(error, 'Unable to save this recipe.'),
+        getWriteMessage(error, 'Unable to save this recipe.'),
+      );
+    }
+
+    // Marked done after the save, not in its batch: a change deleted on another device would otherwise fail the whole save.
+    if (tweakPlan.kind === 'APPLY') {
+      await Promise.all(
+        tweakPlan.applied.map((change) =>
+          updateDoc(noteDoc(uid, change.id), {
+            ...getMissingNoteFields(change),
+            resolvedAt: now,
+            resolvedBy: tweakPlan.note.id,
+            updatedAt: now,
+          }).catch((error) =>
+            console.error('Pinch could not mark a change done', error),
+          ),
+        ),
       );
     }
 
@@ -428,7 +438,7 @@ interface UndoRecipeChangeInput {
   noteIds: string[];
 }
 
-/** Puts the recipe's edited fields back to how the tweak found them and takes the tweak off, in one transaction that re-reads both: it refuses when the recipe has been saved since (its `updatedAt` is no longer the tweak's date) or the tweak is gone. Only the snapshot's fields and `updatedAt` are written (the nine compared ones, plus categories, care and links when it has them), so the photo and the collections stay as they are. */
+/** Puts the recipe's edited fields back to how the tweak found them, takes the tweak off and plans again the changes it took care of, in one transaction that re-reads them all: it refuses when the recipe has been saved since (its `updatedAt` is no longer the tweak's date) or the tweak is gone. Only the snapshot's fields and `updatedAt` are written (the nine compared ones, plus categories, care and links when it has them), so the photo and the collections stay as they are. */
 export const undoRecipeChange = createAsyncThunk<
   number,
   UndoRecipeChangeInput,
@@ -439,12 +449,20 @@ export const undoRecipeChange = createAsyncThunk<
     const noteDocs = noteIds.map((id) =>
       doc(db, 'apps', 'pinch', 'kitchens', uid, 'notes', id),
     );
+    const doneDocs = getState()
+      .pinch.notes.items.filter(
+        (note) => isDoneChange(note) && noteIds.includes(note.resolvedBy ?? ''),
+      )
+      .map((note) => noteDoc(uid, note.id));
     try {
       await freezeBeforeEdit(uid, getState());
       const refusal = await runHeldTransaction(uid, async (transaction) => {
         const recipeSnapshot = await transaction.get(recipeDoc(uid, recipeId));
         const noteSnapshots = await Promise.all(
           noteDocs.map((ref) => transaction.get(ref)),
+        );
+        const doneSnapshots = await Promise.all(
+          doneDocs.map((ref) => transaction.get(ref)),
         );
         const plan = planTweakUndo(
           recipeSnapshot.exists()
@@ -461,6 +479,21 @@ export const undoRecipeChange = createAsyncThunk<
           updatedAt: Date.now(),
         });
         noteDocs.forEach((ref) => transaction.delete(ref));
+        doneSnapshots
+          .filter(
+            (snapshot) =>
+              snapshot.exists() &&
+              noteIds.includes(
+                (snapshot.data() as RecipeNote).resolvedBy ?? '',
+              ),
+          )
+          .forEach((snapshot) =>
+            transaction.update(snapshot.ref, {
+              resolvedAt: null,
+              resolvedBy: null,
+              updatedAt: Date.now(),
+            }),
+          );
         return null;
       });
       if (refusal !== null) return rejectWithValue(refusal);
@@ -542,7 +575,7 @@ export const goBackToChange = createAsyncThunk<
       if (refusal !== null) return rejectWithValue(refusal);
     } catch (error) {
       return rejectWithValue(
-        getWriteMessage(error, 'Unable to go back to before this change.'),
+        getWriteMessage(error, 'Unable to go back to before this edit.'),
       );
     }
 

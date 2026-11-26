@@ -149,6 +149,11 @@ import {
   getJoinedChangeReason,
   getLastTimeNote,
   getMissingNoteFields,
+  getChangesDoneBy,
+  getResolveCandidates,
+  getUnlinkedNearCook,
+  isOpenChange,
+  isStepEntry,
   getNoteSummary,
   getNoteCookChoices,
   getNoteSummaries,
@@ -2808,6 +2813,8 @@ assert.deepEqual(
     reason: null,
     previous: null,
     by: null,
+    resolvedAt: null,
+    resolvedBy: null,
   },
   'an older note gets the keys it lacks, empty',
 );
@@ -2821,10 +2828,96 @@ assert.deepEqual(
     reason: null,
     previous: null,
     by: null,
+    resolvedAt: null,
+    resolvedBy: null,
   }),
   {},
   'a note with every key, even null ones, lacks nothing',
 );
+{
+  const journal = (
+    id: string,
+    kind: RecipeNote['kind'],
+    createdAt: number,
+    extra: Partial<RecipeNote> = {},
+  ) =>
+    ({
+      id,
+      recipeId: 'adobo',
+      kind,
+      text: id,
+      cookId: null,
+      createdAt,
+      resolvedAt: null,
+      resolvedBy: null,
+      ...extra,
+    }) as RecipeNote;
+  const open = journal('open', 'CHANGE', 10);
+  const legacy = { ...journal('legacy', 'CHANGE', 11) } as Partial<RecipeNote>;
+  delete legacy.resolvedAt;
+  const done = journal('done', 'CHANGE', 12, {
+    resolvedAt: 50,
+    resolvedBy: 't2',
+  });
+  assert.equal(isOpenChange(open), true, 'a planned change is open');
+  assert.equal(
+    isOpenChange(legacy as RecipeNote),
+    true,
+    'a change written before done existed is still open',
+  );
+  assert.equal(isOpenChange(done), false, 'a done change is not open');
+  assert.equal(isStepEntry(done), false, 'cooking leaves out a done change');
+  assert.equal(isStepEntry(open), true, 'cooking shows a planned change');
+  const tweaks = [
+    journal('t1', 'TWEAK', 5),
+    journal('t2', 'TWEAK', 20),
+    journal('t3', 'TWEAK', 30),
+  ];
+  assert.deepEqual(
+    getResolveCandidates([...tweaks, open], open, 5).map((note) => note.id),
+    ['t3', 't2'],
+    'only edits since the change was written can have taken care of it, newest first',
+  );
+  assert.deepEqual(
+    getChangesDoneBy([open, done, ...tweaks], 't2').map((note) => note.id),
+    ['done'],
+    'an edit lists the changes it took care of',
+  );
+  const day = 24 * 60 * 60 * 1000;
+  const cooks = [
+    { id: 'c1', recipeId: 'adobo', cookedAt: 1000 },
+    { id: 'c2', recipeId: 'adobo', cookedAt: 1000 + day * 3 },
+  ];
+  const near = getUnlinkedNearCook(
+    [
+      journal('after', 'CHANGE', 2000),
+      journal('tip', 'TIP', 3000),
+      journal('linked', 'NOTE', 2500, { cookId: 'c1' }),
+      journal('gone', 'NOTE', 2600, { cookId: 'deleted' }),
+      journal('before', 'NOTE', 500),
+      journal('late', 'NOTE', 1000 + day * 2),
+      journal('edit', 'TWEAK', 2100),
+    ],
+    cooks[0],
+    cooks,
+    day,
+  ).map((note) => note.id);
+  assert.deepEqual(
+    near,
+    ['after', 'tip', 'gone'],
+    'a cook offers the entries with no cook written in the day after it',
+  );
+  assert.deepEqual(
+    getUnlinkedNearCook(
+      [journal('x', 'NOTE', 1000 + day / 2)],
+      cooks[0],
+      [...cooks, { id: 'c3', recipeId: 'adobo', cookedAt: 1000 + day / 4 }],
+      day,
+    ),
+    [],
+    'an entry written after the next cook belongs to that one',
+  );
+}
 assert.deepEqual(
   [
     '',
@@ -11052,6 +11145,8 @@ assert.equal(
       reason,
       by: null,
       previous: null,
+      resolvedAt: null,
+      resolvedBy: null,
       createdAt,
       updatedAt: createdAt,
     }) as RecipeNote;

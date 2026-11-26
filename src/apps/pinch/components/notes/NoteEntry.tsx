@@ -4,10 +4,14 @@ import { Pencil, PenLine, Undo2 } from 'lucide-react';
 
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import ClampedText from '@/components/ClampedText';
+import TickMark from '@/components/TickMark';
+import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import ChangeList from '@apps/pinch/components/notes/ChangeList';
 import { NOTE_KIND_LABELS } from '@apps/pinch/constants';
+import { selectNotesById } from '@apps/pinch/store/selectors';
 import type { Cook, RecipeNote } from '@apps/pinch/types';
+import { isDoneChange } from '@apps/pinch/utils/notes';
 
 interface NoteEntryProps {
   note: RecipeNote;
@@ -42,12 +46,14 @@ function NoteEntry({
 }: NoteEntryProps) {
   const isTweak = note.kind === 'TWEAK';
   const isChange = note.kind === 'CHANGE';
+  const isDone = isDoneChange(note);
+  const doneEdit = useAppSelector(selectNotesById).get(note.resolvedBy ?? '');
   const date = formatDateShort(note.createdAt);
   const text = note.text ?? null;
   const reason = note.reason ?? null;
   const kindName = NOTE_KIND_LABELS[note.kind].toLowerCase();
   const actions: ActionChip[] = [
-    ...(onApplyChange && isChange
+    ...(onApplyChange && isChange && !isDone
       ? [
           {
             key: 'apply',
@@ -90,9 +96,15 @@ function NoteEntry({
             {isTweak ? `Changed on ${date}` : date}
           </span>
         )}
-        {note.kind !== 'NOTE' && !isTweak && (
+        {!isTweak && (
           <span className='bg-accent text-accent-foreground border-border rounded-full border px-2 py-0.5 text-xs font-normal whitespace-nowrap'>
-            {isChange ? 'To change' : NOTE_KIND_LABELS[note.kind]}
+            {isChange && !isDone ? 'To change' : NOTE_KIND_LABELS[note.kind]}
+          </span>
+        )}
+        {isDone && (
+          <span className='text-muted-foreground inline-flex items-center gap-1 text-xs font-normal whitespace-nowrap'>
+            <TickMark variant='soft' />
+            Done
           </span>
         )}
         {stepAt !== null && (
@@ -105,6 +117,11 @@ function NoteEntry({
         {cook && (
           <p className='text-muted-foreground text-xs'>
             After cooking on {formatDateShort(cook.cookedAt)}
+          </p>
+        )}
+        {isDone && doneEdit?.kind === 'TWEAK' && (
+          <p className='text-muted-foreground text-xs'>
+            Taken care of in your {formatDateShort(doneEdit.createdAt)} edit
           </p>
         )}
         {isStepLost && (
@@ -121,7 +138,8 @@ function NoteEntry({
         )}
         {writtenBefore !== null && !isInCook && (
           <p className='text-muted-foreground text-xs'>
-            Written before you changed the recipe on {formatDateShort(writtenBefore)}
+            Written before you changed the recipe on{' '}
+            {formatDateShort(writtenBefore)}
           </p>
         )}
         <ActionChips actions={actions} />
