@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import AppToggle from '@/components/AppToggle';
@@ -85,7 +86,7 @@ function LookAheadEditor({ uid, reminders, isNoteOn }: LookAheadEditorProps) {
       {isNoteOn && (
         <div className='space-y-2'>
           <p className='text-muted-foreground text-xs'>Send the note at</p>
-          <Select
+          <AppSelect
             className='sm:max-w-60'
             options={HOUR_OPTIONS}
             value={String(reminders.hour)}

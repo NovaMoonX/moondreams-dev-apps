@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
-import { Button, Input, Label, Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useQuery } from '@tanstack/react-query';
 import { ListPlus, MapPin, StickyNote, Timer, Truck } from 'lucide-react';
 
@@ -101,7 +102,7 @@ function AirlineField({ value, onChange }: AirlineFieldProps) {
   };
 
   return (
-    <Select
+    <AppSelect
       searchable
       allowAdd
       clearable
@@ -150,7 +151,7 @@ function AirportField({ fieldKey, value, onChange, onPicked }: AirportFieldProps
   };
 
   return (
-    <Select
+    <AppSelect
       searchable
       allowAdd
       clearable

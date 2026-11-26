@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
-import { Select } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { MapPin } from 'lucide-react';
 
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
@@ -103,7 +103,7 @@ function CitySelect({
         className='pointer-events-none absolute top-1/2 left-3 z-10 h-4 w-4 -translate-y-1/2'
         aria-hidden='true'
       />
-      <Select
+      <AppSelect
         searchable
         clearable
         options={options}

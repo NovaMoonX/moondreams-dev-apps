@@ -8,9 +8,9 @@ import {
   DropdownMenuFactories,
   Input,
   Modal,
-  Select,
   Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import AppToggle from '@/components/AppToggle';
@@ -340,7 +340,7 @@ function CatNamesEditor({
         </div>
       )}
       {adding ? (
-        <Select
+        <AppSelect
           options={availableToAdd.map((cat) => ({ text: cat.name, value: cat.name }))}
           value=''
           placeholder='Select a cat to add'
@@ -380,7 +380,7 @@ function SingleCatSelect({
   ];
 
   return (
-    <Select
+    <AppSelect
       options={options}
       value={catName ?? ''}
       placeholder='Select a cat'
@@ -1045,7 +1045,7 @@ function IngestionDraftReviewModal({
               </div>
               {isEditing('cat', index) && isPickingExisting('cat', index) ? (
                 <>
-                  <Select
+                  <AppSelect
                       options={cats.map((existingCat) => ({ text: existingCat.name, value: existingCat.id }))}
                       value={selections.catIds?.[index] ?? ''}
                       placeholder='Select an existing cat'
@@ -1081,7 +1081,7 @@ function IngestionDraftReviewModal({
                         placeholder='Breed'
                         onChange={(event) => updateCatAt(index, { breed: event.target.value || null })}
                       />
-                      <Select
+                      <AppSelect
                         options={SEX_OPTIONS}
                         value={cat.sex ?? 'unknown'}
                         onChange={(value) => updateCatAt(index, { sex: value as CatSex })}
@@ -1140,7 +1140,7 @@ function IngestionDraftReviewModal({
               </div>
               {isEditing('clinic', index) && isPickingExisting('clinic', index) ? (
                 <>
-                    <Select
+                    <AppSelect
                       options={clinics.map((existingClinic) => ({ text: existingClinic.name, value: existingClinic.id }))}
                       value={selections.clinicIds?.[index] ?? ''}
                       placeholder='Select an existing clinic'
@@ -1254,7 +1254,7 @@ function IngestionDraftReviewModal({
                           }
                         }}
                       />
-                      <Select
+                      <AppSelect
                         options={REASON_OPTIONS}
                         value={visit.reason}
                         onChange={(value) => updateVisitAt(index, { reason: value as VisitReason })}
@@ -1732,7 +1732,7 @@ function IngestionDraftReviewModal({
                     <div className='space-y-2'>
                       {expense.items.map((item, itemIndex) => (
                         <div key={itemIndex} className='flex flex-col gap-2 sm:flex-row'>
-                          <Select
+                          <AppSelect
                             options={DEFAULT_EXPENSE_CATEGORIES.map((category) => ({
                               text: getExpenseCategoryLabel(category),
                               value: category,

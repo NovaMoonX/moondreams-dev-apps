@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Label, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Label } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { copyToClipboard } from '@/utils/clipboardUtils';
@@ -148,7 +149,7 @@ function HouseholdSwitcher({
             <Label className='text-muted-foreground'>Household</Label>
             <div className='flex flex-col items-center sm:items-end gap-3'>
               <div className='flex-1 max-w-full'>
-                <Select
+                <AppSelect
                   options={householdOptions}
                   value={selectedHousehold?.id ?? ''}
                   onChange={(value) => onSelectHousehold(value || null)}
