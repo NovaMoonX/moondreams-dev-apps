@@ -702,7 +702,8 @@ export function useCookVoice({
       lang: langs.speak,
       isNatural: () => naturalRef.current,
       getPriority: () => linePriority.current,
-      onSpoken: (text, { voice, cloudFailure }) =>
+      onSpoken: (text, { voice, cloudFailure }) => {
+        if (lines.current.active !== null) lines.current.hasStarted = true;
         recordTurn('spoken', `“${text}”`, {
           voice,
           ...(cloudFailure === null
@@ -716,7 +717,8 @@ export function useCookVoice({
                   ...(navigator.onLine ? [] : ['offline']),
                 ].join('; '),
               }),
-        }),
+        });
+      },
       onCut: (cause) =>
         recordTurn(
           'failed',
@@ -809,12 +811,13 @@ export function useCookVoice({
   useEffect(() => {
     const state = lines.current;
     if (state.active === null) return;
+    // A cloud line says 'speaking' before its first sound, so only the speaker's own start counts for it.
     if (speech.status === 'speaking') {
-      state.hasStarted = true;
+      if (!isPepperOn) state.hasStarted = true;
       return;
     }
     if (state.hasStarted) playLine.current();
-  }, [speech.status]);
+  }, [speech.status, isPepperOn]);
 
   useEffect(() => {
     if (!shouldAutoWait || !speech.isSupported) return;
@@ -925,10 +928,15 @@ export function useCookVoice({
     const previous = lastReading.current;
     lastReading.current = { isAloud: isReadingAloud, stepKey };
     const route = pepperRoute.current;
-    const isBusy = route?.isBusy() ?? false;
+    const queued = lines.current;
+    const isBusy =
+      (route?.isBusy() ?? false) ||
+      (route?.hasPending() ?? false) ||
+      queued.active !== null ||
+      queued.items.length > 0;
     const isPepperMove =
       isBusy && previous.stepKey !== stepKey && route?.takeMove() === true;
-    // A tap on a step while Pepper is working or speaking cuts it off, and the step is read as usual.
+    // A tap on a step while anything is still being said or asked cuts it off, and the step is read as usual.
     if (isBusy && previous.stepKey !== stepKey && !isPepperMove) {
       route?.cancel();
       clearLines();
@@ -1085,7 +1093,7 @@ export function useCookVoice({
     connect,
     connectPepper,
     /** Wakes the cloud voice's server ahead of the first line. */
-    warmSpeech: () => speechSource.warm?.(),
+    warmSpeech: speechSource.warm,
     /** Says a line after the ones before it, resolving once it has been said; `canAnswer` opens a window to answer it without the wake phrase. */
     speakInOrder: sayInOrder,
     cancelSpeech: () => {

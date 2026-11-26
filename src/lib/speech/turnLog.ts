@@ -135,7 +135,7 @@ export const clearTurnLog = () => {
   notify();
 };
 
-/** Keeps the log for one signed-in person: a different one, or nobody, starts it empty (the log holds what was said and done in someone's kitchen). */
+/** Keeps the log for one signed-in person: a different one, or nobody, starts it empty (the log holds what someone said and what was done for them). */
 export const claimTurnLog = (uid: string | null) => {
   try {
     const owner = window.sessionStorage.getItem(OWNER_KEY);

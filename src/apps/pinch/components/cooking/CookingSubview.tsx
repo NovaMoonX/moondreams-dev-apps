@@ -3047,13 +3047,15 @@ function CookingSession({
   };
   const { connectPepper } = voice;
   useEffect(() => connectPepper(isPepperOn ? pepperRoute : null));
-  const { warm: warmPepper } = pepper;
-  const { warmSpeech } = voice;
+  const warmers = useRef({ pepper: pepper.warm, speech: voice.warmSpeech });
+  useEffect(() => {
+    warmers.current = { pepper: pepper.warm, speech: voice.warmSpeech };
+  });
+  const warmedAt = useRef(0);
   useEffect(() => {
     if (!isPepperOn) return;
-    const warmed = { at: 0 };
-    const warm = () => {
-      const isDue = Date.now() - warmed.at >= PEPPER_WARM_MS - 5000;
+    const warm = async () => {
+      const isDue = Date.now() - warmedAt.current >= PEPPER_WARM_MS - 5000;
       if (
         !isDue ||
         document.visibilityState !== 'visible' ||
@@ -3061,18 +3063,22 @@ function CookingSession({
       ) {
         return;
       }
-      warmed.at = Date.now();
-      void warmPepper();
-      void warmSpeech();
+      warmedAt.current = Date.now();
+      void warmers.current.speech?.();
+      const isWarm = await warmers.current.pepper();
+      if (!isWarm) warmedAt.current = 0;
     };
-    warm();
-    const id = window.setInterval(warm, PEPPER_WARM_MS);
-    document.addEventListener('visibilitychange', warm);
+    const warmSoon = () => void warm();
+    warmSoon();
+    const id = window.setInterval(warmSoon, PEPPER_WARM_MS);
+    document.addEventListener('visibilitychange', warmSoon);
+    window.addEventListener('online', warmSoon);
     return () => {
       window.clearInterval(id);
-      document.removeEventListener('visibilitychange', warm);
+      document.removeEventListener('visibilitychange', warmSoon);
+      window.removeEventListener('online', warmSoon);
     };
-  }, [isPepperOn, warmPepper, warmSpeech]);
+  }, [isPepperOn]);
   const getPepperOrbState = (): AssistantOrbState => {
     if (!isPepperOn || !voice.isOn) return 'off';
     if (pepper.status === 'thinking') return 'thinking';

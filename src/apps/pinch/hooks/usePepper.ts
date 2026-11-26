@@ -107,7 +107,7 @@ export function usePepper({
 
   const warm = useCallback(async () => {
     if (isWarming.current || Date.now() - warmedAt.current < WARM_FRESH_MS) {
-      return;
+      return true;
     }
     isWarming.current = true;
     const headers = await getSignedHeaders().catch(() => null);
@@ -120,7 +120,9 @@ export function usePepper({
             body: JSON.stringify({ warm: true }),
           }).catch(() => null);
     isWarming.current = false;
-    if (response?.ok === true) warmedAt.current = Date.now();
+    if (response?.ok !== true) return false;
+    warmedAt.current = Date.now();
+    return true;
   }, []);
 
   const ask = useCallback(
