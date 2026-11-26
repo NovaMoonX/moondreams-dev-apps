@@ -1545,13 +1545,18 @@ function CookingSession({
           }
         : current;
     });
-  const setAddedIds = (ids: string[], isAdded: boolean, step = index) =>
+  const setAddedIds = (
+    ids: string[],
+    isAdded: boolean,
+    step = index,
+    recipeId = recipe.id,
+  ) =>
     setPlate((current) => {
-      const known = current[recipe.id];
+      const known = current[recipeId];
       return known
         ? {
             ...current,
-            [recipe.id]: {
+            [recipeId]: {
               ...known,
               added: {
                 ...known.added,
@@ -3046,6 +3051,7 @@ function CookingSession({
       if (!isOnStep || isWide) return null;
       const { lineIds } = readAddedLines(queries, voiceContext.lines);
       return {
+        recipeId: recipe.id,
         step: index,
         lineIds: stepRows
           .filter(
@@ -3056,7 +3062,7 @@ function CookingSession({
       };
     },
     setAdded: (change, isAdded) =>
-      setAddedIds(change.lineIds, isAdded, change.step),
+      setAddedIds(change.lineIds, isAdded, change.step, change.recipeId),
     goToStep: goToStepForPepper,
     say: (text) => voice.speak(text),
     capture,

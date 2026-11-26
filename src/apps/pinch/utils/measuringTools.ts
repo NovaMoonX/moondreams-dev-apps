@@ -221,7 +221,11 @@ interface SharedMeasureRow {
 const getRowSizes = (row: SharedMeasureRow) =>
   row.measure === null || row.measure.amount <= 0
     ? []
-    : getSizes({ ...row.measure, name: row.name, isLiquid: row.isLiquid });
+    : getSizes({
+        ...row.measure,
+        name: row.name,
+        isLiquid: row.isLiquid,
+      }).filter((size) => !row.isLiquid || !size.endsWith('cup'));
 
 const nameList = (names: string[], many: string) =>
   names.length === 1
@@ -230,7 +234,7 @@ const nameList = (names: string[], many: string) =>
       ? `${names[0]} and ${names[1]}`
       : many;
 
-/** A step's lines with the dry ones measured before a liquid that needs the same cup or spoon, so the measure stays dry, and the line that says so; otherwise the lines as written and no hint. */
+/** A step's lines with the dry ones measured before a liquid that needs the same spoon (a liquid's cup amount goes in the liquid cup, a separate tool), so the measure stays dry, and the line that says so; otherwise the lines as written and no hint. */
 export function orderDryFirst<T extends SharedMeasureRow>(
   rows: T[],
 ): { rows: T[]; hint: string | null } {

@@ -997,7 +997,10 @@ export function useCookVoice({
       }
       return;
     }
-    if (stepKey !== readStepKey.current) readStepKey.current = null;
+    if (stepKey !== readStepKey.current) {
+      readStepKey.current = null;
+      offeredKey.current = null;
+    }
     // Only a step that moved on or a setting that went off cuts a reading short: a spoken answer starting up flips the status too and must not be cancelled by it.
     if (
       stepKey !== null &&

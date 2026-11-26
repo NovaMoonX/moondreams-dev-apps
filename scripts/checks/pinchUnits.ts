@@ -477,5 +477,14 @@ const apart = [
 ];
 const unchanged = orderDryFirst(apart);
 assert.deepEqual(unchanged.rows, apart, 'a cup and a weight share no measure');
+const cups = orderDryFirst([
+  dryRow('m', 'Milk', true, 1, 'CUP'),
+  dryRow('f', 'Flour', false, 1, 'CUP'),
+]);
+assert.equal(
+  cups.hint,
+  null,
+  'a liquid cup amount goes in the liquid cup, so it shares no measure with dry cups',
+);
 assert.equal(unchanged.hint, null);
 console.log('pinch units: ok');

@@ -52,13 +52,13 @@ export interface PepperScreen {
     lines: { recipeId: string; lineId: string }[],
     isOut: boolean,
   ) => void;
-  /** The lines a spoken added-tick would newly change on the step shown, with that step, or null when no step is shown. */
+  /** The lines a spoken added-tick would newly change on the step shown, with that dish and step, or null when no step is shown. */
   getAddedChanges: (
     queries: string[],
     isAdded: boolean,
-  ) => { step: number; lineIds: string[] } | null;
+  ) => { recipeId: string; step: number; lineIds: string[] } | null;
   setAdded: (
-    change: { step: number; lineIds: string[] },
+    change: { recipeId: string; step: number; lineIds: string[] },
     isAdded: boolean,
   ) => void;
   /** Speaks a line after the fact, for a write that failed once the answer was given. */
