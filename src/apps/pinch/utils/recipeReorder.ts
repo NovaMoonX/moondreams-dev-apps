@@ -121,18 +121,6 @@ export const getStepNeighbourSlot = (
   return result;
 };
 
-/** Whether a run can move one place up or down among the runs: a leading run with no section never moves and is never passed. */
-export const canMoveStepSection = (
-  list: StepList,
-  group: number,
-  direction: MoveDirection,
-) => {
-  const blocks = getStepBlocks(list);
-  const pinned = blocks[0]?.name === null ? 1 : 0;
-  const to = group + direction;
-  return group >= pinned && to >= pinned && to < blocks.length;
-};
-
 interface MovableLine {
   id: string;
   group: string | null;
@@ -224,18 +212,6 @@ export const getLineNeighbourSlot = <T extends MovableLine>(
       ? { group: group - 1, index: next.lines.length }
       : { group: group + 1, index: 0 };
   return result;
-};
-
-/** Whether an ingredient group can move one place up or down; the lines with no group never move and are never passed. */
-export const canMoveIngredientGroup = <T extends MovableLine>(
-  lines: T[],
-  group: number,
-  direction: MoveDirection,
-) => {
-  const groups = groupIngredientLines(lines);
-  const pinned = groups[0]?.name === null ? 1 : 0;
-  const to = group + direction;
-  return group >= pinned && to >= pinned && to < groups.length;
 };
 
 /** Where a moved run of items sat, by the ids around it, so an Undo reverses only that move on whatever the list has become. */

@@ -6,21 +6,17 @@ import ReorderList from '@/components/ReorderList';
 export interface RearrangeGroup {
   id: string;
   label: string;
-  /** One muted line under the name, such as how many items the group holds. */
   detail: string;
 }
 
 interface RearrangeGroupsSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  /** "Rearrange sections". */
   title: string;
   groups: RearrangeGroup[];
   /** Called with the group's index among `groups` once it has left its old spot. */
   onMove: (groupId: string, toIndex: number) => void;
-  /** A line above the list, such as what stays first and isn't in it. */
   note?: string;
-  /** The grip's accessible name before the group's own. */
   handleLabel?: string;
 }
 

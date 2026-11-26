@@ -33,6 +33,7 @@ export function useGrowingTextarea(
     maxLines: 0,
   });
   const observer = useRef<ResizeObserver | null>(null);
+  const frame = useRef(0);
 
   // No dependency list: a remounted field, or one that was hidden, is a new element the value alone wouldn't catch.
   useLayoutEffect(() => {
@@ -59,7 +60,10 @@ export function useGrowingTextarea(
       );
       observer.current.observe(field);
       // Dreamer UI's Textarea resets a new field's height in its own effect, after this one.
-      requestAnimationFrame(() => fit(field, fitted.current.maxLines));
+      cancelAnimationFrame(frame.current);
+      frame.current = requestAnimationFrame(() =>
+        fit(field, fitted.current.maxLines),
+      );
     }
     fitted.current = { field, value, maxLines };
     fit(field, maxLines);
@@ -74,6 +78,7 @@ export function useGrowingTextarea(
     return () => {
       window.visualViewport?.removeEventListener('resize', refit);
       observer.current?.disconnect();
+      cancelAnimationFrame(frame.current);
     };
   }, []);
 }

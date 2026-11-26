@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 
 import {
-  canMoveIngredientGroup,
-  canMoveStepSection,
   getLineNeighbourSlot,
   getSpanAnchor,
   getStepNeighbourSlot,
@@ -80,9 +78,6 @@ const list = {
     [null, null, 'Sauce', 'Chicken', 'Chicken'],
     'moving up past a heading leaves its section',
   );
-  assert.equal(canMoveStepSection(list, 1, -1), false);
-  assert.equal(canMoveStepSection(list, 1, 1), true);
-  assert.equal(canMoveStepSection(list, 2, 1), false);
 }
 
 const lines = [
@@ -119,8 +114,6 @@ const lines = [
     'ungrouped stays first',
   );
   assert.equal(moveIngredientGroup(lines, 0, 2), lines);
-  assert.equal(canMoveIngredientGroup(lines, 1, -1), false);
-  assert.equal(canMoveIngredientGroup(lines, 2, -1), true);
 }
 {
   assert.deepEqual(getLineNeighbourSlot(lines, 's1', -1), {
@@ -168,9 +161,6 @@ const lines = [
     ['a', 'd', 'b', 'c'],
     'nothing goes before the leading unnamed run',
   );
-  assert.equal(canMoveStepSection(middle, 1, -1), false);
-  assert.equal(canMoveStepSection(middle, 2, -1), true);
-  assert.equal(canMoveStepSection(middle, 2, 1), true);
   assert.deepEqual(getStepNeighbourSlot(middle, 2, -1), { group: 1, index: 1 });
 }
 {
