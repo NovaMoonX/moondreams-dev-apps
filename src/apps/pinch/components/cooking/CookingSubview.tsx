@@ -3509,7 +3509,12 @@ function CookingSession({
         title={isEditing ? editTitle : title}
         headerAction={
           isFinishShown || isEditing ? null : (
-            <div className='flex items-center gap-1'>
+            <div
+              className={join(
+                'flex items-center',
+                isPepperOn && voice.isSupported ? 'gap-3' : 'gap-1',
+              )}
+            >
               <CookStopwatch startedAt={startedAt} />
               {voice.isSupported &&
                 (isPepperOn ? (

@@ -137,6 +137,18 @@ const getProvider = async (
     : createGeminiTts({ apiKey });
 };
 
+// Locally Google's voice needs the developer's own sign-in, so a Gemini key from local:services speaks the same voice instead.
+const pickProviderId = async (): Promise<
+  typeof VOICE_PROVIDER_DEFAULT | 'geminiTts'
+> =>
+  isRunningInEmulator() &&
+  process.env.VOICE_REAL_SPEECH !== '1' &&
+  !isForcedFixture('gemini') &&
+  (await secretReader(SECRET_NAMES.geminiTts, AbortSignal.timeout(4_000))) !==
+    null
+    ? 'geminiTts'
+    : VOICE_PROVIDER_DEFAULT;
+
 const TONE_CHUNKS = 4;
 
 const makeTone = () => {
@@ -221,7 +233,7 @@ export const streamSpeech = onRequest(
     ) {
       return fail(403, 'gate');
     }
-    const providerId = VOICE_PROVIDER_DEFAULT;
+    const providerId = await pickProviderId();
     const provider = await getProvider(providerId);
     if (provider === null && !isRunningInEmulator()) {
       if (!keyState.isMissingLogged) {
