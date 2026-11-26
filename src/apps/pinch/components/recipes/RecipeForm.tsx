@@ -98,7 +98,11 @@ import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { announceRecipeAdded } from '@apps/pinch/hooks/useRecipeAdded';
 import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
-import { reviseRecipe } from '@apps/pinch/lib/reviseRecipe';
+import { dropUnopenableLinks } from '@apps/pinch/lib/checkRevisionLinks';
+import {
+  reviseRecipe,
+  type RevisionSource,
+} from '@apps/pinch/lib/reviseRecipe';
 import {
   removeRecipe,
   saveRecipe,
@@ -412,12 +416,20 @@ function RecipeForm({
       data: RecipeFormData;
       marks: RevisionMarks;
       reply: string;
+      sources: RevisionSource[];
       ask: string;
     }[];
     asks: string[];
     sent: number;
     unchangedReply: string | null;
-  }>({ rounds: [], asks: [], sent: 0, unchangedReply: null });
+    unchangedSources: RevisionSource[];
+  }>({
+    rounds: [],
+    asks: [],
+    sent: 0,
+    unchangedReply: null,
+    unchangedSources: [],
+  });
   const latestData = useRef(formData);
   const isDraftDirty = useMemo(
     () =>
@@ -455,7 +467,13 @@ function RecipeForm({
     onTitleChange(initialData.title);
     isDirtyRef.current = false;
     draft.hideNotice();
-    setPepper({ rounds: [], asks: [], sent: 0, unchangedReply: null });
+    setPepper({
+      rounds: [],
+      asks: [],
+      sent: 0,
+      unchangedReply: null,
+      unchangedSources: [],
+    });
     clearUndo();
   };
   const seedForm = (data: RecipeFormData) => {
@@ -772,7 +790,8 @@ function RecipeForm({
       const isMarked = Boolean(
         (row.name === 'sourceChoice' && liveMarks?.source) ||
         (row.name === 'collections' && liveMarks?.collections) ||
-        (row.name === 'care' && liveMarks?.care),
+        (row.name === 'care' && liveMarks?.care) ||
+        (row.name === 'links' && liveMarks?.links),
       );
       return custom({
         name: row.name,
@@ -1306,12 +1325,14 @@ function RecipeForm({
       { ask: askText, earlierAsks: pepper.asks },
     );
     const before = latestData.current;
-    const revision = await reviseRecipe(input);
+    const { revision: revised, sources: found } = await reviseRecipe(input);
+    const revision = await dropUnopenableLinks(revised, input);
     if (JSON.stringify(latestData.current) !== JSON.stringify(before)) {
       setPepper((current) => ({
         ...current,
         unchangedReply:
           'You changed the recipe while Pepper was working, so nothing was changed. Ask again.',
+        unchangedSources: found,
       }));
       return;
     }
@@ -1328,6 +1349,7 @@ function RecipeForm({
         asks: [...current.asks, askText],
         sent: current.sent + 1,
         unchangedReply: revision.reply,
+        unchangedSources: found,
       }));
       return;
     }
@@ -1341,12 +1363,14 @@ function RecipeForm({
           data,
           marks,
           reply: revision.reply,
+          sources: found,
           ask: askText,
         },
       ],
       asks: [...current.asks, askText],
       sent: current.sent + 1,
       unchangedReply: null,
+      unchangedSources: [],
     }));
   };
 
@@ -1391,6 +1415,7 @@ function RecipeForm({
         (_, at) => at !== current.asks.lastIndexOf(round.ask),
       ),
       unchangedReply: null,
+      unchangedSources: [],
     }));
   };
 
@@ -1455,6 +1480,7 @@ function RecipeForm({
               summary={getPepperSummary()}
               reply={pepperRound.reply}
               removed={liveMarks?.removedIngredientNames ?? []}
+              sources={pepperRound.sources}
               undoLabel={pepper.rounds.length > 1 ? 'Undo last' : 'Undo'}
               onUndo={() => void undoPepper()}
               footer={<AiChangeFinder finder={changeFinder} />}
@@ -1467,6 +1493,7 @@ function RecipeForm({
               summary=''
               reply={pepper.unchangedReply}
               removed={[]}
+              sources={pepper.unchangedSources}
               isCompact
             />
           )}

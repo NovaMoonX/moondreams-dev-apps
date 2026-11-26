@@ -7,7 +7,8 @@ export type ModelRole =
   | 'daySummary'
   | 'reflect'
   | 'research'
-  | 'converse';
+  | 'converse'
+  | 'revise';
 
 export interface ModelUsage {
   inputTokens: number;
@@ -21,6 +22,8 @@ interface ModelSpec {
   effort: 'low' | 'medium' | 'high';
   /** Whether the model accepts the API's server-side fallback list; a Haiku-class model refuses it with a 400. */
   hasServerFallback: boolean;
+  /** The web search tool version the model takes; the newest when omitted. A Haiku-class model takes the 2025-03-05 one. */
+  webSearchTool?: 'web_search_20250305' | 'web_search_20260209';
   /** US dollars per million tokens. */
   price: {
     input: number;
@@ -84,6 +87,13 @@ const MODELS: Record<ModelRole, ModelSpec> = {
     id: 'claude-haiku-5-5',
     effort: 'low',
     hasServerFallback: false,
+    price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  },
+  revise: {
+    id: 'claude-haiku-5-5',
+    effort: 'low',
+    hasServerFallback: false,
+    webSearchTool: 'web_search_20250305',
     price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
   },
 };

@@ -119,6 +119,7 @@ const same: RecipeRevision = {
   care: input.care,
   source: input.source,
   collections: input.collections,
+  links: input.links,
   ingredients: input.ingredients.map((line) => keep(line.ref)),
   steps: input.steps,
 };

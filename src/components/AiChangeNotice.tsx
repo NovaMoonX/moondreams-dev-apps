@@ -3,6 +3,8 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Sparkles, Undo2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import SearchSourcesNote from '@/components/SearchSourcesNote';
+
 interface AiChangeNoticeProps {
   /** Who made the change: the assistant's name. */
   who: string;
@@ -12,6 +14,8 @@ interface AiChangeNoticeProps {
   reply: string | null;
   /** Names of what it took out, shown as "Took out: butter, salt". */
   removed: string[];
+  /** The pages a round's web search used, shown under its words; omit when it did not search. */
+  sources?: { title: string; url: string }[];
   /** Takes the change back where it was made; omit when there is nothing to take back. */
   onUndo?: () => void;
   undoLabel?: string;
@@ -28,6 +32,7 @@ function AiChangeNotice({
   summary,
   reply,
   removed,
+  sources = [],
   onUndo,
   undoLabel = 'Undo',
   footer,
@@ -49,6 +54,7 @@ function AiChangeNotice({
           Took out: {removed.join(', ')}
         </p>
       )}
+      <SearchSourcesNote sources={sources} />
     </div>
   ) : (
     <div className='min-w-0 flex-1 space-y-0.5'>
@@ -71,6 +77,7 @@ function AiChangeNotice({
           Took out: {removed.join(', ')}
         </p>
       )}
+      <SearchSourcesNote sources={sources} />
     </div>
   );
   const undoButton = onUndo && (

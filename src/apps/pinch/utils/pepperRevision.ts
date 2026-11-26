@@ -13,7 +13,12 @@ import type {
   RevisedLine,
   RevisionInput,
 } from '@apps/pinch/lib/reviseRecipe';
-import type { Collection, ResolvedIngredient, Source } from '@apps/pinch/types';
+import type {
+  Collection,
+  RecipeLink,
+  ResolvedIngredient,
+  Source,
+} from '@apps/pinch/types';
 import {
   addCollectionByLabel,
   getChoiceLabels,
@@ -25,6 +30,7 @@ import {
 } from '@apps/pinch/utils/ingredientGroups';
 import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
 import { getCareText, parseCareText } from '@apps/pinch/utils/recipeCare';
+import { getLinksText, toRecipeLinks } from '@apps/pinch/utils/recipeLinks';
 import { cleanStepSection } from '@apps/pinch/utils/stepSections';
 
 /** What the form's pickers choose among, for the parts of a recipe that name another record. */
@@ -42,6 +48,7 @@ export interface RevisionMarks {
   care: boolean;
   source: boolean;
   collections: boolean;
+  links: boolean;
   addedIngredientIds: string[];
   changedIngredientIds: string[];
   removedIngredientNames: string[];
@@ -68,6 +75,9 @@ const getSourceLabel = (
     ? formData.sourceChoice.newText.trim() || null
     : (sources.find((source) => source.id === formData.sourceChoice.choice)
         ?.label ?? null);
+
+const toRevisionLinks = (links: RecipeLink[]) =>
+  links.map(({ kind, label, url }) => ({ kind, label, url }));
 
 const getLabelKey = (label: string | null) => label?.trim().toLowerCase() ?? '';
 
@@ -112,6 +122,7 @@ export function toRevisionInput(
       care: parseCareText(formData.care),
       source: getSourceLabel(formData, context.sources),
       collections: own,
+      links: toRevisionLinks(toRecipeLinks(formData.links)),
       otherCollections: [...context.collections, ...formData.collections.added]
         .filter((entry) => !ownKeys.has(getCollectionKey(entry.label)))
         .map((entry) => entry.label),
@@ -199,7 +210,7 @@ const getChangedSteps = (
 const getListKey = (labels: string[]) =>
   labels.map(getCollectionKey).sort().join('|');
 
-/** The form's data with a revision applied, and what changed. Unchanged lines keep their row, ingredient and staging; nothing outside the revision's reach (photo, links, nutrition) is touched. */
+/** The form's data with a revision applied, and what changed. Unchanged lines keep their row, ingredient and staging; nothing outside the revision's reach (photo, nutrition) is touched. */
 export function applyRevision(
   formData: RecipeFormData,
   revision: RecipeRevision,
@@ -359,6 +370,17 @@ export function applyRevision(
     ],
   };
 
+  const currentLinks = toRecipeLinks(formData.links);
+  const revisedLinks = revision.links.map((link) => ({
+    ...link,
+    id:
+      currentLinks.find((current) => current.url === link.url)?.id ??
+      generateUuid(),
+  }));
+  const isLinksChanged =
+    JSON.stringify(toRevisionLinks(currentLinks)) !==
+    JSON.stringify(toRevisionLinks(revisedLinks));
+
   const data: RecipeFormData = {
     ...formData,
     title: revision.title ?? formData.title,
@@ -381,6 +403,7 @@ export function applyRevision(
     care: getCareText(revision.care),
     sourceChoice,
     collections,
+    links: isLinksChanged ? getLinksText(revisedLinks) : formData.links,
   };
 
   const careKey = (care: RecipeFormData['care']) =>
@@ -436,6 +459,7 @@ export function applyRevision(
     collections:
       getListKey(getChoiceLabels(collections, context.collections)) !==
       getListKey(getChoiceLabels(formData.collections, context.collections)),
+    links: isLinksChanged,
     addedIngredientIds,
     changedIngredientIds,
     removedIngredientNames,
@@ -455,6 +479,7 @@ export function applyRevision(
         !marks.care &&
         !marks.source &&
         !marks.collections &&
+        !marks.links &&
         addedIngredientIds.length === 0 &&
         changedIngredientIds.length === 0 &&
         removedIngredientNames.length === 0 &&
@@ -478,6 +503,7 @@ export function describeRevisionMarks(marks: RevisionMarks) {
     marks.care && 'how it keeps',
     marks.source && "where it's from",
     marks.collections && 'the collections',
+    marks.links && 'the links',
     ingredientCount > 0 && count(ingredientCount, 'ingredient'),
     marks.changedStepIndices.length > 0 &&
       count(marks.changedStepIndices.length, 'step'),

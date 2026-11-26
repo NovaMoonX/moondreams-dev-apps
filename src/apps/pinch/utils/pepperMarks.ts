@@ -40,6 +40,7 @@ export function getLiveMarks(
     source: marks.source && same(current.sourceChoice, applied.sourceChoice),
     collections:
       marks.collections && same(current.collections, applied.collections),
+    links: marks.links && same(current.links, applied.links),
     addedIngredientIds: marks.addedIngredientIds.filter(isRowKept),
     changedIngredientIds: marks.changedIngredientIds.filter(isRowKept),
     removedIngredientNames: marks.removedIngredientNames,
@@ -61,6 +62,7 @@ export function getLiveMarks(
       !live.care &&
       !live.source &&
       !live.collections &&
+      !live.links &&
       live.addedIngredientIds.length === 0 &&
       live.changedIngredientIds.length === 0 &&
       live.changedStepIndices.length === 0,
@@ -85,7 +87,8 @@ export function getAllLiveMarks(
       | 'categories'
       | 'care'
       | 'source'
-      | 'collections',
+      | 'collections'
+      | 'links',
   ) => lives.some((live) => live[key]);
   const union = <T>(pick: (live: RevisionMarks) => T[]) =>
     Array.from(new Set(lives.flatMap(pick)));
@@ -100,6 +103,7 @@ export function getAllLiveMarks(
     care: any('care'),
     source: any('source'),
     collections: any('collections'),
+    links: any('links'),
     addedIngredientIds,
     changedIngredientIds: union((live) => live.changedIngredientIds).filter(
       (id) => !addedIngredientIds.includes(id),
@@ -137,6 +141,7 @@ export function describePepperChange(
     marks.care && 'how it keeps',
     marks.source && "where it's from",
     marks.collections && 'the collections',
+    marks.links && 'the links',
     ...(namedIngredients ??
       (ingredientCount > 0
         ? [countOf(ingredientCount, 'an ingredient', 'ingredients')]
@@ -175,6 +180,7 @@ export const getRoundChangeKeys = (marks: RevisionMarks, steps: string[]) => [
       'source',
       'collections',
       'care',
+      'links',
     ] as const
   ).filter((field) => marks[field]),
   ...[...marks.addedIngredientIds, ...marks.changedIngredientIds].map(
