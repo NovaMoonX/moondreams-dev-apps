@@ -69,6 +69,7 @@ const MAX_QUOTE_CHARS = 22;
 const MAX_PEPPER_ALTERNATIVES = 4;
 const LINE_MS_PER_CHAR = 70;
 const WINDOW_HOLD_MS = 1000;
+const END_POLL_MS = 250;
 
 export type CookVoiceResult =
   | { ok: true; show?: string; speak?: string }
@@ -404,6 +405,14 @@ export function useCookVoice({
     context: CookVoiceContext;
   } | null>(null);
   const pepperRoute = useRef<CookPepperRoute | null>(null);
+  // Bumped by each new turn, so a close Pepper asked for earlier no longer applies.
+  const ending = useRef(0);
+  useEffect(
+    () => () => {
+      ending.current += 1;
+    },
+    [],
+  );
   const lines = useRef<{
     items: QueuedLine[];
     active: QueuedLine | null;
@@ -509,6 +518,7 @@ export function useCookVoice({
     run: (command: CookActionCommand) => CookVoiceResult,
   ) => {
     const { command, transcript } = heard;
+    ending.current += 1;
     if (command.kind === 'STOP_LISTENING') {
       routed('set command: STOP_LISTENING');
       send({ type: 'STOP' });
@@ -580,6 +590,7 @@ export function useCookVoice({
       });
       return false;
     }
+    ending.current += 1;
     routed(`asked Pepper (natural language): “${guesses[0]}”`, {
       alternatives: guesses.slice(1),
     });
@@ -1062,6 +1073,29 @@ export function useCookVoice({
     setMessage(null);
   }, [send, setMessage]);
 
+  /** Pepper judged the person done: once its reply has been said, the window closes as if it ran out, so the mic waits for the wake phrase again. Anything heard before then keeps it open. */
+  const endAfterReply = useCallback(() => {
+    ending.current += 1;
+    const mine = ending.current;
+    const settle = () => {
+      if (ending.current !== mine) return;
+      const queued = lines.current;
+      const isSpeaking =
+        (pepperRoute.current?.isBusy() ?? false) ||
+        queued.active !== null ||
+        queued.items.length > 0;
+      if (isSpeaking) {
+        window.setTimeout(settle, END_POLL_MS);
+        return;
+      }
+      const isAsking = pepperRoute.current?.hasPending() ?? false;
+      if (isAsking || machineRef.current.phase !== 'WINDOW') return;
+      recordTurn('routed', 'Pepper ended the conversation: back to waiting');
+      send({ type: 'WINDOW_ENDED' });
+    };
+    window.setTimeout(settle, END_POLL_MS);
+  }, [send]);
+
   const setReadingAloud = (isOn: boolean) => {
     readStepKey.current = null;
     setIsReadingAloud(isOn);
@@ -1096,6 +1130,7 @@ export function useCookVoice({
     warmSpeech: speechSource.warm,
     /** Says a line after the ones before it, resolving once it has been said; `canAnswer` opens a window to answer it without the wake phrase. */
     speakInOrder: sayInOrder,
+    endAfterReply,
     cancelSpeech: () => {
       clearLines();
       quiet();

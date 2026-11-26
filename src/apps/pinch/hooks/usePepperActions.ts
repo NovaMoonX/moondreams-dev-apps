@@ -70,6 +70,8 @@ export interface PepperRun {
   said?: string;
   /** The screen refused it, for the conversation log. */
   isRefused?: boolean;
+  /** The conversation is over once the reply has been said. */
+  isEnding?: boolean;
 }
 
 interface UndoEntry {
@@ -371,6 +373,8 @@ export function usePepperActions(screen: PepperScreen) {
           return addToShopping(command);
         case 'undo_last':
           return undo();
+        case 'end_conversation':
+          return { isEnding: true };
         case 'finish':
           return {
             said: "Finishing is your own tap on Finish when you're done.",
@@ -387,12 +391,13 @@ export function usePepperActions(screen: PepperScreen) {
   const run = useCallback(
     (action: Pick<PepperAction, 'name' | 'input'>): PepperRun => {
       const command = readPepperAction(action);
-      const result: PepperRun = hasDialogOnTop()
-        ? {
-            said: 'Close what is open first, then ask me again.',
-            isRefused: true,
-          }
-        : execute(command);
+      const result: PepperRun =
+        hasDialogOnTop() && command.kind !== 'end_conversation'
+          ? {
+              said: 'Close what is open first, then ask me again.',
+              isRefused: true,
+            }
+          : execute(command);
       const isRefused =
         result.isRefused === true ||
         command.kind === 'invalid' ||
@@ -405,9 +410,11 @@ export function usePepperActions(screen: PepperScreen) {
           input: toLoggedInput(action.input),
           outcome: isRefused
             ? 'refused'
-            : result.said === undefined
-              ? 'done on screen'
-              : 'said something',
+            : result.isEnding === true
+              ? 'mic waits for the wake phrase after the reply'
+              : result.said === undefined
+                ? 'done on screen'
+                : 'said something',
           said: result.said ?? null,
           undoSteps: undoStack.current.length,
           isConfirmWaiting: removal.isWaiting(Date.now()),

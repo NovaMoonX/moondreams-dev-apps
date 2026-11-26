@@ -106,6 +106,7 @@ An assistant that answers anything said to it (Pepper in Pinch's cooking mode fi
 5. **The first sentence plays at once.** `createSentenceFeed` hands each finished sentence to `speak` under the turn's key, the first as soon as it ends and later ones joined to a natural length, so the voice starts while the rest is still being written. Before a web lookup the model says a short line first ("Let me check."), so there is no dead air.
 6. **What it does is a tap.** Each `action` is carried out on the device through the same handlers a tap uses; the model is told it was done and confirms it in the same breath. Nothing the device can't do by tap is offered as a tool, and a removal is confirmed by the device itself, not only by the prompt.
 7. **The person can answer back without the phrase.** A reply that asks a question opens the follow-up window, so "the sauce or the marinade?" is answered by just saying "the sauce".
+8. **The model decides when the conversation is over.** When the person sounds done ("thanks", "that's all", "okay, got it" after an answer), the model gives a short close and calls its end-of-conversation tool; once that line has been said, the window closes as if it ran out and the mic goes back to waiting for the phrase. It is judged from guidance in the prompt, not a phrase list (the device's own closing phrases, "never mind" and the like, still end it instantly), anything heard before the line ends keeps the window open, and it never ends while a question waits for an answer.
 
 ### Prompt caching: how a long conversation stays cheap
 

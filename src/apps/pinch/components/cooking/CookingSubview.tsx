@@ -2922,6 +2922,7 @@ function CookingSession({
     speak: (text, { canAnswer }) => voice.speakInOrder(text, { canAnswer }),
     onAction: (action) => {
       const result = pepperActions.run(action);
+      if (result.isEnding === true) voice.endAfterReply();
       if (result.said === undefined) return;
       void voice.speakInOrder(result.said, {
         canAnswer: pepperActions.hasPending(),

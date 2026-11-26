@@ -54,6 +54,8 @@ export type PepperCommand =
   | { kind: 'remove_entry'; id: string }
   | { kind: 'add_to_shopping_list'; items: PepperShoppingItem[] }
   | { kind: 'undo_last' }
+  /** Pepper judged the person done: the mic goes back to waiting once the reply has been said. */
+  | { kind: 'end_conversation' }
   /** Finishing the cook is the person's own tap; nothing here ever runs it. */
   | { kind: 'finish' }
   /** A tool that exists but was asked something it can't do; `said` is the one line that tells the person. */
@@ -259,6 +261,8 @@ export const readPepperAction = (action: {
       return readShopping(input);
     case 'undo_last':
       return { kind: 'undo_last' };
+    case 'end_conversation':
+      return { kind: 'end_conversation' };
     default:
       return { kind: 'unknown' };
   }

@@ -27,6 +27,7 @@ const valid: Record<string, unknown> = {
   remove_entry: { id: 'n1' },
   add_to_shopping_list: { items: [{ name: 'milk', amount: null }] },
   undo_last: {},
+  end_conversation: {},
 };
 assert.deepEqual(
   Object.keys(valid).sort(),
@@ -271,6 +272,7 @@ assert.equal(
 // Undo, and the things nothing here ever does.
 assert.deepEqual(read('undo_last', {}), { kind: 'undo_last' });
 assert.deepEqual(read('undo_last', undefined), { kind: 'undo_last' });
+assert.deepEqual(read('end_conversation', {}), { kind: 'end_conversation' });
 ['finish', 'finish_cooking', 'mark_cooked'].forEach((name) =>
   assert.deepEqual(read(name, {}), { kind: 'finish' }),
 );
