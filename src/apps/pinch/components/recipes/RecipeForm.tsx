@@ -658,6 +658,17 @@ function RecipeForm({
             value={props.value as RecipeFormData['links']}
             onChange={props.onValueChange}
             position={position}
+            debug={
+              recipe === null
+                ? null
+                : {
+                    recipeId: recipe.id,
+                    savedAt: recipe.updatedAt,
+                    savedLinks: recipe.links,
+                    openedHowToUrl: formStart.links.howTo.url,
+                    isDraftRestored: isRestored,
+                  }
+            }
           />
         ),
       },
@@ -903,6 +914,8 @@ function RecipeForm({
     tracking,
     adaptedIds,
     units,
+    formStart.links.howTo.url,
+    isRestored,
   ]);
 
   const handleDelete = async () => {

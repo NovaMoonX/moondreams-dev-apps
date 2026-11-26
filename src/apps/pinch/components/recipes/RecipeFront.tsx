@@ -3,6 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
+import DebugDetails from '@/components/DebugDetails';
 import FactsLine, { type Fact } from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
 import LabelChip from '@/components/LabelChip';
@@ -62,9 +63,38 @@ import {
   getAmountWords,
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
-import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
+import {
+  getHowToLink,
+  getInlineVideo,
+  getRecipeLinks,
+} from '@apps/pinch/utils/recipeLinks';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 import { getStepSections } from '@apps/pinch/utils/stepSections';
+
+/** What the drawer plays and what the recipe holds, so a debug viewer can copy why a video differs from the form. */
+function LinksDebug({ recipe }: { recipe: Recipe }) {
+  const howTo = getHowToLink(getRecipeLinks(recipe));
+  const video = howTo === null ? null : getInlineVideo(howTo.url);
+  const stored: unknown = recipe.links;
+  return (
+    <DebugDetails
+      title='Link details'
+      message={`Playing: ${video?.src ?? 'no video'}`}
+      facts={[
+        `How-to link: ${howTo?.url ?? 'none'}`,
+        `How-to label: ${howTo?.label ?? 'none'}`,
+        `Picture: ${video?.thumbnailUrl ?? 'none'}`,
+        `Recipe: ${recipe.id}`,
+        `Saved at: ${new Date(recipe.updatedAt).toISOString()}`,
+        `Stored links: ${Array.isArray(stored) ? stored.length : 'no list'}`,
+      ]}
+      trace={{
+        label: 'Stored links',
+        text: JSON.stringify(stored ?? null, null, 2),
+      }}
+    />
+  );
+}
 
 const gapLabel = (kind: GapKind | undefined) => {
   if (kind === 'NO_PRODUCT') return 'No price yet';
@@ -257,7 +287,12 @@ function RecipeFront({
         )}
       </div>
     ) : null;
-  const linksSection = <RecipeLinksSection links={links} />;
+  const linksSection = (
+    <>
+      <RecipeLinksSection links={links} />
+      {links.length > 0 && <LinksDebug recipe={recipe} />}
+    </>
+  );
 
   return (
     <div className='space-y-5'>

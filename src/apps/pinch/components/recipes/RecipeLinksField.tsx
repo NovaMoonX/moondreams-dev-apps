@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
+import DebugDetails from '@/components/DebugDetails';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
@@ -20,10 +21,13 @@ import {
   RECIPE_LINK_KIND_OPTIONS,
   RECIPE_LINK_LABELS,
 } from '@apps/pinch/constants';
+import type { RecipeLink } from '@apps/pinch/types';
 import {
   canAddLink,
+  cleanLinks,
   countLinkSlots,
   getBlankLinkDraft,
+  getHowToLink,
   getLinksSummary,
   getLinkHost,
   getLinkUrlProblem,
@@ -330,16 +334,55 @@ function LinksEditor({ value, onChange, onRemoved }: LinksEditorProps) {
   );
 }
 
+/** What the saved recipe holds beside what the form opened on, for a debug viewer chasing a link that didn't change. */
+export interface LinksDebugInfo {
+  recipeId: string;
+  savedAt: number;
+  savedLinks: RecipeLink[] | undefined;
+  openedHowToUrl: string;
+  isDraftRestored: boolean;
+}
+
 interface RecipeLinksFieldProps {
   value: LinksText;
   onChange: (value: LinksText) => void;
   position: SummaryGroupPosition;
+  debug?: LinksDebugInfo | null;
+}
+
+function LinksFormDebug({
+  value,
+  debug,
+}: {
+  value: LinksText;
+  debug: LinksDebugInfo;
+}) {
+  const saved = getHowToLink(cleanLinks(debug.savedLinks));
+  return (
+    <DebugDetails
+      title='Link details'
+      message={`How-to in the form: ${value.howTo.url || 'none'}`}
+      facts={[
+        `Saved how-to: ${saved?.url ?? 'none'}`,
+        `Saved label: ${saved?.label ?? 'none'}`,
+        `Form opened on: ${debug.openedHowToUrl || 'none'}`,
+        `Opened from a kept draft: ${debug.isDraftRestored ? 'yes' : 'no'}`,
+        `Recipe: ${debug.recipeId}`,
+        `Saved at: ${new Date(debug.savedAt).toISOString()}`,
+      ]}
+      trace={{
+        label: 'Saved links',
+        text: JSON.stringify(debug.savedLinks ?? null, null, 2),
+      }}
+    />
+  );
 }
 
 function RecipeLinksField({
   value,
   onChange,
   position,
+  debug = null,
 }: RecipeLinksFieldProps) {
   const { pending, showUndo, undo } = useUndoRemoval();
   const summary = getLinksSummary(value);
@@ -364,6 +407,7 @@ function RecipeLinksField({
         shouldFocus={summary === ''}
       >
         <LinksEditor value={value} onChange={onChange} onRemoved={showUndo} />
+        {debug && <LinksFormDebug value={value} debug={debug} />}
       </SummaryEditor>
       <UndoSnackbar pending={pending} onUndo={undo} isOverSheet />
     </>
