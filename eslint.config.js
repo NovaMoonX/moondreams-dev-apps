@@ -42,6 +42,12 @@ export default defineConfig([
             },
             {
               name: '@moondreamsdev/dreamer-ui/components',
+              importNames: ['Select'],
+              message:
+                "Use '@/components/AppSelect': Select's list is cut off inside a drawer, modal or any scroll box, and AppSelect floats it over the page and opens it upward when there is more room above.",
+            },
+            {
+              name: '@moondreamsdev/dreamer-ui/components',
               importNames: ['Drawer'],
               message:
                 "Use '@/components/Drawer': it closes with a swipe down anywhere on the sheet, the same way its close control does.",
@@ -70,7 +76,7 @@ export default defineConfig([
     rules: { 'no-restricted-syntax': 'off' },
   },
   {
-    files: ['src/components/Drawer.tsx'],
+    files: ['src/components/Drawer.tsx', 'src/components/AppSelect.tsx'],
     rules: { 'no-restricted-imports': 'off' },
   },
   {

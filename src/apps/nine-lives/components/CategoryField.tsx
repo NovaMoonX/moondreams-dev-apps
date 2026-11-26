@@ -1,4 +1,5 @@
-import { Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Input } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 
 import { CUSTOM_EXPENSE_CATEGORY_OPTION } from '@apps/nine-lives/constants/presetOptions';
 import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '@apps/nine-lives/utils/budgetCalculators';
@@ -21,7 +22,7 @@ function CategoryField({ value, onValueChange, disabled }: CategoryFieldProps) {
 
   return (
     <div className='space-y-2'>
-      <Select
+      <AppSelect
         options={categoryOptions}
         value={selectValue}
         onChange={(nextValue) => onValueChange(nextValue === CUSTOM_EXPENSE_CATEGORY_OPTION ? '' : nextValue)}

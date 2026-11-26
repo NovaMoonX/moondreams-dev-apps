@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
@@ -734,11 +735,10 @@ function IncomeFormBody({
                   <p className='text-muted-foreground text-xs'>
                     {key === 'firstDay' ? 'First' : 'Second'}
                   </p>
-                  <Select
+                  <AppSelect
                     options={dayOptions}
                     value={formData[key]}
                     placeholder='Pick a day'
-                    dropdownClassName='top-auto! bottom-full! mt-0! mb-1 max-h-48! [&_[data-scroll-area-viewport]]:max-h-48!'
                     onChange={(value) => setPaydays({ [key]: value })}
                   />
                 </div>

@@ -1,4 +1,5 @@
-import { Input, Label, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 
 import { CAT_BREEDS, CUSTOM_BREED_OPTION } from '@apps/nine-lives/constants/presetOptions';
 import type { BreedValue } from '@apps/nine-lives/utils/breedUtils';
@@ -17,7 +18,7 @@ const breedOptions = [
 function BreedField({ value, onValueChange, disabled }: BreedFieldProps) {
   return (
     <div className='space-y-3'>
-      <Select
+      <AppSelect
         options={breedOptions}
         value={value.preset}
         onChange={(nextPreset) => onValueChange({ ...value, preset: nextPreset })}

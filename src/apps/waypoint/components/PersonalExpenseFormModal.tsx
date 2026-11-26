@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Form, FormFactories, Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { Lock, StickyNote } from 'lucide-react';
@@ -185,7 +186,7 @@ function PersonalExpenseFormModal({
         name: 'dayIndex',
         label: 'Trip day',
         renderComponent: (props) => (
-          <Select options={dayOptions} value={props.value as string} onChange={(value) => props.onValueChange(value)} />
+          <AppSelect options={dayOptions} value={props.value as string} onChange={(value) => props.onValueChange(value)} />
         ),
       }),
     ];
