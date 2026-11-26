@@ -30,7 +30,12 @@ const makesFixedBox = (style: CSSStyleDeclaration) =>
 const findFixedBox = (node: HTMLElement) => {
   const climb = (current: HTMLElement | null): DOMRect => {
     if (!current || current === document.documentElement) {
-      return new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+      return new DOMRect(
+        0,
+        0,
+        document.documentElement.clientWidth,
+        document.documentElement.clientHeight,
+      );
     }
     if (makesFixedBox(getComputedStyle(current))) {
       const rect = current.getBoundingClientRect();
@@ -57,7 +62,8 @@ const place = (box: HTMLElement) => {
   const at = trigger.getBoundingClientRect();
   const screen = window.visualViewport;
   const screenTop = screen?.offsetTop ?? 0;
-  const screenBottom = screenTop + (screen?.height ?? window.innerHeight);
+  const screenBottom =
+    screenTop + (screen?.height ?? document.documentElement.clientHeight);
   const chrome = list.offsetHeight - (viewport?.offsetHeight ?? 0);
   const wanted = Math.min(LIST_MAX_PX, viewport?.scrollHeight ?? LIST_MAX_PX);
   const below = screenBottom - at.bottom - GAP_PX - EDGE_PX - chrome;
@@ -65,7 +71,8 @@ const place = (box: HTMLElement) => {
   const isAbove = below < wanted && above > below;
   const room = isAbove ? above : below;
   const fixedBox = findFixedBox(box);
-  const isRightAligned = at.left + at.width / 2 > window.innerWidth / 2;
+  const isRightAligned =
+    at.left + at.width / 2 > document.documentElement.clientWidth / 2;
   const vars: Record<string, string> = {
     '--app-select-top': isAbove
       ? 'auto'
@@ -96,7 +103,8 @@ function AppSelect({ dropdownClassName, ...props }: AppSelectProps) {
     const box = boxRef.current;
     if (!box) return;
     const frame = { id: 0 };
-    const follow = () => {
+    const follow = (event: Event) => {
+      if (event.target instanceof Node && box.contains(event.target)) return;
       cancelAnimationFrame(frame.id);
       frame.id = requestAnimationFrame(() => place(box));
     };
