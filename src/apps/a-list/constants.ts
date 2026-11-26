@@ -16,6 +16,8 @@ export const ARCHIVE_GATE_ID = 'archive';
 /** The feature switch for release days on the calendar (`FEATURE_GATES`). */
 export const CALENDAR_RELEASES_GATE_ID = 'calendar-releases';
 export const EMAIL_TICKETS_GATE_ID = 'amc-emails';
+/** The feature switch that stars a calendar day's number when friends have plans (`FEATURE_GATES`). */
+export const FRIEND_DAY_STARS_GATE_ID = 'friend-day-stars';
 export const EMAIL_EVENT_KEEP_DAYS = 30;
 
 export const EMAIL_TICKETS_TITLE = 'Tickets from your AMC emails';
