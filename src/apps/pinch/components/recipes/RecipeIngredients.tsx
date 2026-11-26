@@ -1425,7 +1425,7 @@ function RecipeIngredients({
                   'border-border scroll-mt-16 scroll-mb-28 py-1',
                   !isFirst && 'border-t',
                   aiMarkedIds.includes(row.id) &&
-                    'ai-changed -mx-2 rounded-lg border-transparent px-2',
+                    'ai-changed -mx-2 my-0.5 rounded-lg border-transparent px-2',
                 )}
                 data-ingredient-row={row.id}
                 data-change-key={`ingredient-${row.id}`}

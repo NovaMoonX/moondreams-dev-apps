@@ -939,6 +939,10 @@ html[data-pressing] * {
   animation: ai-change-in 600ms ease-out;
 }
 
+.dark .ai-changed {
+  --ai-mark-end: color-mix(in oklab, var(--ai-mark) 40%, #a78bfa);
+}
+
 .ai-changed::after {
   content: '';
   position: absolute;

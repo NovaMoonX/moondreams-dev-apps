@@ -760,7 +760,7 @@ function RecipeSteps({
       <div
         className={join(
           'space-y-2',
-          aiMarkedIndices.includes(index) && 'ai-changed -mx-2 rounded-lg px-2',
+          aiMarkedIndices.includes(index) && 'ai-changed -mx-2 my-0.5 rounded-lg px-2',
         )}
         data-change-key={getStepChangeKey(step)}
       >
