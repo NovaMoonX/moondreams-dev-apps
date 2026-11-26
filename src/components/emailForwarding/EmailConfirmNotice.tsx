@@ -80,44 +80,41 @@ function EmailConfirmNotice({
       icon={Mail}
       title={WORDS.confirmAsked(name ?? 'Your email')}
     >
-      <div className='mt-2 space-y-2'>
-        {url !== null && isActionInFooter && (
-          <p className='text-muted-foreground'>
-            {WORDS.confirmWithFooter(name)}
-          </p>
-        )}
-        {url !== null && !isActionInFooter && (
-          <Button
-            className='w-full'
-            onClick={() => {
-              openLink(url);
-              onConfirmTapped();
-            }}
-          >
-            {WORDS.confirmButton(name)}
-          </Button>
-        )}
-        {url === null && (
-          <>
-            <p className='text-muted-foreground'>
-              {WORDS.confirmCodeLine(name)}
-            </p>
-            <div className='flex items-center justify-between gap-3'>
-              <span className='text-lg font-semibold tabular-nums'>
-                {confirm.code}
-              </span>
-              {!isActionInFooter && (
-                <CopyTextButton
-                  text={confirm.code ?? ''}
-                  label={WORDS.copyCode}
-                  variant='tertiary'
-                  isCompact
-                />
-              )}
-            </div>
-          </>
-        )}
-      </div>
+      {!(url !== null && isActionInFooter) && (
+        <div className='mt-2 space-y-2'>
+          {url !== null && (
+            <Button
+              className='w-full'
+              onClick={() => {
+                openLink(url);
+                onConfirmTapped();
+              }}
+            >
+              {WORDS.confirmButton(name)}
+            </Button>
+          )}
+          {url === null && (
+            <>
+              <p className='text-muted-foreground'>
+                {WORDS.confirmCodeLine(name)}
+              </p>
+              <div className='flex items-center justify-between gap-3'>
+                <span className='text-lg font-semibold tabular-nums'>
+                  {confirm.code}
+                </span>
+                {!isActionInFooter && (
+                  <CopyTextButton
+                    text={confirm.code ?? ''}
+                    label={WORDS.copyCode}
+                    variant='tertiary'
+                    isCompact
+                  />
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </InlineNotice>
   );
 }

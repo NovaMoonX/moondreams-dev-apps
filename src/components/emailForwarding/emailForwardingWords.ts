@@ -51,6 +51,7 @@ export const EMAIL_FORWARDING_WORDS = {
   stepFirstLater: 'Once forwarding is on, your first email shows here.',
   stepFirst: 'Your first email comes in',
   stepDone: 'Done',
+  stepSkipped: 'Skipped',
   allSetTitle: 'You’re all set',
   allSetLine: 'Nothing else to do. New emails come in on their own.',
   copySearch: 'Copy search',
@@ -73,8 +74,6 @@ export const EMAIL_FORWARDING_WORDS = {
       : `Enter this code in ${provider}’s forwarding settings`,
   copyCode: 'Copy code',
   codeCopyFailed: 'Couldn’t copy it. Press and hold the code to copy it.',
-  confirmWithFooter: (provider: string | null) =>
-    `Tap ${confirmButton(provider)} below to open it, then come back here.`,
   confirmedBy: (appName: string, provider: string) =>
     `${appName} confirmed ${provider}’s forwarding`,
   confirmWaiting:

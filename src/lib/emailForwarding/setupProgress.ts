@@ -13,7 +13,7 @@ export interface EmailForwardingState {
 }
 
 export type SetupStepKey = 'copy' | 'forward' | 'confirm' | 'first';
-export type StepState = 'done' | 'current' | 'later';
+export type StepState = 'done' | 'skipped' | 'current' | 'later';
 
 export interface SetupProgress {
   /** The step the footer acts on, or null once everything is done. */
@@ -73,8 +73,11 @@ export function readSetupProgress({
     first: isAllSet,
   };
   const current = STEP_ORDER.find((key) => !done[key]) ?? null;
+  const isConfirmSkipShown =
+    isConfirmSkipped && shownConfirm === null && !isForwardSeen;
   const states = Object.fromEntries(
     STEP_ORDER.map((key) => {
+      if (key === 'confirm' && isConfirmSkipShown) return [key, 'skipped'];
       if (done[key]) return [key, 'done'];
       return [key, key === current ? 'current' : 'later'];
     }),
@@ -85,8 +88,7 @@ export function readSetupProgress({
     pendingConfirm,
     shownConfirm,
     isForwardSeen,
-    isConfirmSkipShown:
-      isConfirmSkipped && shownConfirm === null && !isForwardSeen,
+    isConfirmSkipShown,
     isAllSet,
   };
 }

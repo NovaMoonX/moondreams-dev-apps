@@ -8,6 +8,7 @@ import {
   CircleCheck,
   CircleHelp,
   LoaderCircle,
+  Minus,
 } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
@@ -50,10 +51,14 @@ function Step({ number, title, state, isOpen, onToggle, children }: StepProps) {
             state === 'done' && 'bg-primary text-primary-foreground',
             state === 'current' && 'border-primary text-primary border-2',
             state === 'later' && 'bg-muted text-muted-foreground',
+            state === 'skipped' &&
+              'border-muted-foreground text-muted-foreground border-2',
           )}
           aria-hidden='true'
         >
-          {state === 'done' ? <Check className='size-4' /> : number}
+          {state === 'done' && <Check className='size-4' />}
+          {state === 'skipped' && <Minus className='size-4' />}
+          {state !== 'done' && state !== 'skipped' && number}
         </span>
         <span
           className={join(
@@ -64,6 +69,9 @@ function Step({ number, title, state, isOpen, onToggle, children }: StepProps) {
           {title}
           {state === 'done' && (
             <span className='sr-only'>, {WORDS.stepDone}</span>
+          )}
+          {state === 'skipped' && (
+            <span className='sr-only'>, {WORDS.stepSkipped}</span>
           )}
         </span>
         <ChevronDown
@@ -99,7 +107,7 @@ function UndoButton({
       type='button'
       variant='outline'
       size='sm'
-      className='relative before:absolute before:-inset-y-1 before:inset-x-0 before:content-[""]'
+      className='border-border! text-foreground! relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[""]'
       onClick={onClick}
     >
       {label}
@@ -168,7 +176,7 @@ function EmailSetupSteps({
         </>
       );
     }
-    if (states.confirm === 'done') {
+    if (states.confirm !== 'current' && states.confirm !== 'later') {
       return <StepLine>{WORDS.stepConfirmDone}</StepLine>;
     }
     return <StepLine>{WORDS.stepConfirmLine}</StepLine>;
@@ -207,6 +215,7 @@ function EmailSetupSteps({
                 label={WORDS.copyAgain}
                 variant='tertiary'
                 isCompact
+                className='px-0!'
               />
             </>
           ) : (
