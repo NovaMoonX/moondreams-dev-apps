@@ -44,7 +44,7 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     appId: 'a-list',
     label: "Friends' days as stars",
     description:
-      "Someone without it sees a small mark in the corner of a day when friends have plans. Someone with it sees that day's number inside a gold star instead.",
+      "Someone without it sees a small mark in the corner of a day when friends have plans. Someone with it sees that day's number inside a light purple star instead.",
     defaultRollout: 'off',
     isServerEnforced: false,
     warning: null,

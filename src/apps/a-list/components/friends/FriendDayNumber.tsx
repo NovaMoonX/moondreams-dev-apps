@@ -9,7 +9,7 @@ interface FriendDayNumberProps {
 /* The edge is a shade darker than the fill and sits on a halo, so a pastel star still
    stands apart from the pastel title tiles a cell shows when a movie has no poster. */
 const STAR_COLOR =
-  'fill-amber-400 stroke-amber-600 dark:fill-amber-400 dark:stroke-amber-200';
+  'fill-violet-200 stroke-violet-500 dark:fill-violet-300 dark:stroke-violet-100';
 
 /** A cell's date number inside a star, saying friends have plans that day in place of a separate mark. */
 function FriendDayNumber({ day, count }: FriendDayNumberProps) {
@@ -26,7 +26,7 @@ function FriendDayNumber({ day, count }: FriendDayNumberProps) {
         aria-hidden='true'
         className={join('absolute inset-0 size-7 stroke-[1.5]', STAR_COLOR)}
       />
-      <span className='relative mt-[3px] text-[10px] leading-none font-bold text-neutral-900 tabular-nums'>
+      <span className='relative mt-0.5 text-[10px] leading-none font-bold text-neutral-900 tabular-nums'>
         {day}
       </span>
       <span className='sr-only'>{label}</span>
