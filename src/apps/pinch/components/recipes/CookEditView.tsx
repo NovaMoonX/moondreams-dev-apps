@@ -90,15 +90,6 @@ function CookEditView({
 
   const fields = useMemo(
     () => [
-      ...(cook && journal
-        ? [
-            custom({
-              name: 'journal',
-              label: '',
-              renderComponent: () => journal,
-            }),
-          ]
-        : []),
       custom({
         name: 'when',
         label: '',
@@ -159,6 +150,15 @@ function CookEditView({
                   <CookResultFields uid={uid} cookId={cook.id} isLarge />
                 </div>
               ),
+            }),
+          ]
+        : []),
+      ...(cook && journal
+        ? [
+            custom({
+              name: 'journal',
+              label: '',
+              renderComponent: () => journal,
             }),
           ]
         : []),
