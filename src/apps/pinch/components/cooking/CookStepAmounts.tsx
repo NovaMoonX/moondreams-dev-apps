@@ -1,33 +1,58 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AppCheckbox from '@/components/AppCheckbox';
 import {
   CookAmountButton,
   CookConversionLine,
 } from '@apps/pinch/components/cooking/CookAmount';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
+import { orderDryFirst } from '@apps/pinch/utils/measuringTools';
 
-/** A step's lines as flat rows, name on the left and amount on the right. */
+/** A step's lines as flat rows, name on the left and amount on the right; with `onToggleAdded` each has a tick for what the person has put in, and the name beside it is its target. */
 export function CookAmountRows({
   rows,
   className,
+  added,
+  onToggleAdded,
 }: {
   rows: CookRow[];
   className?: string;
+  added?: Record<string, boolean>;
+  onToggleAdded?: (id: string, isAdded: boolean) => void;
 }) {
   return (
     <ul className={join('divide-border divide-y', className)}>
       {rows.map((row) => (
         <li key={row.id}>
           <div className='flex items-baseline justify-between gap-3 py-1.5 text-sm sm:[@media(min-height:701px)]:py-2 sm:[@media(min-height:701px)]:text-base'>
-            <span className='min-w-0 wrap-break-word'>
-              {row.name}
-              {row.groupLabel && (
-                <span className='text-muted-foreground text-xs sm:[@media(min-height:701px)]:text-sm'>
-                  {' '}
-                  · {row.groupLabel}
+            <label
+              className={join(
+                'flex min-w-0 items-baseline gap-2',
+                onToggleAdded && 'cursor-pointer',
+              )}
+            >
+              {onToggleAdded && (
+                <span className='inline-flex shrink-0 self-center'>
+                  <AppCheckbox
+                    aria-label={`Added ${row.name}`}
+                    isMark
+                    checked={added?.[row.id] === true}
+                    onCheckedChange={(checked) =>
+                      onToggleAdded(row.id, checked === true)
+                    }
+                  />
                 </span>
               )}
-            </span>
+              <span className='min-w-0 wrap-break-word'>
+                {row.name}
+                {row.groupLabel && (
+                  <span className='text-muted-foreground text-xs sm:[@media(min-height:701px)]:text-sm'>
+                    {' '}
+                    · {row.groupLabel}
+                  </span>
+                )}
+              </span>
+            </label>
             <CookAmountButton
               row={row}
               className={
@@ -57,6 +82,7 @@ function CookStepAmounts({
   isAmountNoteShown,
   className,
 }: CookStepAmountsProps) {
+  const { rows: ordered, hint } = orderDryFirst(rows);
   if (rows.length === 0) {
     return isAmountNoteShown ? (
       <p className={join('text-muted-foreground text-xs', className)}>
@@ -74,7 +100,10 @@ function CookStepAmounts({
       )}
     >
       <p className='text-muted-foreground text-xs font-medium'>For this step</p>
-      <CookAmountRows rows={rows} className='mt-1' />
+      <CookAmountRows rows={ordered} className='mt-1' />
+      {hint !== null && (
+        <p className='text-muted-foreground pt-1 text-xs'>{hint}</p>
+      )}
       {isAmountNoteShown && (
         <p className='text-muted-foreground border-border mt-1 border-t pt-2 text-xs'>
           Amounts written in this step stay as they are.
