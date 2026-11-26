@@ -15,10 +15,18 @@ import {
   DEFAULT_SERVING,
   SHOPPING_ADD_MODE_LABELS,
   SHOPPING_ADD_MODES,
+  SHOP_SECTION_LABELS,
+  SHOP_SECTIONS,
   SOFT_MAX_SHOPPING_ITEMS,
+  type ShopSection,
   type ShoppingAddMode,
 } from '@apps/pinch/constants';
-import { addToShoppingList } from '@apps/pinch/store/actions/shoppingActions';
+import {
+  addListOnlyItem,
+  makeListOnlyId,
+  addToShoppingList,
+  setListOnlySection,
+} from '@apps/pinch/store/actions/shoppingActions';
 import {
   selectCookSummaries,
   selectIngredientsById,
@@ -55,6 +63,11 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [added, setAdded] = useState<string[]>([]);
+  const [listOnly, setListOnly] = useState<{
+    id: string;
+    section: ShopSection | null;
+  } | null>(null);
+  const [listOnlyWords, setListOnlyWords] = useState<string[]>([]);
   const [searchKey, setSearchKey] = useState(0);
   const fieldRef = useRef<HTMLDivElement>(null);
 
@@ -142,6 +155,74 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
     }
   };
 
+  const handlePickListOnly = (words: string) => {
+    if (isAdding || !isReady) {
+      return;
+    }
+    const shown = words.trim().replace(/\s+/g, ' ');
+    const wanted = shown.toLowerCase();
+    const onListAlready = items.find(
+      (item) =>
+        item.ingredientId === null &&
+        !item.isChecked &&
+        (item.freeText ?? '').toLowerCase() === wanted,
+    );
+    const addedHere = listOnlyWords.find(
+      (listed) => listed.toLowerCase() === wanted,
+    );
+    if (onListAlready || addedHere) {
+      setError(
+        `${onListAlready?.freeText ?? addedHere} is already on your list.`,
+      );
+      return;
+    }
+    if (onList.size >= SOFT_MAX_SHOPPING_ITEMS) {
+      setError(
+        "Your list is full: take something off or clear what you've got.",
+      );
+      return;
+    }
+
+    const id = makeListOnlyId();
+    setError(null);
+    setAdded((current) => [...current, shown]);
+    setListOnlyWords((current) => [...current, shown]);
+    setListOnly({ id, section: null });
+    setSearchKey((current) => current + 1);
+    dispatch(addListOnlyItem({ uid, id, text: words, shopSection: null }))
+      .unwrap()
+      .catch((addError) => {
+        setListOnlyWords((current) =>
+          current.filter((listed) => listed !== shown),
+        );
+        setAdded((current) => {
+          const at = current.lastIndexOf(shown);
+          return at === -1
+            ? current
+            : [...current.slice(0, at), ...current.slice(at + 1)];
+        });
+        setListOnly((current) => (current?.id === id ? null : current));
+        setError(getErrorMessage(addError, 'Unable to add this to your list.'));
+      });
+  };
+
+  const handleSection = (section: ShopSection) => {
+    if (!listOnly) return;
+    const id = listOnly.id;
+    setListOnly({ id, section });
+    dispatch(
+      setListOnlySection({
+        uid,
+        id,
+        shopSection: section === 'other' ? null : section,
+      }),
+    )
+      .unwrap()
+      .catch((sectionError: unknown) =>
+        setError(getErrorMessage(sectionError, 'Unable to save this change.')),
+      );
+  };
+
   return (
     <FormSheet isOpen onClose={onClose} title='Shopping list'>
       <div className='space-y-4'>
@@ -172,8 +253,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
         ) : (
           <div className='space-y-3 pb-4 [@media(max-height:499px)]:pb-0'>
             <p className='text-muted-foreground text-sm [@media(max-height:499px)]:hidden'>
-              What do you need? It goes on the list at a typical serving, and
-              the arrow beside it on the list changes how much.
+              What do you need? Food goes on at a typical serving.
             </p>
             <div ref={fieldRef}>
               <ItemSearch
@@ -182,10 +262,14 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                 isDisabled={isAdding || !isReady}
                 suggestions={{
                   caption: 'From your list and your cooking',
-                  ids: suggestedIds,
+                  ids: listOnly ? [] : suggestedIds,
                 }}
                 isCapped
-                onPick={(ingredientId) => void handlePick(ingredientId)}
+                onPick={(ingredientId) => {
+                  setListOnly(null);
+                  void handlePick(ingredientId);
+                }}
+                onPickListOnly={handlePickListOnly}
               />
             </div>
             {note && (
@@ -201,6 +285,9 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                 />
                 <span className='min-w-0 wrap-break-word'>
                   Added {added.at(-1)}
+                  {listOnly?.section &&
+                    listOnly.section !== 'other' &&
+                    ` under ${SHOP_SECTION_LABELS[listOnly.section]}`}
                   {added.length > 1 && (
                     <span className='text-muted-foreground whitespace-nowrap'>
                       {' '}
@@ -209,6 +296,23 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                   )}
                 </span>
               </p>
+            )}
+            {!note && listOnly && (
+              <div className='space-y-2'>
+                <p className='text-muted-foreground text-xs'>
+                  Part of the shop
+                </p>
+                <PillGroup
+                  label='Part of the shop'
+                  options={SHOP_SECTIONS.map((value) => ({
+                    value,
+                    label: SHOP_SECTION_LABELS[value],
+                  }))}
+                  value={listOnly.section ?? 'other'}
+                  onChange={handleSection}
+                  isThin
+                />
+              </div>
             )}
             {error && <p className='text-destructive text-sm'>{error}</p>}
             {added.length > 0 && (

@@ -178,11 +178,12 @@ const carriesKey = (item: Pick<ShoppingItem, 'sources'>, key: string) =>
   (item.sources ?? []).some((source) => getSourceKey(source) === key);
 
 export interface ShoppingRowData {
-  /** One ingredient's amounts of the same kind (weights, volumes or counts) share a row. */
+  /** One ingredient's amounts of the same kind (weights, volumes or counts) share a row; a list-only line is a row of its own. */
   id: string;
   /** Every stored item the row stands for, largest first. */
   itemIds: string[];
-  ingredientId: string;
+  /** Null for a list-only line ("Paper towels"), which sits under Other. */
+  ingredientId: string | null;
   name: string;
   /** What to pick up, or null for a pinch of a spice or oil or a line that is just the name, which needs only its name. */
   amountText: string | null;
@@ -695,6 +696,11 @@ export function getShoppingMealsText(
   }
   return `${shown.join(', ')} and ${rest.length} more`;
 }
+
+/** A line that names an ingredient, as opposed to a list-only line ("Paper towels"). */
+export const isIngredientItem = <T extends Pick<ShoppingItem, 'ingredientId'>>(
+  item: T,
+): item is T & { ingredientId: string } => item.ingredientId !== null;
 
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
 export const isValidAmount = (amount: number) =>
@@ -1237,7 +1243,9 @@ export function planStopShopping(
     if (otherAmount > 0) {
       return keep(Math.min(item.amount, otherAmount), 'kept');
     }
-    if (item.unit === 'EACH') return keep(null, 'kept');
+    if (item.unit === 'EACH' || item.ingredientId === null) {
+      return keep(null, 'kept');
+    }
 
     const twinId = getNameOnlyItemId(item.ingredientId);
     const twin = current(planned, twinId);
@@ -1253,6 +1261,8 @@ export function planStopShopping(
         : {
             id: twinId,
             ingredientId: item.ingredientId,
+            freeText: null,
+            shopSection: null,
             amount: null,
             unit: 'EACH',
             isChecked: false,
@@ -1534,17 +1544,22 @@ const byName = (a: ShoppingRowData, b: ShoppingRowData) =>
 
 type RowItem = Pick<ShoppingItem, 'id' | 'ingredientId' | 'amount' | 'unit'>;
 
+/** A list-only line is its own row: it has no ingredient to share one with. */
+const getOwnRowId = (item: RowItem) =>
+  item.ingredientId === null
+    ? `free:${item.id}`
+    : getShopRowId(item.ingredientId, item.unit);
+
 /** Per ingredient that has an amount among the items, the row a name-only item of it joins. */
 const getAmountRows = (items: RowItem[]) =>
-  items
-    .filter((item) => item.amount !== null)
-    .reduce((acc, item) => {
-      const id = getShopRowId(item.ingredientId, item.unit);
-      const known = acc.get(item.ingredientId);
-      return known !== undefined && known <= id
-        ? acc
-        : acc.set(item.ingredientId, id);
-    }, new Map<string, string>());
+  items.reduce((acc, item) => {
+    if (item.amount === null || item.ingredientId === null) return acc;
+    const id = getShopRowId(item.ingredientId, item.unit);
+    const known = acc.get(item.ingredientId);
+    return known !== undefined && known <= id
+      ? acc
+      : acc.set(item.ingredientId, id);
+  }, new Map<string, string>());
 
 const groupByRow = <T extends RowItem>(
   items: T[],
@@ -1561,8 +1576,9 @@ export function getItemRowIds(items: RowItem[]): Map<string, string> {
   const result = new Map(
     items.map((item) => [
       item.id,
-      (item.amount === null ? amountRows.get(item.ingredientId) : undefined) ??
-        getShopRowId(item.ingredientId, item.unit),
+      (item.amount === null && item.ingredientId !== null
+        ? amountRows.get(item.ingredientId)
+        : undefined) ?? getOwnRowId(item),
     ]),
   );
   return result;
@@ -1580,12 +1596,10 @@ export function getItemsByRow(
   const rowIds = getItemRowIds(items);
   const amountRows = getAmountRows(items);
   const byDrawnRow = groupByRow(items, (item) => rowIds.get(item.id) ?? '');
-  const byRow = groupByRow(items, (item) =>
-    getShopRowId(item.ingredientId, item.unit),
-  );
+  const byRow = groupByRow(items, getOwnRowId);
   const nameOnlyByIngredient = groupByRow(
     items.filter((item) => item.amount === null),
-    (item) => item.ingredientId,
+    (item) => item.ingredientId ?? '',
   );
   const getJoined = (
     row: Pick<ShopLineRow, 'id' | 'ingredientId' | 'lines'>,
@@ -1637,8 +1651,13 @@ export function groupShoppingItems(
       (item) => `${rowIds.get(item.id) ?? ''}${suffix}`,
     );
     return [...byRow.entries()].map(([id, rowItems]) => {
-      const ingredient = ingredientsById.get(rowItems[0].ingredientId);
-      const section = getShopSection(ingredient);
+      const { ingredientId, freeText, shopSection } = rowItems[0];
+      const ingredient =
+        ingredientId === null ? undefined : ingredientsById.get(ingredientId);
+      const section =
+        ingredientId === null
+          ? (shopSection ?? 'other')
+          : getShopSection(ingredient);
       const byBase = [...rowItems].sort(
         (a, b) =>
           (b.amount ?? 0) * UNIT_TO_BASE[b.unit] -
@@ -1647,8 +1666,11 @@ export function groupShoppingItems(
       const row: ShoppingRowData = {
         id,
         itemIds: byBase.map((item) => item.id),
-        ingredientId: rowItems[0].ingredientId,
-        name: ingredient?.name ?? 'Removed ingredient',
+        ingredientId,
+        name:
+          ingredientId === null
+            ? (freeText ?? '')
+            : (ingredient?.name ?? 'Removed ingredient'),
         amountText: formatShopAmount(getShopAmount(rowItems, section), units),
         words: rowItems.every((item) => item.amount === null)
           ? joinWords(rowItems.map((item) => item.amountText))

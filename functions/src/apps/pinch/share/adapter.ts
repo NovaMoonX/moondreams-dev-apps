@@ -351,7 +351,9 @@ async function syncShoppingList(
   const records = snapshot.docs.flatMap((doc) => {
     const ingredientId = readText(doc.get('ingredientId'));
     const title =
-      ingredientId === null ? null : (names.get(ingredientId) ?? null);
+      ingredientId === null
+        ? readText(doc.get('freeText'))
+        : (names.get(ingredientId) ?? null);
     if (title === null) return [];
     return [
       toRecord({

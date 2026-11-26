@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
 import {
   doc,
+  setDoc,
   updateDoc,
   writeBatch,
   type DocumentSnapshot,
@@ -11,13 +12,16 @@ import {
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { generateUuid } from '@/utils';
 import { runHeldTransaction } from '@apps/pinch/store/actions/heldTransaction';
 import {
   MAX_AMOUNT_TEXT_LENGTH,
+  MAX_NAME_LENGTH,
   MAX_SHOPPING_LINES_PER_ADD,
   MAX_SHOPPING_NOTE_LENGTH,
   SHOPPING_BATCH_SIZE,
   UNITS,
+  type ShopSection,
 } from '@apps/pinch/constants';
 import { selectShoppingSourceContext } from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
@@ -33,6 +37,7 @@ import {
   getSourceKey,
   getSourceLines,
   isAsStopLeft,
+  isIngredientItem,
   isValidAmount,
   joinWords,
   mergeSourcedLines,
@@ -110,6 +115,8 @@ function writeLine(
   const item: ShoppingItem = {
     id: snapshot.id,
     ingredientId: line.ingredientId,
+    freeText: null,
+    shopSection: null,
     unit: line.unit,
     createdAt: now,
     ...fields,
@@ -204,7 +211,7 @@ export const setShoppingItemChecked = createAsyncThunk<
 
 interface UpdateShoppingItemInput {
   uid: string;
-  item: Pick<ShoppingItem, 'id' | 'ingredientId' | 'unit'>;
+  item: Pick<ShoppingItem, 'id' | 'unit'> & { ingredientId: string };
   /** The other items the row showed as one amount with this one; saving keeps only the amount typed. */
   mergedIds?: string[];
   amount: number;
@@ -294,6 +301,110 @@ export const updateShoppingItem = createAsyncThunk<
               note === null ? null : note.slice(0, MAX_SHOPPING_NOTE_LENGTH),
           });
         }
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to save this change.'),
+      );
+    }
+  },
+);
+
+interface AddListOnlyItemInput {
+  uid: string;
+  /** From `makeListOnlyId`, so the sheet can show the line before the write lands. */
+  id: string;
+  /** The person's own words ("Paper towels"). */
+  text: string;
+  /** Null files it under Other. */
+  shopSection: ShopSection | null;
+}
+
+/** A line that is never an ingredient: its own words, no amount or sources, so cost, nutrition, the pantry and the meals on the list never see it. Resolves to its id. */
+export const makeListOnlyId = () => `free__${generateUuid()}`;
+
+export const addListOnlyItem = createAsyncThunk<
+  string,
+  AddListOnlyItemInput,
+  { rejectValue: string }
+>(
+  'pinch/shopping/addListOnly',
+  async ({ uid, id, text, shopSection }, { rejectWithValue }) => {
+    const freeText = text.trim().replace(/\s+/g, ' ').slice(0, MAX_NAME_LENGTH);
+    if (freeText === '') return rejectWithValue('Type what you need first.');
+    const now = Date.now();
+    const item: ShoppingItem = {
+      id,
+      ingredientId: null,
+      freeText,
+      shopSection,
+      amount: null,
+      unit: 'EACH',
+      isChecked: false,
+      sources: [],
+      note: null,
+      amountText: null,
+      pantryAddedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    try {
+      await setDoc(shoppingDoc(uid, id), item);
+      return id;
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to add this to your list.'),
+      );
+    }
+  },
+);
+
+interface RenameListOnlyItemInput {
+  uid: string;
+  id: string;
+  text: string;
+}
+
+export const renameListOnlyItem = createAsyncThunk<
+  void,
+  RenameListOnlyItemInput,
+  { rejectValue: string }
+>(
+  'pinch/shopping/renameListOnly',
+  async ({ uid, id, text }, { rejectWithValue }) => {
+    const freeText = text.trim().replace(/\s+/g, ' ').slice(0, MAX_NAME_LENGTH);
+    if (freeText === '') return rejectWithValue('Give it a name.');
+    try {
+      await updateDoc(shoppingDoc(uid, id), {
+        freeText,
+        updatedAt: Date.now(),
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to save this change.'),
+      );
+    }
+  },
+);
+
+interface SetListOnlySectionInput {
+  uid: string;
+  id: string;
+  shopSection: ShopSection | null;
+}
+
+/** Field-scoped, so a pick shows at once and queues offline. */
+export const setListOnlySection = createAsyncThunk<
+  void,
+  SetListOnlySectionInput,
+  { rejectValue: string }
+>(
+  'pinch/shopping/setListOnlySection',
+  async ({ uid, id, shopSection }, { rejectWithValue }) => {
+    try {
+      await updateDoc(shoppingDoc(uid, id), {
+        shopSection,
+        updatedAt: Date.now(),
       });
     } catch (error) {
       return rejectWithValue(
@@ -457,6 +568,7 @@ export const stopShoppingFor = createAsyncThunk<
         const twinIds = [
           ...new Set(
             fresh
+              .filter(isIngredientItem)
               .filter((item) => item.unit !== 'EACH')
               .map((item) => getNameOnlyItemId(item.ingredientId)),
           ),
@@ -586,6 +698,8 @@ export const restoreShoppingItems = createAsyncThunk<
             const restored: Omit<ShoppingItem, 'note'> = {
               id: item.id,
               ingredientId: item.ingredientId,
+              freeText: item.freeText ?? null,
+              shopSection: item.shopSection ?? null,
               amount: item.amount,
               unit: item.unit,
               isChecked: item.isChecked,

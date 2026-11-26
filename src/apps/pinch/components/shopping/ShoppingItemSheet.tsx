@@ -57,7 +57,7 @@ interface ShoppingItemSheetProps {
   /** The day the screen opened on, for naming planned meals. */
   todayKey: string;
   /** The stored items one row of the list stands for, largest first. */
-  items: ShoppingItem[];
+  items: (ShoppingItem & { ingredientId: string })[];
   onClose: () => void;
   /** Takes the row off at once; the list offers an Undo. */
   onRemove: () => void;
