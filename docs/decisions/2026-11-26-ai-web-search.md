@@ -2,35 +2,40 @@
 
 ## The question
 
-Pepper changes a recipe on request. The owner first held links out (an assistant could invent an address), then decided Pepper may change links and should "search the web if necessary" while the person talks with it, never unprompted or without a reason, and that the person must be told it can search. The photo stays out, and nutrition is its own later decision ("So just links").
+Pepper changes a recipe on request. The owner first held links out (an assistant could invent an address), then decided Pepper may change links and should "search the web if necessary" while the person talks with it, never unprompted or without a reason, and that the person must be told it can search. The photo stays out, and nutrition is its own later decision ("So just links"). That raised a second question: which model and which search.
 
 ## What we considered
 
 - **No links at all.** Safe, but "add a video for the folding" is a natural ask, and the owner asked for it.
-- **Links from the model's memory only.** Cheap, but models invent plausible addresses; the reason links were held out in the first place.
-- **Our own search call, then the model picks.** A second provider, key and cost for one feature.
-- **Gemini's Google Search grounding through Firebase AI Logic (chosen).** The model Pepper already uses, one `tools` entry, and the model decides when a search would help.
+- **Links from the model's memory only.** Models invent plausible addresses; the reason links were held out in the first place.
+- **Gemini with Google Search grounding, from the browser through Firebase AI Logic.** Built first, since the editor already called Gemini. Lost: Google requires showing its search suggestions and sources as given ("It's *required* to display Google Search suggestions and *required* to display sources", [Grounding with Google Search](https://firebase.google.com/docs/ai-logic/grounding-google-search)), whether search works with a JSON answer was unconfirmed, and its price could not be read here (ai.google.dev was blocked and the owner declined opening it).
+- **Claude Haiku with Anthropic's web search, in a callable (chosen).** Cooking Pepper already runs on Haiku with capped search on our server (`docs/decisions/2026-11-25-spoken-assistant-turns.md`), so Pepper is one assistant with one key, one spend cap and known prices. The owner chose it once the costs were laid side by side.
 
 ## What we chose
 
-- Pepper's model is created with `tools: [{ googleSearch: {} }]`; the prompt allows link changes only when the ask is about links or plainly needs one, never invented, never a search-redirect address.
+- The revision runs in a Pinch callable on Claude Haiku (`claude-haiku-5-5`, low effort), behind the `pepper-edits` switch checked on the server, with the basic web search tool capped at two searches; the answer comes back through a terminal tool shaped like the revision.
+- The prompt allows link changes only when the ask is about links or plainly needs one, never invented.
 - Every new link is opened with `fetchPageContent` before it reaches the form; one that fails is dropped, and Pepper's line says so.
-- A round that searched shows Google's search suggestion (its HTML in a shadow root, untouched) and up to three sources, in the change summary (`SearchGroundingNote`).
+- A round that searched shows up to three of its sources in the change summary (`SearchSourcesNote`).
 - The disclosure line before the first ask says Pepper may search the web.
-- If the model refuses search with a JSON response, Pepper falls back to the plain model and reports it with `reportFallback`.
 
 ## Why
 
-- Firebase's grounding page ([Grounding with Google Search](https://firebase.google.com/docs/ai-logic/grounding-google-search)): grounding is turned on by adding the `googleSearch` tool, and the model "decides whether to use Google Search". It lists the Flash-Lite model Pepper uses as supported.
-- The same page sets the display terms: "It's *required* to display Google Search suggestions and *required* to display sources", with the suggestion's `renderedContent` meant to be shown as given. That is why the note is a shared component and is never restyled.
+- Price, from Anthropic's [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) page: "web search costs $10 USD per 1,000 searches, plus standard token costs for search-generated content. Search results count as input tokens", and "A web search that fails with an error is not billed." Haiku is $0.10 per million input tokens and $0.50 per million output tokens (Anthropic's model table, as cached in the claude-api reference on 2026-11-03). An ask that rewrites a recipe is a few thousand tokens each way, about a tenth of a cent; one that searches adds a cent per search plus the pages read.
+- The model decides: "Claude determines when to search based on the prompt", and `max_uses` caps it.
+- Display terms: "When displaying API outputs directly to end users, citations must be included to the original source." Pepper's reply and links draw on what it found, so the summary names the sources.
 - Checking each link loads closes the gap that held links out: an invented or dead address never reaches the form.
 
 ## How it is held
 
-`docs/conventions/design-ux.md` "What an AI changed is marked where it changed…" (its search sentence), `.claude/rules/pinch.md` (Pepper's scope), and the shared `SearchGroundingNote`.
+`docs/conventions/design-ux.md` "What an AI changed is marked where it changed…" (its search sentence), `.claude/rules/pinch.md` (Pepper's scope), the shared `SearchSourcesNote`, and the per-person assistant spend cap the callable reserves against.
 
 ## When to revisit
 
-- Unconfirmed, because this session could not reach ai.google.dev (the owner declined opening it): whether `googleSearch` is accepted together with a JSON response schema on every model (the fallback covers a refusal), grounding's price and free quota, and the full Gemini terms for grounded results. Read them before turning `pepper-edits` on for more people.
-- When nutrition is decided: it would use the same search and the same display terms.
-- When a second app grounds an answer: it uses `SearchGroundingNote` as is.
+- When nutrition is decided: it would use the same search and the same citation rule.
+- If Haiku's links or edits prove wrong in real use: move the role up a model, as the spoken-turns record says for cooking.
+- When a second app's assistant searches: it shows sources with `SearchSourcesNote`.
+
+## Changes
+
+- 2026-11-26: first built on Gemini with Google Search grounding; the owner asked "Is Haiku cheaper here?", and once the costs were compared chose Haiku, so the revision moved to a callable and Google's suggestion box was dropped.
