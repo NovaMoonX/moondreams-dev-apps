@@ -5,25 +5,30 @@ import {
   useState,
   type KeyboardEvent,
 } from 'react';
+import type { ReactNode } from 'react';
 
 import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ArrowUp, LoaderCircle, Mic, Sparkles, Square } from 'lucide-react';
+import { ArrowUp, Mic, Square } from 'lucide-react';
 
+import AssistantOrb from '@/components/AssistantOrb';
+import type { AssistantOrbState } from '@/components/AssistantOrb';
 import DebugDetails from '@/components/DebugDetails';
 import MicrophoneAccess from '@/components/MicrophoneAccess';
 import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
 import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
+import PepperFace from '@apps/pinch/components/cooking/PepperFace';
 import {
   MAX_PEPPER_ASK_LENGTH,
   MAX_PEPPER_ROUNDS,
 } from '@apps/pinch/constants';
+import type { PepperLook } from '@apps/pinch/types';
 
-const ASK_MAX_LINES = 4;
-const HIT_AREA =
-  "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
+const ASK_MAX_LINES = 5;
+const ROUND_BUTTON =
+  "relative size-9 shrink-0 before:absolute before:-inset-0.5 before:content-['']";
 
 const VOICE_IDENTITY: VoiceIdentity = {
   id: 'pinch-pepper-edit',
@@ -31,21 +36,30 @@ const VOICE_IDENTITY: VoiceIdentity = {
   device: { naturalVoice: false, systemVoiceHints: [], rate: 1, pitch: 1 },
 };
 
-interface PepperComposerProps {
+interface PepperDockProps {
   /** Changes asked for so far in this sitting. */
   rounds: number;
-  /** Starts with the box open and focused, instead of the one start line. */
-  isStartOpen: boolean;
+  /** Focuses the box as the screen opens. */
+  isStartFocused: boolean;
+  /** The person's chosen look for Pepper, drawn while Pepper listens or works. */
+  look: PepperLook;
+  /** What Pepper last did and the change finder, shown above the box. */
+  above?: ReactNode;
   /** Resolves once Pepper's answer is in the form; rejects when it could not be made. */
   onSend: (ask: string) => Promise<void>;
 }
 
-/** The box where a person types or says what to change in a recipe; the answer lands in the form, never saved. */
-function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
-  const [isOpen, setIsOpen] = useState(isStartOpen);
+/** The chat-style box pinned at the foot of the recipe form, where a person types or says what to change; the answer lands in the form, never saved. */
+function PepperDock({
+  rounds,
+  isStartFocused,
+  look,
+  above,
+  onSend,
+}: PepperDockProps) {
   const [text, setText] = useState('');
   const [isWorking, setIsWorking] = useState(false);
-  const [hasSent, setHasSent] = useState(false);
+  const [spokenAsk, setSpokenAsk] = useState<string | null>(null);
   const [failure, setFailure] = useState<{
     message: string;
     detail: string;
@@ -56,7 +70,7 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
 
   useEffect(() => {
     const field = fieldRef.current;
-    if (!isOpen || field === null) return;
+    if (!isStartFocused || field === null) return;
     // The drawer that opened this screen hands focus back to its opener as it closes.
     const home = field.closest('[role="dialog"]') ?? document.body;
     const pullBack = (event: FocusEvent) => {
@@ -74,44 +88,19 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
       window.clearTimeout(timer);
       document.removeEventListener('focusin', pullBack);
     };
-  }, [isOpen]);
+  }, [isStartFocused]);
   const lang = useMemo(() => navigator.language || 'en-US', []);
 
-  const voice = useVoiceConversation({
-    lang,
-    identity: VOICE_IDENTITY,
-    endPhrases: [],
-    cloudListening: null,
-    onUtterance: (spoken) => {
-      setText((current) =>
-        `${current.trim()} ${spoken}`.trim().slice(0, MAX_PEPPER_ASK_LENGTH),
-      );
-      voice.settle();
-    },
-    onUnavailable: (reason) => setNeedsMicrophone(reason === 'no-permission'),
-  });
-  const isListening = voice.state === 'listening';
-  const canListen = voice.unavailableReason !== 'no-recognition';
-
-  if (rounds >= MAX_PEPPER_ROUNDS) {
-    return (
-      <p className='text-muted-foreground mb-4 text-sm'>
-        That&apos;s as many changes as one sitting takes. Save, then ask again.
-      </p>
-    );
-  }
-
-  const send = async () => {
-    const ask = text.trim();
+  const send = async (ask: string, isSpoken: boolean) => {
     if (ask === '' || isWorking) return;
-    if (isListening) voice.cancel();
     setFailure(null);
     setIsWorking(true);
+    setSpokenAsk(isSpoken ? ask : null);
     try {
       await onSend(ask);
-      setText('');
-      setHasSent(true);
+      if (!isSpoken) setText('');
     } catch (sendError) {
+      if (isSpoken) setText(ask);
       setFailure({
         message: getAiReadFailureMessage(sendError, {
           subject: 'recipe',
@@ -124,8 +113,39 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
       });
     } finally {
       setIsWorking(false);
+      setSpokenAsk(null);
     }
   };
+
+  const voice = useVoiceConversation({
+    lang,
+    identity: VOICE_IDENTITY,
+    endPhrases: [],
+    cloudListening: null,
+    onUtterance: (spoken) => {
+      voice.settle();
+      const ask = `${text.trim()} ${spoken}`
+        .trim()
+        .slice(0, MAX_PEPPER_ASK_LENGTH);
+      void send(ask, true);
+    },
+    onUnavailable: (reason) => setNeedsMicrophone(reason === 'no-permission'),
+  });
+  const isListening = voice.state === 'listening' || voice.isStarting;
+  const canListen = voice.unavailableReason !== 'no-recognition';
+  const isVoiceShown = isListening || spokenAsk !== null;
+
+  if (rounds >= MAX_PEPPER_ROUNDS) {
+    return (
+      <div className='mb-3 space-y-2'>
+        {above}
+        <p className='text-muted-foreground text-xs'>
+          That&apos;s as many changes as one sitting takes. Save, then ask
+          again.
+        </p>
+      </div>
+    );
+  }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (
@@ -137,113 +157,103 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
       return;
     }
     event.preventDefault();
-    void send();
+    void send(text.trim(), false);
   };
 
-  if (!isOpen) {
-    return (
-      <Button
-        type='button'
-        variant='secondary'
-        size='sm'
-        rounded='full'
-        className={join('mb-4 w-fit gap-1.5', HIT_AREA)}
-        onClick={() => setIsOpen(true)}
-      >
-        <Sparkles
-          className='text-muted-foreground h-4 w-4'
-          aria-hidden='true'
-        />
-        Change with Pepper
-      </Button>
-    );
-  }
+  const getOrbState = (): AssistantOrbState =>
+    spokenAsk !== null ? 'thinking' : 'listening';
+
+  const getHeard = () => {
+    if (spokenAsk !== null) return spokenAsk;
+    const heard = `${text.trim()} ${voice.heard.trim()}`.trim();
+    return heard === '' ? 'Say what to change.' : heard;
+  };
 
   return (
-    <div className='mb-4 space-y-2'>
-      <p className='flex items-center gap-1.5 text-sm font-medium'>
-        <Sparkles
-          className='text-muted-foreground h-4 w-4 shrink-0'
-          aria-hidden='true'
-        />
-        Change with Pepper
-      </p>
-      {!hasSent && (
-        <p className='text-muted-foreground text-xs'>
-          Your recipe and what you ask are sent to Gemini to make the change. If
-          you speak instead, your browser hears it and Pinch keeps nothing.
-          Nothing is saved until you press Save.
-        </p>
-      )}
-      <Textarea
-        ref={fieldRef}
-        rows={2}
-        variant='outline'
-        aria-label='What to change'
-        placeholder='Make it spicier, or swap the butter for olive oil'
-        maxLength={MAX_PEPPER_ASK_LENGTH}
-        value={text}
-        disabled={isWorking}
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={handleKeyDown}
-      />
-      {isListening && (
-        <p className='text-muted-foreground text-xs' aria-live='polite'>
-          {voice.heard.trim() === '' ? 'Listening…' : voice.heard}
-        </p>
+    <div className='mb-3 space-y-2'>
+      {above}
+      {isVoiceShown ? (
+        <div className='border-border bg-background flex items-center gap-3 rounded-3xl border p-2 pl-3'>
+          <AssistantOrb
+            state={getOrbState()}
+            word={spokenAsk !== null ? 'Changing it…' : 'Listening'}
+            reserveWord='Changing it…'
+            avatar={look === 'ORB' ? undefined : <PepperFace look={look} />}
+            name='Pepper'
+            className='shrink-0'
+          />
+          <p
+            className={join(
+              'min-w-0 flex-1 text-sm',
+              voice.heard.trim() === '' &&
+                text.trim() === '' &&
+                spokenAsk === null &&
+                'text-muted-foreground',
+            )}
+            aria-live='polite'
+          >
+            {getHeard()}
+          </p>
+          {spokenAsk === null && (
+            <Button
+              type='button'
+              variant='secondary'
+              size='icon'
+              rounded='full'
+              className={ROUND_BUTTON}
+              aria-label='Stop listening'
+              onClick={() => voice.stop()}
+            >
+              <Square className='h-3.5 w-3.5 fill-current' aria-hidden='true' />
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className='border-border bg-background focus-within:border-foreground/40 flex items-end gap-1.5 rounded-3xl border p-1.5 pl-3'>
+          <Textarea
+            ref={fieldRef}
+            rows={1}
+            variant='base'
+            aria-label='What to change'
+            placeholder='Ask Pepper'
+            maxLength={MAX_PEPPER_ASK_LENGTH}
+            value={text}
+            disabled={isWorking}
+            className='min-h-9 flex-1 resize-none bg-transparent px-0 py-2 text-sm placeholder:truncate focus:outline-none'
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          {canListen && text.trim() === '' && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              rounded='full'
+              className={ROUND_BUTTON}
+              aria-label='Say what to change'
+              disabled={isWorking}
+              onClick={() => voice.listen()}
+            >
+              <Mic className='h-4 w-4' aria-hidden='true' />
+            </Button>
+          )}
+          <Button
+            type='button'
+            size='icon'
+            rounded='full'
+            className={ROUND_BUTTON}
+            aria-label='Send to Pepper'
+            loading={isWorking}
+            disabled={isWorking || text.trim() === ''}
+            onClick={() => void send(text.trim(), false)}
+          >
+            <ArrowUp className='h-4 w-4' aria-hidden='true' />
+          </Button>
+        </div>
       )}
       {needsMicrophone && (
         <MicrophoneAccess onAllowed={() => setNeedsMicrophone(false)} />
       )}
-      <div className='flex items-center gap-2'>
-        <span className='min-w-0 flex-1'>
-          {isWorking && (
-            <span
-              className='text-muted-foreground flex items-center gap-2 text-xs'
-              role='status'
-            >
-              <LoaderCircle
-                className='h-3.5 w-3.5 shrink-0 animate-spin motion-reduce:[animation-duration:2.5s]'
-                aria-hidden='true'
-              />
-              Pepper is changing the recipe…
-            </span>
-          )}
-        </span>
-        {canListen && (
-          <Button
-            type='button'
-            variant='secondary'
-            size='icon'
-            rounded='full'
-            className='size-10 shrink-0'
-            aria-label={isListening ? 'Stop listening' : 'Say what to change'}
-            aria-pressed={isListening}
-            disabled={isWorking}
-            onClick={() => {
-              if (isListening) voice.stop();
-              else voice.listen();
-            }}
-          >
-            {isListening ? (
-              <Square className='h-4 w-4 fill-current' aria-hidden='true' />
-            ) : (
-              <Mic className='h-4 w-4' aria-hidden='true' />
-            )}
-          </Button>
-        )}
-        <Button
-          type='button'
-          size='sm'
-          rounded='full'
-          className={join('shrink-0 gap-1.5', HIT_AREA)}
-          disabled={isWorking || text.trim() === ''}
-          onClick={() => void send()}
-        >
-          <ArrowUp className='h-4 w-4' aria-hidden='true' />
-          Send
-        </Button>
-      </div>
       {failure !== null && (
         <div className='space-y-1.5'>
           <p className='text-destructive text-sm' role='alert'>
@@ -252,8 +262,14 @@ function PepperComposer({ rounds, isStartOpen, onSend }: PepperComposerProps) {
           <DebugDetails message={failure.detail} />
         </div>
       )}
+      {rounds === 0 && failure === null && (
+        <p className='text-muted-foreground px-3 text-xs'>
+          Your recipe and request go to Gemini, and speech to your browser.
+          Nothing is saved until you press Save.
+        </p>
+      )}
     </div>
   );
 }
 
-export default PepperComposer;
+export default PepperDock;

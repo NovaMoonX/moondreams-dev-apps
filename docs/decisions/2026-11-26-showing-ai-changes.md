@@ -14,7 +14,8 @@ Pinch's "Change with Pepper" lets a person tell an assistant what to change in a
 ## What we chose
 
 - One shared summary, `AiChangeNotice`: the muted sparkle, who changed it and how much, the assistant's reply line, what was taken out by name, and Undo. It is a live region.
-- One shared mark, the `ai-changed` class: a tint of `--ai-mark` (an app sets it; default its accent) and a 3px leading edge, with one fade-in of about 600 ms that doesn't run under reduced motion.
+- One shared mark, the `ai-changed` class: a tint of `--ai-mark` (an app sets it; default its accent), a hairline that follows the item's corners and a small sparkle on its top leading corner, with one fade-in of about 600 ms that doesn't run under reduced motion.
+- A finder, `AiChangeFinder` over `useChangeFinder`: how many changes the person hasn't had on screen yet, and up and down jumps to them.
 - The mark lasts until save, the person's own edit of that item, or the next change (a newer round's marks replace an earlier round's).
 - A change is applied only to the content it was made from: if the person edited while the AI worked, the answer is dropped with a line saying so, and an Undo that would also take back the person's later edits asks first.
 - Review first for the person's own content; apply with Undo only for small, easily reversed changes.
@@ -40,3 +41,4 @@ Pinch's "Change with Pepper" lets a person tell an assistant what to change in a
 ## Changes
 
 - 2026-11-26, after the product and design reviews of the first use: unsaved changes now add up across rounds instead of the newest replacing the old (a later ask was hiding an earlier removal); the summary names one or two changed items; Undo is a chip, not a text button; the reply line is near body contrast.
+- 2026-11-26, the owner's review of the first use: the 3px leading edge became a hairline that follows the item's corners (a one-sided bar can't follow a rounded tint, and looked broken); each changed item now carries a small corner sparkle, reversing "never on each marked row", because on a long recipe the person has to spot the changes while scrolling and the owner asked for it; a finder counts the changes not yet seen and jumps to them; and the box that asks Pepper moved to the foot of the form, chat-style, with a growing box and the summary above it, since a long ask at the top was cramped and chat boxes sit at the bottom.

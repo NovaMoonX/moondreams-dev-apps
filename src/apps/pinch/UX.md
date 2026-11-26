@@ -1957,17 +1957,17 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["Recipe drawer · ⋯ More · Change with Pepper"] --> B["Recipe form · the box open and focused"]
-    A2["Recipe form, opened any other way"] --> A3["✨ Change with Pepper"] --> B
-    B --> C["Type or tap the mic · Send · 'Pepper is changing the recipe…'"]
-    C --> D["Notice: ✨ Pepper changed 2 ingredients and a step · its one line · Took out: cream · Undo"]
-    D --> E["Changed rows, steps and fields tinted with a leading edge, until edited"]
+    A["Recipe drawer · ⋯ More · Change with Pepper"] --> B["Recipe form · the box at the foot, focused"]
+    A2["Recipe form of a saved recipe, opened any other way"] --> B
+    B --> C["Type and send, or tap the mic and talk · Pepper's face while it listens and works"]
+    C --> D["Form scrolls to the first change · above the box: its one line · Pepper changed … · Took out: cream · Undo"]
+    D --> E["Changed rows tinted with a hairline and a corner sparkle · 2 changes left to see ↑ ↓"]
     E --> C
     D -->|Undo| B
     E --> F["Save · reason prefilled 'Asked Pepper: …' on a cooked recipe"]
 ```
 
-The box sits at the top of the form of a saved recipe: a quiet line saying the recipe and the ask go to Gemini and nothing is kept until Save (until the first send), a growing text box (500 characters), a mic where the browser can listen (the words fill the box, never send themselves), and Send. A change that can't be made shows Pepper's one line alone, with nothing marked. After twelve sends in one sitting the box gives way to "That's as many changes as one sitting takes. Save, then ask again."
+The box is pinned at the foot of the form of a saved recipe, above Cancel and Save, like a chat: a growing text box (one line, up to five, 500 characters, "Ask Pepper"), a mic while it is empty where the browser can listen, and a round Send; until the first send a quiet line under it says the recipe and the ask go to Gemini, speech to the browser, and nothing is kept until Save. Tapping the mic swaps the box for Pepper's face in the orb (the look picked in Voice control, or the orb), "Listening", the words as they are heard and Stop; when the person stops talking the words send by themselves and the face shows "Changing it…"; a send that fails puts the words back in the box. Once a change lands the form scrolls to the first changed item, and above the box sit Pepper's line, then who changed what and what it took out (each cut to two lines, one on a short screen), Undo, and the finder ("2 changes left to see" with up and down). A change that can't be made shows Pepper's one line alone, with nothing marked. After twelve sends in one sitting the box gives way to "That's as many changes as one sitting takes. Save, then ask again."
 
 **Say how to keep a recipe**
 

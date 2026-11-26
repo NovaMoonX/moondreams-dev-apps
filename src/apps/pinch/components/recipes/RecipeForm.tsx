@@ -43,7 +43,9 @@ import { formatList } from '@/utils/formatUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import { canLoadImage } from '@/utils/imageUtils';
 import Stepper from '@/components/Stepper';
-import PepperComposer from '@apps/pinch/components/recipes/PepperComposer';
+import PepperDock from '@apps/pinch/components/recipes/PepperDock';
+import AiChangeFinder from '@/components/AiChangeFinder';
+import { useChangeFinder } from '@/hooks/useChangeFinder';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
 import CategoryField from '@apps/pinch/components/shared/CategoryField';
 import RecipeCareField from '@apps/pinch/components/recipes/RecipeCareField';
@@ -313,7 +315,9 @@ function RecipeForm({
   );
   const upload = useImageUpload(null, 'cover');
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
-  const units = useAppSelector(selectPinchSettings).units;
+  const { units, voice: voiceSettings } = useAppSelector(selectPinchSettings);
+  const formRootRef = useRef<HTMLDivElement>(null);
+  const changeFinder = useChangeFinder(formRootRef, '.ai-changed');
   const [readStart] = useState(() => {
     if (!initialRead) return null;
     const read = getDataFromExtracted(
@@ -1311,6 +1315,7 @@ function RecipeForm({
       }));
       return;
     }
+    changeFinder.goFirstOnNextChange();
     seedForm(data);
     setPepper((current) => ({
       rounds: [
@@ -1420,6 +1425,40 @@ function RecipeForm({
     };
   }, [ask, backStepRef]);
 
+  const pepperDock = isPepperOn && ask === null && (
+    <PepperDock
+      rounds={pepper.sent}
+      isStartFocused={autoFocusPepper}
+      look={voiceSettings.look}
+      onSend={sendToPepper}
+      above={
+        <>
+          {pepperRound !== null && (
+            <AiChangeNotice
+              who='Pepper'
+              summary={getPepperSummary()}
+              reply={pepperRound.reply}
+              removed={liveMarks?.removedIngredientNames ?? []}
+              undoLabel={pepper.rounds.length > 1 ? 'Undo last' : 'Undo'}
+              onUndo={() => void undoPepper()}
+              footer={<AiChangeFinder finder={changeFinder} />}
+              isCompact
+            />
+          )}
+          {pepper.unchangedReply !== null && (
+            <AiChangeNotice
+              who='Pepper'
+              summary=''
+              reply={pepper.unchangedReply}
+              removed={[]}
+              isCompact
+            />
+          )}
+        </>
+      }
+    />
+  );
+
   if (recipeId !== null && !recipe) {
     return (
       <p className='text-muted-foreground py-6 text-center text-sm'>
@@ -1429,7 +1468,7 @@ function RecipeForm({
   }
 
   return (
-    <>
+    <div ref={formRootRef}>
       {draft.isNoticeShown && (
         <div className='mb-4'>
           <DraftRestoredNotice
@@ -1437,35 +1476,6 @@ function RecipeForm({
             onDismiss={draft.hideNotice}
           />
         </div>
-      )}
-      {isPepperOn && ask === null && (
-        <>
-          <PepperComposer
-            rounds={pepper.sent}
-            isStartOpen={autoFocusPepper}
-            onSend={sendToPepper}
-          />
-          {pepperRound !== null && (
-            <AiChangeNotice
-              className='mb-4'
-              who='Pepper'
-              summary={getPepperSummary()}
-              reply={pepperRound.reply}
-              removed={liveMarks?.removedIngredientNames ?? []}
-              undoLabel={pepper.rounds.length > 1 ? 'Undo last' : 'Undo'}
-              onUndo={() => void undoPepper()}
-            />
-          )}
-          {pepper.unchangedReply !== null && (
-            <AiChangeNotice
-              className='mb-4'
-              who='Pepper'
-              summary=''
-              reply={pepper.unchangedReply}
-              removed={[]}
-            />
-          )}
-        </>
       )}
       <UndoSnackbar pending={pending} onUndo={undo} />
       {initialIdea?.kind === 'PHOTO' && (
@@ -1592,6 +1602,7 @@ function RecipeForm({
         }}
         submitButton={
           <ModalFooterActions
+            top={pepperDock}
             note={
               error ? (
                 <span className='text-destructive'>{error}</span>
@@ -1653,7 +1664,7 @@ function RecipeForm({
           error={error}
         />
       )}
-    </>
+    </div>
   );
 }
 
