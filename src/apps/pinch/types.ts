@@ -173,6 +173,8 @@ export interface PinchSettings {
   freezerDays: number | null;
   /** Whether a new recipe's Photo drawer searches the web with its title for pictures to pick. A document written before this key lacks it, which reads as true. */
   suggestPhotos: boolean;
+  /** Whether the AI that reads a recipe also adds what a cookbook would: the steps the source leaves out, honest times and how it keeps. Off, it fills in only what the source gives. A document written before this key lacks it, which reads as true. */
+  isFinishingRecipes: boolean;
   /** Whether the Calendar draws its stat tiles (the total, the averages and the daily nutrition) above the week or month. Saved with the account, so it follows the person to another device. A document written before this key lacks it, which reads as false. */
   calendarStats: boolean;
   /** The tab Pinch opens on, on every device. A document written before this key lacks it, which reads as Recipes. */

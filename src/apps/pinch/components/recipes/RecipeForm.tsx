@@ -1345,6 +1345,12 @@ function RecipeForm({
                   ))}
                 </ul>
               )}
+            {(!isReadNoticeFolded || isReadDetailOpen) &&
+              readNotice.footer !== null && (
+                <p className='text-muted-foreground pt-1 text-xs'>
+                  {readNotice.footer}
+                </p>
+              )}
           </div>
           <Button
             type='button'

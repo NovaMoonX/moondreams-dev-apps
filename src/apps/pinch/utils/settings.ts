@@ -31,6 +31,7 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   fridgeDays: null,
   freezerDays: null,
   suggestPhotos: true,
+  isFinishingRecipes: true,
   calendarStats: false,
   defaultTab: DEFAULT_PINCH_TAB,
   voice: {
@@ -113,6 +114,7 @@ export interface PinchSettingsPatch {
   fridgeDays?: number;
   freezerDays?: number;
   suggestPhotos?: boolean;
+  isFinishingRecipes?: boolean;
   calendarStats?: boolean;
   defaultTab?: PinchStartTab;
   voice?: Partial<PinchVoiceSettings>;
@@ -132,6 +134,8 @@ export const createSettings = (
   fridgeDays: patch.fridgeDays ?? DEFAULT_PINCH_SETTINGS.fridgeDays,
   freezerDays: patch.freezerDays ?? DEFAULT_PINCH_SETTINGS.freezerDays,
   suggestPhotos: patch.suggestPhotos ?? DEFAULT_PINCH_SETTINGS.suggestPhotos,
+  isFinishingRecipes:
+    patch.isFinishingRecipes ?? DEFAULT_PINCH_SETTINGS.isFinishingRecipes,
   calendarStats: patch.calendarStats ?? DEFAULT_PINCH_SETTINGS.calendarStats,
   defaultTab: patch.defaultTab ?? DEFAULT_PINCH_SETTINGS.defaultTab,
   voice: { ...DEFAULT_PINCH_SETTINGS.voice, ...patch.voice },
@@ -163,6 +167,9 @@ export const getSettingsUpdates = (
   ...(patch.suggestPhotos === undefined
     ? []
     : [{ path: ['suggestPhotos'], value: patch.suggestPhotos }]),
+  ...(patch.isFinishingRecipes === undefined
+    ? []
+    : [{ path: ['isFinishingRecipes'], value: patch.isFinishingRecipes }]),
   ...(patch.calendarStats === undefined
     ? []
     : [{ path: ['calendarStats'], value: patch.calendarStats }]),

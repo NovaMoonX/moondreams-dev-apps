@@ -393,6 +393,7 @@ assert.deepEqual(Object.keys(hostile).sort(), [
   'categories',
   'cookMinutes',
   'description',
+  'finished',
   'guided',
   'ingredients',
   'isCareEstimate',
@@ -1173,4 +1174,96 @@ assert.equal(
   normalizeExtractedRecipe({ isCareEstimate: true, fridgeDays: 3.9 })
     .isCareEstimate,
   true,
+);
+
+// Finishing like a cookbook: what the model added is kept, trimmed, deduped and capped
+assert.deepEqual(normalizeExtractedRecipe({}).finished, []);
+assert.deepEqual(
+  normalizeExtractedRecipe({
+    finished: [
+      '  added a step to melt the butter ',
+      'added a step to melt the butter',
+      '',
+      7,
+      'x'.repeat(200),
+    ],
+  }).finished.map((item) => item.length),
+  [31, 80],
+  'finished items are trimmed, deduped, blank and non-text ones dropped, and long ones cut',
+);
+assert.equal(
+  normalizeExtractedRecipe({
+    finished: Array.from({ length: 20 }, (_, index) => `added step ${index}`),
+  }).finished.length,
+  8,
+  'finished is capped',
+);
+
+const cornbreadReading = {
+  title: 'Cornbread dressing',
+  isTimeEstimate: true,
+  prepMinutes: 25,
+  cookMinutes: 40,
+  isCareEstimate: true,
+  fridgeDays: 3,
+  freezerDays: 90,
+  reheat: 'Reheat covered at 350°F with a splash of broth.',
+  tip: 'Keep the broth apart.',
+  ingredients: [
+    { name: 'Cornbread', amount: 1, unit: 'EACH' },
+    { name: 'Butter', amount: 0.5, unit: 'CUP', note: 'melted' },
+  ],
+  steps: [
+    { text: 'Melt the butter.', section: 'Prep' },
+    { text: 'Crumble the cornbread into a large bowl.', section: 'Prep' },
+    { text: 'Stir in the butter.', section: 'Mix' },
+    {
+      text: 'Bake uncovered at 350°F until the top is light brown.',
+      section: 'Bake',
+    },
+  ],
+  finished: [
+    'added a step to melt the butter',
+    'added a step to crumble the cornbread',
+    'estimated how long it keeps',
+  ],
+};
+const cornbread = normalizeExtractedRecipe(cornbreadReading);
+assert.deepEqual(cornbread.finished, [
+  'added a step to melt the butter',
+  'added a step to crumble the cornbread',
+  'estimated how long it keeps',
+]);
+assert.equal(cornbread.isTimeEstimate, true);
+assert.equal(cornbread.isCareEstimate, true);
+assert.equal(cornbread.care?.fridgeDays, 3);
+assert.equal(cornbread.steps.length, 4);
+
+// Strict mode is the safety net when the model ignores it: no estimates or finishing notes survive
+const strictCornbread = normalizeExtractedRecipe(cornbreadReading, false);
+assert.deepEqual(strictCornbread.finished, []);
+assert.equal(strictCornbread.prepMinutes, null);
+assert.equal(strictCornbread.cookMinutes, null);
+assert.equal(strictCornbread.isTimeEstimate, false);
+assert.equal(strictCornbread.isCareEstimate, false);
+assert.equal(strictCornbread.care?.fridgeDays, null);
+assert.equal(strictCornbread.care?.freezerDays, null);
+assert.equal(strictCornbread.care?.reheat, null);
+assert.equal(
+  strictCornbread.care?.tip,
+  'Keep the broth apart.',
+  'the recipe’s own tip is not an estimate',
+);
+assert.equal(
+  normalizeExtractedRecipe(
+    { prepMinutes: 10, cookMinutes: 30, fridgeDays: 4, finished: ['x'] },
+    false,
+  ).prepMinutes,
+  10,
+  'a time the source gave stays when finishing is off',
+);
+assert.equal(
+  normalizeExtractedRecipe({ fridgeDays: 4 }, false).care?.fridgeDays,
+  4,
+  'keeping the source states stays when finishing is off',
 );

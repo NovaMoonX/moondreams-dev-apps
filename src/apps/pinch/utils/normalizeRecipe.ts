@@ -2,6 +2,8 @@ import { toComparable } from '@/utils/optionMatchUtils';
 import { clipAtWord } from '@/utils/stringUtils';
 import {
   MAX_AMOUNT_TEXT_LENGTH,
+  MAX_FINISHED_ITEMS,
+  MAX_FINISHED_LENGTH,
   MAX_GUIDED_ITEMS,
   MAX_GUIDED_LENGTH,
   MAX_MINUTES,
@@ -68,6 +70,8 @@ export interface ExtractedRecipe {
   unread: string[];
   /** Changes the person's guidance made to the reading, in a few words each; empty without guidance. */
   guided: string[];
+  /** What the reader added beyond the source (a step to melt the butter, longer times), in a few words each; empty when finishing was off or nothing was added. */
+  finished: string[];
 }
 
 const asString = (value: unknown) =>
@@ -298,19 +302,36 @@ const mergeOtherMeasures = (
   ];
 };
 
-/** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real, and a line with no amount keeps its words ("to taste") as its amount text. */
-export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
+const toShortList = (value: unknown, length: number, max: number) =>
+  [
+    ...new Set(
+      (Array.isArray(value) ? value : [])
+        .map(asString)
+        .filter((entry): entry is string => entry !== null)
+        .map((entry) => entry.slice(0, length)),
+    ),
+  ].slice(0, max);
+
+/** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real, and a line with no amount keeps its words ("to taste") as its amount text. With `isFinishing` false, nothing the model estimated or added beyond the source survives: no estimated times or keeping days and no finishing notes. */
+export function normalizeExtractedRecipe(
+  raw: unknown,
+  isFinishing = true,
+): ExtractedRecipe {
   const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<
     string,
     unknown
   >;
   const list = (value: unknown) => (Array.isArray(value) ? value : []);
+  const isCareDropped = !isFinishing && parsed.isCareEstimate === true;
   const care = toCare({
-    fridgeDays: asWholeDays(parsed.fridgeDays),
-    freezerDays: asWholeDays(parsed.freezerDays),
-    reheat: parsed.reheat,
+    fridgeDays: isCareDropped ? null : asWholeDays(parsed.fridgeDays),
+    freezerDays: isCareDropped ? null : asWholeDays(parsed.freezerDays),
+    reheat: isCareDropped ? null : parsed.reheat,
     tip: parsed.tip,
   });
+  const isTimeDropped = !isFinishing && parsed.isTimeEstimate === true;
+  const prepMinutes = isTimeDropped ? null : asMinutes(parsed.prepMinutes);
+  const cookMinutes = isTimeDropped ? null : asMinutes(parsed.cookMinutes);
 
   return {
     title: asString(parsed.title)?.slice(0, MAX_RECIPE_TITLE_LENGTH) ?? null,
@@ -319,15 +340,14 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
       parsed.servingsEstimated === true && asNumber(parsed.servings) !== null,
     isTimeEstimate:
       parsed.isTimeEstimate === true &&
-      (asMinutes(parsed.prepMinutes) !== null ||
-        asMinutes(parsed.cookMinutes) !== null),
+      (prepMinutes !== null || cookMinutes !== null),
     categories: getCategories({
       categories: list(parsed.categories).filter(
         (value): value is string => typeof value === 'string',
       ),
     }),
-    prepMinutes: asMinutes(parsed.prepMinutes),
-    cookMinutes: asMinutes(parsed.cookMinutes),
+    prepMinutes,
+    cookMinutes,
     description:
       asString(parsed.description)?.slice(0, MAX_RECIPE_DESCRIPTION_LENGTH) ??
       null,
@@ -366,7 +386,8 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
       .slice(0, MAX_RECIPE_INGREDIENTS),
     ...readSteps(list(parsed.steps)),
     care,
-    isCareEstimate: parsed.isCareEstimate === true && care !== null,
+    isCareEstimate:
+      parsed.isCareEstimate === true && care !== null && !isCareDropped,
     unread: list(parsed.unread)
       .flatMap((entry) =>
         asString(entry) ? [asString(entry)!.slice(0, 200)] : [],
@@ -377,5 +398,8 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
       .filter((entry): entry is string => entry !== null)
       .map((entry) => entry.slice(0, MAX_GUIDED_LENGTH))
       .slice(0, MAX_GUIDED_ITEMS),
+    finished: isFinishing
+      ? toShortList(parsed.finished, MAX_FINISHED_LENGTH, MAX_FINISHED_ITEMS)
+      : [],
   };
 }

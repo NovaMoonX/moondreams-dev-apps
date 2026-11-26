@@ -10790,6 +10790,7 @@ assert.equal(
       fridgeDays: 5,
       freezerDays: null,
       suggestPhotos: true,
+      isFinishingRecipes: true,
       calendarStats: false,
       defaultTab: 'recipes',
       voice: {
@@ -10841,6 +10842,11 @@ assert.equal(
     'the defaults are never written as they are',
   );
   assert.equal(stgDefaults.suggestPhotos, true, 'photo suggestions start on');
+  assert.equal(
+    stgDefaults.isFinishingRecipes,
+    true,
+    'finishing a recipe like a cookbook starts on',
+  );
   assert.deepEqual(
     [
       stgDefaults.reminders.eatSoon,
@@ -10965,6 +10971,11 @@ assert.equal(
     stgWithDefaults(olderDocument)?.suggestPhotos,
     true,
     'and a document written before photo suggestions reads them as on',
+  );
+  assert.equal(
+    stgWithDefaults(olderDocument)?.isFinishingRecipes,
+    true,
+    'and a document written before finishing reads it as on',
   );
   assert.equal(
     stgWithDefaults(olderDocument)?.calendarStats,

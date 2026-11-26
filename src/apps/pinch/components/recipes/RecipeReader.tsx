@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AIError } from 'firebase/ai';
 import { Lightbulb, Plus, X } from 'lucide-react';
 
+import AppToggle from '@/components/AppToggle';
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import FilePickCard from '@/components/FilePickCard';
 import FormSection from '@/components/FormSection';
@@ -37,7 +38,10 @@ import {
   type ExtractedRecipe,
 } from '@apps/pinch/lib/extractRecipe';
 import { recipePageQueryOptions } from '@apps/pinch/queries/recipePageQueries';
-import { selectIdeaGroups } from '@apps/pinch/store/selectors';
+import {
+  selectIdeaGroups,
+  selectPinchSettings,
+} from '@apps/pinch/store/selectors';
 import type { RecipeSource, RecipeStartMethod } from '@apps/pinch/types';
 import {
   getPageExtras,
@@ -73,6 +77,17 @@ const toReading = (recipe: ExtractedRecipe): Reading => ({
 const SAVED_LINE = 'You look it over before anything is saved.';
 
 const GUIDANCE_MAX_LINES = 4;
+
+const getFinishingSubtitle = (isFinishing: boolean, isSettingOn: boolean) => {
+  if (isSettingOn) {
+    return isFinishing
+      ? 'Adds missing steps and honest times'
+      : 'Off for this recipe only. To turn it off for every recipe, change it in Settings.';
+  }
+  return isFinishing
+    ? 'On for this recipe only'
+    : 'Reads only what you give it';
+};
 
 const IDEAS_SHOWN = 3;
 const IDEAS_SHOWN_MOST = 10;
@@ -192,6 +207,9 @@ function RecipeReader({
   const textRef = useRef<HTMLTextAreaElement>(null);
   const guidanceRef = useRef<HTMLTextAreaElement>(null);
   const [guidanceText, setGuidanceText] = useState('');
+  const isSettingOn = useAppSelector(selectPinchSettings).isFinishingRecipes;
+  const [finishChoice, setFinishChoice] = useState<boolean | null>(null);
+  const isFinishing = finishChoice ?? isSettingOn;
   const isMounted = useIsMounted();
   const isReading = state.status === 'reading';
   const canPasteText = initialUrl === undefined;
@@ -327,7 +345,7 @@ function RecipeReader({
     const [first] = files;
     if (first === undefined) return;
     void run(first.name, 'AI_FILE', async () =>
-      toReading(await extractRecipeFromFiles(files, guidance)),
+      toReading(await extractRecipeFromFiles(files, guidance, isFinishing)),
     );
   };
 
@@ -346,7 +364,7 @@ function RecipeReader({
         'youtube.com',
         'AI_LINK',
         async () => ({
-          recipe: await extractRecipeFromVideo(videoId, guidance),
+          recipe: await extractRecipeFromVideo(videoId, guidance, isFinishing),
           extras: getVideoExtras(url),
         }),
         true,
@@ -357,7 +375,7 @@ function RecipeReader({
     void run(new URL(url).hostname, 'AI_LINK', async () => {
       const page = await queryClient.fetchQuery(recipePageQueryOptions(url));
       return {
-        recipe: await extractRecipeFromPage(page, guidance),
+        recipe: await extractRecipeFromPage(page, guidance, isFinishing),
         extras: getPageExtras(page, url),
       };
     });
@@ -374,7 +392,7 @@ function RecipeReader({
 
   const handleText = () =>
     void run('your text', 'AI_TEXT', async () =>
-      toReading(await extractRecipeFromText(text, guidance)),
+      toReading(await extractRecipeFromText(text, guidance, isFinishing)),
     );
 
   const reportTyped = (main: string, guide: string) =>
@@ -683,6 +701,22 @@ function RecipeReader({
           </div>
         )}
         {getGuidanceField()}
+        <label className='flex items-start justify-between gap-3 px-1'>
+          <span className='min-w-0'>
+            <span className='block text-sm font-medium'>
+              Finish it like a cookbook
+            </span>
+            <span className='text-muted-foreground block text-xs text-pretty'>
+              {getFinishingSubtitle(isFinishing, isSettingOn)}
+            </span>
+          </span>
+          <AppToggle
+            aria-label='Finish it like a cookbook'
+            checked={isFinishing}
+            disabled={isReading}
+            onCheckedChange={setFinishChoice}
+          />
+        </label>
         {preview !== null && <LinkPreviewCard preview={preview} />}
       </FormSection>
       <ActionChips actions={getChips()} label='What else you can do with it' />

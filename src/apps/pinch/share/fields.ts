@@ -116,6 +116,7 @@ const PINCH_SETTINGS_FIELDS = {
   fridgeDays: 'notUseful',
   freezerDays: 'notUseful',
   suggestPhotos: 'notUseful',
+  isFinishingRecipes: 'notUseful',
   calendarStats: 'notUseful',
   defaultTab: 'notUseful',
   voice: 'notUseful',
