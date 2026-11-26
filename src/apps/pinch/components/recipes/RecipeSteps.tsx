@@ -397,6 +397,8 @@ interface RecipeStepsProps {
   onRemoved: (message: string, restore: () => void) => void;
   /** Drawn under "Add a step". */
   footerAction?: ReactNode;
+  /** Steps an AI added or changed, by index, drawn marked. */
+  aiMarkedIndices?: readonly number[];
 }
 
 function RecipeSteps({
@@ -405,6 +407,7 @@ function RecipeSteps({
   onChange,
   onRemoved,
   footerAction,
+  aiMarkedIndices = [],
 }: RecipeStepsProps) {
   const isPhone = useMediaQuery().isBelow('sm');
   const [openStep, setOpenStep] = useState<number | null>(null);
@@ -479,7 +482,13 @@ function RecipeSteps({
               />,
             ]),
         ...block.steps.map(({ text: step, index }) => (
-          <div key={`step-${index}`} className='space-y-2'>
+          <div
+            key={`step-${index}`}
+            className={join(
+              'space-y-2',
+              aiMarkedIndices.includes(index) && 'ai-changed rounded-lg px-2',
+            )}
+          >
             <div className='flex items-start gap-1'>
               <Button
                 type='button'

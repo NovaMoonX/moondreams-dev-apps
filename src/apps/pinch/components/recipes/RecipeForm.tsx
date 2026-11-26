@@ -13,6 +13,7 @@ import {
   FormFactories,
   type FormCustomFieldProps,
 } from '@moondreamsdev/dreamer-ui/components';
+import AiChangeNotice from '@/components/AiChangeNotice';
 import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -30,6 +31,7 @@ import {
 } from '@/components/summaryGroup';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
@@ -40,6 +42,7 @@ import { formatList } from '@/utils/formatUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import { canLoadImage } from '@/utils/imageUtils';
 import Stepper from '@/components/Stepper';
+import PepperComposer from '@apps/pinch/components/recipes/PepperComposer';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
 import CategoryField from '@apps/pinch/components/shared/CategoryField';
 import RecipeCareField from '@apps/pinch/components/recipes/RecipeCareField';
@@ -90,6 +93,7 @@ import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { announceRecipeAdded } from '@apps/pinch/hooks/useRecipeAdded';
 import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
+import { reviseRecipe } from '@apps/pinch/lib/reviseRecipe';
 import {
   removeRecipe,
   saveRecipe,
@@ -138,6 +142,16 @@ import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getIdeaPhotoPaths } from '@apps/pinch/utils/ideas';
 import { getIdeaExtras, type ReadExtras } from '@apps/pinch/utils/readExtras';
 import { getJoinedChangeReason } from '@apps/pinch/utils/notes';
+import {
+  describePepperChange,
+  getLiveMarks,
+  getPepperReason,
+} from '@apps/pinch/utils/pepperMarks';
+import {
+  applyRevision,
+  toRevisionInput,
+  type RevisionMarks,
+} from '@apps/pinch/utils/pepperRevision';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import {
   getDraftChanges,
@@ -205,6 +219,8 @@ interface RecipeFormProps {
   isDirtyRef: RefObject<boolean>;
   /** Holds a function that steps back inside the form (out of the question about why) and says whether it did, for the screen's own back to call first. */
   backStepRef: RefObject<(() => boolean) | null>;
+  /** Opens with the Change with Pepper box focused. */
+  autoFocusPepper?: boolean;
   /** Cancel and the screen's own back go through the screen, which asks before discarding. */
   onLeave: () => void;
   /** For a form shown inside another screen: runs after a save instead of closing the open subview, and the form offers no delete. */
@@ -243,6 +259,7 @@ function RecipeForm({
   initialRead,
   initialIdea,
   initialChanges,
+  autoFocusPepper = false,
   onTitleChange,
   isDirtyRef,
   backStepRef,
@@ -368,6 +385,21 @@ function RecipeForm({
   const [isSplitOpen, setIsSplitOpen] = useState(false);
   const splitRef = useRef<Pick<Recipe, 'steps' | 'stepSections'> | null>(null);
   const [formKey, setFormKey] = useState(0);
+  const isPepperOn =
+    useIsGateOpen('pinch', 'pepper-edits') && recipeId !== null;
+  const [pepper, setPepper] = useState<{
+    rounds: {
+      previousData: RecipeFormData;
+      data: RecipeFormData;
+      marks: RevisionMarks;
+      reply: string;
+      ask: string;
+    }[];
+    asks: string[];
+    sent: number;
+    unchangedReply: string | null;
+  }>({ rounds: [], asks: [], sent: 0, unchangedReply: null });
+  const latestData = useRef(formData);
   const isDraftDirty = useMemo(
     () =>
       webCover !== null ||
@@ -404,6 +436,18 @@ function RecipeForm({
     isDirtyRef.current = false;
     draft.hideNotice();
   };
+  const seedForm = (data: RecipeFormData) => {
+    latestData.current = data;
+    setFormStart(data);
+    setFormData(data);
+    sectionsRef.current = data.stepSections;
+    splitRef.current = null;
+    setFormKey((current) => current + 1);
+    onTitleChange(data.title);
+    isDirtyRef.current =
+      JSON.stringify(data) !== JSON.stringify(initialData) ||
+      isDirtyRef.current === true;
+  };
   const [isNoteClosed, setIsNoteClosed] = useState(false);
   const [isAllChangesShown, setIsAllChangesShown] = useState(false);
   const [appliedIds, setAppliedIds] = useState(() =>
@@ -413,7 +457,26 @@ function RecipeForm({
   const applied = initialChanges.filter((change) =>
     appliedIds.includes(change.id),
   );
-  const why = typedWhy ?? getJoinedChangeReason(applied) ?? '';
+  const pepperRound = pepper.rounds.at(-1) ?? null;
+  const why =
+    typedWhy ??
+    getJoinedChangeReason(applied) ??
+    getPepperReason(pepper.rounds.map((round) => round.ask)) ??
+    '';
+  const liveMarks = useMemo(
+    () =>
+      pepperRound === null
+        ? null
+        : getLiveMarks(pepperRound.marks, pepperRound.data, formData),
+    [pepperRound, formData],
+  );
+  const aiMarkedIds = useMemo(
+    () =>
+      liveMarks === null
+        ? []
+        : [...liveMarks.addedIngredientIds, ...liveMarks.changedIngredientIds],
+    [liveMarks],
+  );
   const [ask, setAsk] = useState<{
     data: RecipeFormData;
     changes: string[];
@@ -672,7 +735,13 @@ function RecipeForm({
       return custom({
         name: row.name,
         label: '',
-        className: SUMMARY_GROUP_FRAME[position],
+        className: join(
+          SUMMARY_GROUP_FRAME[position],
+          ((row.name === 'sourceChoice' && liveMarks?.source) ||
+            (row.name === 'collections' && liveMarks?.collections) ||
+            (row.name === 'care' && liveMarks?.care)) &&
+            'ai-changed',
+        ),
         renderComponent: (props) => row.render(props, position),
       });
     });
@@ -682,21 +751,27 @@ function RecipeForm({
         name: 'title',
         label: '',
         renderComponent: (props) => (
-          <RecipeTitleField
-            value={String(props.value)}
-            onChange={props.onValueChange}
-            defaultOpen={isBlankByHand}
-          />
+          <div className={join(liveMarks?.title && 'ai-changed rounded-xl')}>
+            <RecipeTitleField
+              value={String(props.value)}
+              onChange={props.onValueChange}
+              defaultOpen={isBlankByHand}
+            />
+          </div>
         ),
       }),
       custom({
         name: 'categories',
         label: '',
         renderComponent: (props) => (
-          <CategoryField
-            value={props.value as DishCategory[]}
-            onChange={props.onValueChange}
-          />
+          <div
+            className={join(liveMarks?.categories && 'ai-changed rounded-xl')}
+          >
+            <CategoryField
+              value={props.value as DishCategory[]}
+              onChange={props.onValueChange}
+            />
+          </div>
         ),
       }),
       custom({
@@ -708,7 +783,12 @@ function RecipeForm({
             props.onValueChange({ ...basics, ...patch });
           return (
             <div className='space-y-1' onKeyDown={blockEnterSubmit}>
-              <div className='flex min-h-11 items-center justify-between gap-3'>
+              <div
+                className={join(
+                  'flex min-h-11 items-center justify-between gap-3',
+                  liveMarks?.servings && 'ai-changed rounded-xl px-2',
+                )}
+              >
                 <span className='text-sm font-medium'>Servings</span>
                 <Stepper
                   label='Servings'
@@ -716,11 +796,15 @@ function RecipeForm({
                   onChange={(servings) => set({ servings })}
                 />
               </div>
-              <RecipeTimesField
-                prep={basics.prep}
-                cook={basics.cook}
-                onChange={set}
-              />
+              <div
+                className={join(liveMarks?.times && 'ai-changed rounded-xl')}
+              >
+                <RecipeTimesField
+                  prep={basics.prep}
+                  cook={basics.cook}
+                  onChange={set}
+                />
+              </div>
             </div>
           );
         },
@@ -729,10 +813,14 @@ function RecipeForm({
         name: 'description',
         label: '',
         renderComponent: (props) => (
-          <RecipeDescriptionField
-            value={String(props.value)}
-            onChange={props.onValueChange}
-          />
+          <div
+            className={join(liveMarks?.description && 'ai-changed rounded-xl')}
+          >
+            <RecipeDescriptionField
+              value={String(props.value)}
+              onChange={props.onValueChange}
+            />
+          </div>
         ),
       }),
       custom({
@@ -795,6 +883,7 @@ function RecipeForm({
               adaptedIds={adaptedIds}
               onAdaptedIdsChange={setAdaptedIds}
               adaptUnits={recipe === null ? null : units}
+              aiMarkedIds={aiMarkedIds}
             />
           </FormSection>
         ),
@@ -812,6 +901,7 @@ function RecipeForm({
                 props.onValueChange(steps);
               }}
               onRemoved={showUndo}
+              aiMarkedIndices={liveMarks?.changedStepIndices}
               footerAction={
                 initialRead === null &&
                 (props.value as string[]).filter((step) => step.trim()).length >
@@ -903,6 +993,8 @@ function RecipeForm({
     tracking,
     adaptedIds,
     units,
+    liveMarks,
+    aiMarkedIds,
   ]);
 
   const handleDelete = async () => {
@@ -1144,6 +1236,63 @@ function RecipeForm({
     }
   };
 
+  const sendToPepper = async (askText: string) => {
+    const context = { sources, collections };
+    const { input, refMap } = toRevisionInput(
+      latestData.current,
+      ingredientsById,
+      context,
+      { ask: askText, earlierAsks: pepper.asks },
+    );
+    const revision = await reviseRecipe(input);
+    const before = latestData.current;
+    const { data, marks } = applyRevision(
+      before,
+      revision,
+      refMap,
+      ingredients,
+      context,
+    );
+    if (!revision.isChanged || marks.isEmpty) {
+      setPepper((current) => ({
+        ...current,
+        asks: [...current.asks, askText],
+        sent: current.sent + 1,
+        unchangedReply: revision.reply,
+      }));
+      return;
+    }
+    seedForm(data);
+    setPepper((current) => ({
+      rounds: [
+        ...current.rounds,
+        {
+          previousData: before,
+          data,
+          marks,
+          reply: revision.reply,
+          ask: askText,
+        },
+      ],
+      asks: [...current.asks, askText],
+      sent: current.sent + 1,
+      unchangedReply: null,
+    }));
+  };
+
+  const undoPepper = () => {
+    if (pepperRound === null) return;
+    seedForm(pepperRound.previousData);
+    setPepper((current) => ({
+      ...current,
+      rounds: current.rounds.slice(0, -1),
+      asks: current.asks.filter(
+        (_, at) => at !== current.asks.lastIndexOf(pepperRound.ask),
+      ),
+      unchangedReply: null,
+    }));
+  };
+
   const handleSubmit = async (data: RecipeFormData) => {
     const hasReason = applied.length > 0 && why.trim() !== '';
     if (
@@ -1208,6 +1357,34 @@ function RecipeForm({
             onDismiss={draft.hideNotice}
           />
         </div>
+      )}
+      {isPepperOn && ask === null && (
+        <>
+          <PepperComposer
+            rounds={pepper.sent}
+            isStartOpen={autoFocusPepper}
+            onSend={sendToPepper}
+          />
+          {pepperRound !== null && pepper.unchangedReply === null && (
+            <AiChangeNotice
+              className='mb-4'
+              who='Pepper'
+              summary={describePepperChange(pepperRound.marks)}
+              reply={pepperRound.reply}
+              removed={pepperRound.marks.removedIngredientNames}
+              onUndo={undoPepper}
+            />
+          )}
+          {pepper.unchangedReply !== null && (
+            <AiChangeNotice
+              className='mb-4'
+              who='Pepper'
+              summary=''
+              reply={pepper.unchangedReply}
+              removed={[]}
+            />
+          )}
+        </>
       )}
       <UndoSnackbar pending={pending} onUndo={undo} />
       {initialIdea?.kind === 'PHOTO' && (
@@ -1317,6 +1494,7 @@ function RecipeForm({
             ...(data as RecipeFormData),
             stepSections: sectionsRef.current,
           };
+          latestData.current = next;
           setFormData(next);
           setError(null);
           onTitleChange(next.title);

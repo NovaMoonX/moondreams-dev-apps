@@ -72,6 +72,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     subview?.kind === 'recipe' ? (subview.fromIdeaId ?? null) : null;
   const fromChangeIds =
     subview?.kind === 'recipe' ? (subview.fromChangeIds ?? []) : [];
+  const withPepper = subview?.kind === 'recipe' && subview.withPepper === true;
   const fromCalendar =
     subview?.kind === 'recipe' && subview.fromCalendar === true;
   const isDirtyRef = useRef(false);
@@ -288,6 +289,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
           initialRead={read}
           initialIdea={fromIdea}
           initialChanges={fromChanges}
+          autoFocusPepper={withPepper}
           isDirtyRef={isDirtyRef}
           backStepRef={backStepRef}
           onLeave={() => void leave()}

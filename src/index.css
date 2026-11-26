@@ -905,3 +905,29 @@ html[data-pressing] * {
     transition: none !important;
   }
 }
+
+/* What an AI changed in a form: a quiet tint and a leading edge in the app's --ai-mark, settling from a stronger tint once. */
+:root {
+  --ai-mark: var(--color-primary);
+}
+
+@keyframes ai-change-in {
+  from {
+    background-color: color-mix(in oklab, var(--ai-mark) 26%, transparent);
+  }
+  to {
+    background-color: color-mix(in oklab, var(--ai-mark) 11%, transparent);
+  }
+}
+
+.ai-changed {
+  background-color: color-mix(in oklab, var(--ai-mark) 11%, transparent);
+  box-shadow: inset 3px 0 0 var(--ai-mark);
+  animation: ai-change-in 600ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-changed {
+    animation: none;
+  }
+}
