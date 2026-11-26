@@ -58,6 +58,8 @@ export function useGrowingTextarea(
         }),
       );
       observer.current.observe(field);
+      // Dreamer UI's Textarea resets a new field's height in its own effect, after this one.
+      requestAnimationFrame(() => fit(field, fitted.current.maxLines));
     }
     fitted.current = { field, value, maxLines };
     fit(field, maxLines);

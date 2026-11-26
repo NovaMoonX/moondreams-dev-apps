@@ -12,6 +12,7 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowRightLeft,
+  ArrowUpDown,
   ArrowUp,
   Link2,
   NotebookText,
@@ -32,6 +33,7 @@ import Field from '@/components/forms/Field';
 import LabelChip from '@/components/LabelChip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import MoveChoices from '@/components/MoveChoices';
+import RearrangeGroupsSheet from '@/components/RearrangeGroupsSheet';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
 import ReorderList, { type ReorderGroup } from '@/components/ReorderList';
@@ -93,7 +95,6 @@ import {
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { takeSuggestionIds } from '@apps/pinch/utils/pickerSuggestions';
 import {
-  canMoveIngredientGroup,
   findLineSlot,
   getLineNeighbourSlot,
   getSpanAnchor,
@@ -842,10 +843,7 @@ interface GroupEditorBodyProps {
   onDraftChange: (draft: string) => void;
   onDone: () => void;
   onRemove: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  upSubtitle?: string;
-  downSubtitle?: string;
+  onRearrange?: () => void;
 }
 
 function GroupEditorBody({
@@ -856,10 +854,7 @@ function GroupEditorBody({
   onDraftChange,
   onDone,
   onRemove,
-  onMoveUp,
-  onMoveDown,
-  upSubtitle,
-  downSubtitle,
+  onRearrange,
 }: GroupEditorBodyProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const isMerge = otherNames.some(
@@ -900,13 +895,14 @@ function GroupEditorBody({
           Another group has this name, so the two become one.
         </p>
       )}
-      <MoveChoices
-        itemNoun='group'
-        onMoveUp={onMoveUp}
-        onMoveDown={onMoveDown}
-        upSubtitle={upSubtitle}
-        downSubtitle={downSubtitle}
-      />
+      {onRearrange && (
+        <ActionRow
+          icon={<ArrowUpDown className='h-4 w-4' />}
+          label='Rearrange groups'
+          subtitle='Change the order the groups come in.'
+          onClick={onRearrange}
+        />
+      )}
       <ActionRow
         isDestructive
         icon={<Ungroup className='h-4 w-4' />}
@@ -928,11 +924,8 @@ interface GroupHeadingProps {
   lineCount: number;
   onRename: (name: string) => void;
   onRemove: () => void;
-  /** Left out where the group cannot move that way. */
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  upSubtitle?: string;
-  downSubtitle?: string;
+  /** Left out while the recipe has fewer than two groups to order. */
+  onRearrange?: () => void;
 }
 
 /** Closing the editor keeps the typed name. */
@@ -942,10 +935,7 @@ function GroupHeading({
   lineCount,
   onRename,
   onRemove,
-  onMoveUp,
-  onMoveDown,
-  upSubtitle,
-  downSubtitle,
+  onRearrange,
 }: GroupHeadingProps) {
   const isPhone = useMediaQuery().isBelow('sm');
   const [isOpen, setIsOpen] = useState(false);
@@ -972,10 +962,13 @@ function GroupHeading({
       onDraftChange={setDraft}
       onDone={close}
       onRemove={remove}
-      onMoveUp={onMoveUp}
-      onMoveDown={onMoveDown}
-      upSubtitle={upSubtitle}
-      downSubtitle={downSubtitle}
+      onRearrange={
+        onRearrange &&
+        (() => {
+          close();
+          onRearrange();
+        })
+      }
     />
   );
   const trigger = (
@@ -1086,6 +1079,7 @@ function RecipeIngredients({
   });
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [sheet, setSheet] = useState<SheetMode | null>(null);
+  const [isRearranging, setIsRearranging] = useState(false);
   const [isAdaptReviewOpen, setIsAdaptReviewOpen] = useState(false);
   const oftenUsedIds = useAppSelector(selectOftenUsedIngredientIds);
   const usedKey = rows.map((row) => row.ingredientId).join(',');
@@ -1228,51 +1222,38 @@ function RecipeIngredients({
       `Moved “${groups[from]?.name ?? ''}”`,
       groups[from]?.lines.map((line) => line.id) ?? [],
     );
-  const getGroupMoveSubtitle = (at: number, direction: MoveDirection) => {
-    if (!canMoveIngredientGroup(rows, at, direction)) return null;
-    const name = groups[at + direction].name;
-    const place = name === null ? 'the lines with no group' : `“${name}”`;
-    return `${direction === -1 ? 'Before' : 'After'} ${place}`;
-  };
-  const reorderGroups: ReorderGroup<LineItem>[] = groups.map((group, at) => {
-    const upSubtitle = getGroupMoveSubtitle(at, -1);
-    const downSubtitle = getGroupMoveSubtitle(at, 1);
-    return {
-      id: group.key,
-      label: group.name,
-      heading:
-        group.name === null ? undefined : (
-          <GroupHeading
-            name={group.name}
-            otherNames={groupNames.filter((name) => name !== group.name)}
-            lineCount={group.lines.length}
-            onRename={(name) => {
-              const renamed = renameLineGroup(rows, group.name ?? '', name);
-              onChange(renamed);
-              focusGroupHeading(
-                renamed.find(
-                  (row) => getGroupKey(row.group) === getGroupKey(name),
-                )?.group ?? name,
-              );
-            }}
-            onRemove={() => removeGroup(group.name ?? '')}
-            onMoveUp={upSubtitle ? () => moveGroup(at, at - 1) : undefined}
-            onMoveDown={downSubtitle ? () => moveGroup(at, at + 1) : undefined}
-            upSubtitle={upSubtitle ?? undefined}
-            downSubtitle={downSubtitle ?? undefined}
-          />
-        ),
-      items: group.lines.map((row, index) => ({
-        id: row.id,
-        row,
-        isFirst: index === 0,
-      })),
-      isOrdered: true,
-      isMovable: group.name !== null,
-      isPinnedFirst: group.name === null,
-      foldedLabel: `${group.name === null ? '' : `${group.name} · `}${group.lines.length} ${group.lines.length === 1 ? 'ingredient' : 'ingredients'}`,
-    };
-  });
+  const pinnedGroups = groups[0]?.name === null ? 1 : 0;
+  const reorderGroups: ReorderGroup<LineItem>[] = groups.map((group) => ({
+    id: group.key,
+    label: group.name,
+    heading:
+      group.name === null ? undefined : (
+        <GroupHeading
+          name={group.name}
+          otherNames={groupNames.filter((name) => name !== group.name)}
+          lineCount={group.lines.length}
+          onRename={(name) => {
+            const renamed = renameLineGroup(rows, group.name ?? '', name);
+            onChange(renamed);
+            focusGroupHeading(
+              renamed.find(
+                (row) => getGroupKey(row.group) === getGroupKey(name),
+              )?.group ?? name,
+            );
+          }}
+          onRemove={() => removeGroup(group.name ?? '')}
+          onRearrange={
+            groupNames.length > 1 ? () => setIsRearranging(true) : undefined
+          }
+        />
+      ),
+    items: group.lines.map((row, index) => ({
+      id: row.id,
+      row,
+      isFirst: index === 0,
+    })),
+    isOrdered: true,
+  }));
 
   const addRow = (
     ingredientId: string,
@@ -1429,7 +1410,6 @@ function RecipeIngredients({
           isPlain
           handleSide='start'
           handleLabel='Move ingredient'
-          groupHandleLabel='Move group'
           getItemLabel={(item) => getName(item.row)}
           renderRow={({ row, isFirst }) => {
             const name = getName(row);
@@ -1520,14 +1500,30 @@ function RecipeIngredients({
               index: toIndex,
             })
           }
-          onMoveGroup={({ groupId, toIndex }) =>
-            moveGroup(
-              groups.findIndex((group) => group.key === groupId),
-              toIndex,
-            )
-          }
         />
       )}
+      <RearrangeGroupsSheet
+        isOpen={isRearranging && groupNames.length > 1}
+        onClose={() => setIsRearranging(false)}
+        title='Rearrange groups'
+        handleLabel='Move group'
+        note={
+          pinnedGroups === 1
+            ? 'Ingredients with no group stay first.'
+            : undefined
+        }
+        groups={groups.slice(pinnedGroups).map((group) => ({
+          id: group.key,
+          label: group.name ?? '',
+          detail: `${group.lines.length} ${group.lines.length === 1 ? 'ingredient' : 'ingredients'}`,
+        }))}
+        onMove={(groupId, toIndex) =>
+          moveGroup(
+            groups.findIndex((group) => group.key === groupId),
+            toIndex + pinnedGroups,
+          )
+        }
+      />
       {rows.length < MAX_RECIPE_INGREDIENTS && (
         <Button
           type='button'

@@ -22,7 +22,7 @@ interface MoveChoicesProps {
 const COMPACT_CLASS =
   "relative gap-1.5 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']";
 
-/** The tap alternative to dragging: Move up and Move down rows for an item's or group's own editor. */
+/** The tap alternative to dragging: Move up and Move down rows for an item's own editor. */
 function MoveChoices({
   itemNoun,
   onMoveUp,

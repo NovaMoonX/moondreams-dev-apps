@@ -13,15 +13,17 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Pencil, Plus, Trash2, Ungroup, X } from 'lucide-react';
+import { ArrowUpDown, Pencil, Plus, Trash2, Ungroup, X } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import Field from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import RearrangeGroupsSheet from '@/components/RearrangeGroupsSheet';
 import RevealChip from '@/components/RevealChip';
 import MoveChoices from '@/components/MoveChoices';
 import ReorderList, { type ReorderGroup } from '@/components/ReorderList';
+import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { generateUuid } from '@/utils';
 import { clipAtWord } from '@/utils/stringUtils';
@@ -31,7 +33,6 @@ import {
   MAX_STEP_SECTION_LENGTH,
 } from '@apps/pinch/constants';
 import {
-  canMoveStepSection,
   getSpanAnchor,
   getStepNeighbourSlot,
   moveStep,
@@ -138,11 +139,8 @@ interface SectionHeadingProps {
   stepCount: number;
   onRename: (name: string) => void;
   onRemove: () => void;
-  /** Left out where the section cannot move that way. */
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  upSubtitle?: string;
-  downSubtitle?: string;
+  /** Left out while the recipe has fewer than two sections to order. */
+  onRearrange?: () => void;
 }
 
 function SectionHeading({
@@ -150,10 +148,7 @@ function SectionHeading({
   stepCount,
   onRename,
   onRemove,
-  onMoveUp,
-  onMoveDown,
-  upSubtitle,
-  downSubtitle,
+  onRearrange,
 }: SectionHeadingProps) {
   const isPhone = useMediaQuery().isBelow('sm');
   const [isOpen, setIsOpen] = useState(false);
@@ -198,13 +193,17 @@ function SectionHeading({
           />
         )}
       </Field>
-      <MoveChoices
-        itemNoun='section'
-        onMoveUp={onMoveUp}
-        onMoveDown={onMoveDown}
-        upSubtitle={upSubtitle}
-        downSubtitle={downSubtitle}
-      />
+      {onRearrange && (
+        <ActionRow
+          icon={<ArrowUpDown className='h-4 w-4' />}
+          label='Rearrange sections'
+          subtitle='Change the order the sections come in.'
+          onClick={() => {
+            close();
+            onRearrange();
+          }}
+        />
+      )}
       <ActionRow
         isDestructive
         icon={<Ungroup className='h-4 w-4' />}
@@ -503,6 +502,33 @@ interface RecipeStepsProps {
 
 const ADDED_ID = 'added-';
 
+interface InlineStepFieldProps {
+  index: number;
+  value: string;
+  onChange: (text: string) => void;
+}
+
+const INLINE_STEP_MAX_LINES = 8;
+
+function InlineStepField({ index, value, onChange }: InlineStepFieldProps) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useGrowingTextarea(ref, value, INLINE_STEP_MAX_LINES);
+  return (
+    <Textarea
+      ref={ref}
+      rows={1}
+      variant='base'
+      autoFocus
+      aria-label={`Step ${index + 1} text`}
+      placeholder='Write this step'
+      maxLength={MAX_STEP_LENGTH}
+      value={value}
+      className='border-border min-h-0 resize-none rounded-none border-b pt-0! pr-0 pb-1! pl-0 text-sm leading-5 focus:border-current/60'
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
 function RecipeSteps({
   steps,
   sections: storedSections,
@@ -513,6 +539,7 @@ function RecipeSteps({
   const isPhone = useMediaQuery().isBelow('sm');
   const [openStep, setOpenStep] = useState<number | null>(null);
   const [drawer, setDrawer] = useState<StepDrawerMode | null>(null);
+  const [isRearranging, setIsRearranging] = useState(false);
   const sections = steps.map((_, at) => storedSections[at] ?? null);
   const [keptIds, setKeptIds] = useState(() => steps.map(() => generateUuid()));
   const ids =
@@ -670,137 +697,139 @@ function RecipeSteps({
       blocks[from].steps.map((step) => ids[step.index]),
     );
   };
-  const getSectionMoveSubtitle = (at: number, direction: MoveDirection) => {
-    if (!canMoveStepSection({ steps, sections }, at, direction)) return null;
-    const name = blocks[at + direction].name;
-    const place = name === null ? 'the steps with no section' : `“${name}”`;
-    return `${direction === -1 ? 'Before' : 'After'} ${place}`;
+  const pinnedBlocks = blocks[0]?.name === null ? 1 : 0;
+  const namedCount = blocks.filter((block) => block.name !== null).length;
+
+  const groups: ReorderGroup<StepItem>[] = blocks.map((block, at) => ({
+    id: blockIds[at],
+    label: block.name,
+    heading:
+      block.name === null ? undefined : (
+        <SectionHeading
+          name={block.name}
+          stepCount={block.steps.length}
+          onRename={(name) => {
+            const indexes = block.steps.map(({ index }) => index);
+            onChange(steps, setBlockSection(indexes, name));
+            focusSectionHeading(name);
+          }}
+          onRemove={() =>
+            removeSection(
+              block.name ?? '',
+              block.steps.map(({ index }) => index),
+            )
+          }
+          onRearrange={
+            namedCount > 1 ? () => setIsRearranging(true) : undefined
+          }
+        />
+      ),
+    items: block.steps.map(({ text, index }) => ({
+      id: ids[index],
+      index,
+      text,
+    })),
+    isOrdered: true,
+  }));
+
+  const toggleStep = (index: number) => {
+    if (isPhone) {
+      const realIds = ids.map(toKeptId);
+      setKeptIds(realIds);
+      setDrawer({ id: realIds[index], isNew: false });
+      return;
+    }
+    setOpenStep((current) => (current === index ? null : index));
   };
 
-  const groups: ReorderGroup<StepItem>[] = blocks.map((block, at) => {
-    const upSubtitle = getSectionMoveSubtitle(at, -1);
-    const downSubtitle = getSectionMoveSubtitle(at, 1);
-    return {
-      id: blockIds[at],
-      label: block.name,
-      heading:
-        block.name === null ? undefined : (
-          <SectionHeading
-            name={block.name}
-            stepCount={block.steps.length}
-            onRename={(name) => {
-              const indexes = block.steps.map(({ index }) => index);
-              onChange(steps, setBlockSection(indexes, name));
-              focusSectionHeading(name);
-            }}
-            onRemove={() =>
-              removeSection(
-                block.name ?? '',
-                block.steps.map(({ index }) => index),
-              )
-            }
-            onMoveUp={upSubtitle ? () => moveSectionTo(at, at - 1) : undefined}
-            onMoveDown={
-              downSubtitle ? () => moveSectionTo(at, at + 1) : undefined
-            }
-            upSubtitle={upSubtitle ?? undefined}
-            downSubtitle={downSubtitle ?? undefined}
-          />
-        ),
-      items: block.steps.map(({ text, index }) => ({
-        id: ids[index],
-        index,
-        text,
-      })),
-      isOrdered: true,
-      isMovable: block.name !== null,
-      isPinnedFirst: block.name === null && at === 0,
-      foldedLabel: `${block.name === null ? '' : `${block.name} · `}${countWords(block.steps.length, 'step')}`,
-    };
-  });
-
-  const renderStep = ({ index, text: step }: StepItem) => (
-    <div className='space-y-2'>
-      <div className='flex items-start gap-1'>
-        <Button
-          type='button'
-          variant='tertiary'
-          aria-expanded={isPhone ? undefined : openStep === index}
-          aria-label={`Step ${index + 1}`}
-          onClick={() => {
-            if (isPhone) {
-              const realIds = ids.map(toKeptId);
-              setKeptIds(realIds);
-              setDrawer({ id: realIds[index], isNew: false });
-              return;
-            }
-            setOpenStep((current) => (current === index ? null : index));
-          }}
-          className='h-auto min-w-0 flex-1 items-start justify-start gap-3 px-0! py-2 text-left'
-        >
-          <span className='bg-accent text-accent-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
-            {index + 1}
-          </span>
-          {(isPhone || openStep !== index) && (
-            <span
-              className={join(
-                'line-clamp-2 min-w-0 flex-1 text-sm font-normal',
-                step.trim() === '' && 'text-muted-foreground',
-              )}
+  const renderStep = ({ index, text: step }: StepItem) => {
+    const isEditing = !isPhone && openStep === index;
+    const number = (
+      <span className='bg-accent text-accent-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
+        {index + 1}
+      </span>
+    );
+    return (
+      <div className='space-y-2'>
+        <div className='flex items-start gap-1'>
+          {isEditing ? (
+            <div className='flex min-w-0 flex-1 items-start gap-3 py-2'>
+              <Button
+                type='button'
+                variant='tertiary'
+                size='stripped'
+                aria-expanded
+                aria-label={`Step ${index + 1}: done editing`}
+                className="relative shrink-0 rounded-full after:absolute after:-inset-2 after:content-['']"
+                onClick={() => toggleStep(index)}
+              >
+                {number}
+              </Button>
+              <InlineStepField
+                index={index}
+                value={step}
+                onChange={(text) =>
+                  onChange(
+                    steps.map((current, at) => (at === index ? text : current)),
+                    sections,
+                  )
+                }
+              />
+            </div>
+          ) : (
+            <Button
+              type='button'
+              variant='tertiary'
+              aria-expanded={isPhone ? undefined : false}
+              aria-label={`Step ${index + 1}`}
+              onClick={() => toggleStep(index)}
+              className='h-auto min-w-0 flex-1 items-start justify-start gap-3 px-0! py-2 text-left'
             >
-              {step.trim() === '' ? 'Write this step' : step}
-            </span>
+              {number}
+              <span
+                className={join(
+                  'line-clamp-2 min-w-0 flex-1 text-sm font-normal',
+                  step.trim() === '' && 'text-muted-foreground',
+                )}
+              >
+                {step.trim() === '' ? 'Write this step' : step}
+              </span>
+            </Button>
           )}
-        </Button>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          aria-label={`Remove step ${index + 1}`}
-          className='size-10 shrink-0'
-          onClick={() => {
-            setOpenStep(null);
-            remove(index);
-          }}
-        >
-          <X className='h-4 w-4' aria-hidden='true' />
-        </Button>
-      </div>
-      {!isPhone && openStep === index && (
-        <div className='space-y-3'>
-          <Textarea
-            rows={3}
-            variant='outline'
-            autoFocus
-            aria-label={`Step ${index + 1} text`}
-            maxLength={MAX_STEP_LENGTH}
-            value={step}
-            onChange={(event) =>
-              onChange(
-                steps.map((current, at) =>
-                  at === index ? event.target.value : current,
-                ),
-                sections,
-              )
-            }
-          />
-          <SectionField
-            section={sections[index]}
-            names={getSectionNames(sections)}
-            onChange={(section) =>
-              onChange(steps, setBlockSection([index], section))
-            }
-          />
-          <StepMoveChoices
-            isCompact
-            index={index}
-            describeMove={describeMove}
-            onMove={(direction) => setOpenStep(moveStepBy(index, direction))}
-          />
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            aria-label={`Remove step ${index + 1}`}
+            className='size-10 shrink-0'
+            onClick={() => {
+              setOpenStep(null);
+              remove(index);
+            }}
+          >
+            <X className='h-4 w-4' aria-hidden='true' />
+          </Button>
         </div>
-      )}
-    </div>
-  );
+        {isEditing && (
+          <div className='space-y-3 pb-2 pl-9'>
+            <SectionField
+              section={sections[index]}
+              names={getSectionNames(sections)}
+              onChange={(section) =>
+                onChange(steps, setBlockSection([index], section))
+              }
+            />
+            <StepMoveChoices
+              isCompact
+              index={index}
+              describeMove={describeMove}
+              onMove={(direction) => setOpenStep(moveStepBy(index, direction))}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className='space-y-2'>
@@ -810,7 +839,6 @@ function RecipeSteps({
         handleSide='start'
         isHandleAtFirstLine
         handleLabel='Move step'
-        groupHandleLabel='Move section'
         getItemLabel={(item) =>
           item.text.trim() === ''
             ? `Step ${item.index + 1}`
@@ -822,9 +850,6 @@ function RecipeSteps({
             group: blockIds.indexOf(toGroupId),
             index: toIndex,
           })
-        }
-        onMoveGroup={({ groupId, toIndex }) =>
-          moveSectionTo(blockIds.indexOf(groupId), toIndex)
         }
       />
       {steps.length < MAX_RECIPE_STEPS && (
@@ -847,6 +872,23 @@ function RecipeSteps({
         </Button>
       )}
       {footerAction}
+      <RearrangeGroupsSheet
+        isOpen={isRearranging && namedCount > 1}
+        onClose={() => setIsRearranging(false)}
+        title='Rearrange sections'
+        handleLabel='Move section'
+        note={
+          pinnedBlocks === 1 ? 'Steps with no section stay first.' : undefined
+        }
+        groups={blocks.slice(pinnedBlocks).map((block, at) => ({
+          id: blockIds[at + pinnedBlocks],
+          label: block.name ?? 'Steps with no section',
+          detail: countWords(block.steps.length, 'step'),
+        }))}
+        onMove={(groupId, toIndex) =>
+          moveSectionTo(blockIds.indexOf(groupId), toIndex + pinnedBlocks)
+        }
+      />
       {isPhone && drawer && drawerIndex >= 0 && (
         <StepDrawer
           steps={steps}
