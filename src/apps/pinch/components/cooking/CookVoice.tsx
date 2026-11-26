@@ -10,6 +10,9 @@ import {
   type RefObject,
 } from 'react';
 
+import AssistantOrb, {
+  type AssistantOrbState,
+} from '@/components/AssistantOrb';
 import MicrophoneAccess from '@/components/MicrophoneAccess';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { NaturalVoiceOption } from '@/components/NaturalVoiceOption';
@@ -638,11 +641,45 @@ function StatusChip({ voice }: { voice: CookVoice }) {
 }
 
 interface CookVoiceLineProps extends CookVoiceSheetProps {
+  /** Where Pepper is while it is on; the orb then takes the chip's place in the line. */
+  orbState?: AssistantOrbState;
   className?: string;
 }
 
+const ORB_WORDS: Record<Exclude<AssistantOrbState, 'off'>, string> = {
+  waiting: `Say “${COOK_WAKE_PHRASE}”`,
+  listening: 'Listening',
+  thinking: 'Thinking',
+  speaking: 'Speaking',
+};
+
+/** Pepper's orb in the state chip's place: the same tap (the voice sheet), smaller than the chip's line is tall. */
+function PepperOrb({
+  voice,
+  state,
+}: {
+  voice: CookVoice;
+  state: Exclude<AssistantOrbState, 'off'>;
+}) {
+  return (
+    <AssistantOrb
+      state={state}
+      word={voice.status === 'starting' ? 'Starting…' : ORB_WORDS[state]}
+      name='Pepper'
+      actionHint='Tap for voice options.'
+      size='sm'
+      className='shrink-0'
+      onClick={voice.openSheet}
+    />
+  );
+}
+
 /** One line over the cooking footer's buttons: while the mic is on, its state as a chip (which opens the voice sheet) and what to say, or what it last heard or answered; after it stops by itself, why, for a few seconds. */
-export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
+export function CookVoiceLine({
+  orbState = 'off',
+  className,
+  ...props
+}: CookVoiceLineProps) {
   const { voice, ingredientExample } = props;
   const permission = useMicrophonePermission();
   const sheet = <CookVoiceSheet {...props} />;
@@ -675,11 +712,23 @@ export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
   }
 
   const { message, status } = voice;
+  const isOrbShown = orbState !== 'off';
   const isHint = message === null && status === 'listening';
   const getText = () => {
     if (message !== null) return message.text;
     if (status === 'starting') return 'Allow the microphone if asked.';
-    if (status === 'speaking') return 'Reading aloud… tap Next to skip';
+    if (status === 'speaking') {
+      return isOrbShown
+        ? 'Tap Next to skip'
+        : 'Reading aloud… tap Next to skip';
+    }
+    if (voice.phase === 'WAITING' && isOrbShown) {
+      return (
+        <span className='max-sm:hidden'>
+          Then “next” or “how much {ingredientExample}”
+        </span>
+      );
+    }
     if (voice.phase === 'WAITING') {
       return (
         <>
@@ -712,7 +761,20 @@ export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
           className,
         )}
       >
-        <StatusChip voice={voice} />
+        {orbState === 'off' ? (
+          <StatusChip voice={voice} />
+        ) : (
+          <PepperOrb voice={voice} state={orbState} />
+        )}
+        {isOrbShown &&
+          voice.phase === 'LOCKED' &&
+          voice.lockEndsAt !== null && (
+            <span className='text-muted-foreground flex shrink-0 items-center gap-1 text-xs'>
+              <Lock className='h-3 w-3' aria-hidden='true' />
+              <LockCountdown endsAt={voice.lockEndsAt} />
+              <span className='sr-only'>Kept open</span>
+            </span>
+          )}
         <p
           className={join(
             'min-w-0 flex-1 truncate text-sm [@media(max-height:500px)]:line-clamp-2 [@media(max-height:500px)]:whitespace-normal',

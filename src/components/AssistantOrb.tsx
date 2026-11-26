@@ -15,8 +15,12 @@ interface AssistantOrbProps {
   avatar?: ReactNode;
   /** The live input level while listening and the output level while speaking, 0 to 1, read every frame. */
   getLevel?: () => number;
-  /** `lg` is the bigger disc and word for a laptop. */
-  size?: 'md' | 'lg';
+  /** `sm` is a 24px pill for a line of text, `lg` the bigger disc and word for a laptop. */
+  size?: 'sm' | 'md' | 'lg';
+  /** The assistant's name, for the button's label ("Pepper is listening."). */
+  name?: string;
+  /** What a tap does, in a sentence ("Tap to stop listening."); with `name` it completes the button's label. */
+  actionHint?: string;
   /** When given the whole pill is one button. */
   onClick?: () => void;
   className?: string;
@@ -29,6 +33,8 @@ function AssistantOrb({
   avatar,
   getLevel,
   size = 'md',
+  name,
+  actionHint,
   onClick,
   className,
 }: AssistantOrbProps) {
@@ -94,6 +100,9 @@ function AssistantOrb({
     </span>
   );
 
+  const label =
+    name && actionHint ? `${name} is ${state}. ${actionHint}` : word;
+
   if (!onClick) {
     return (
       <>
@@ -108,7 +117,10 @@ function AssistantOrb({
       <Clickable
         className={join('w-fit rounded-full', className)}
         onButtonClick={onClick}
-        buttonProps={{ 'aria-label': word }}
+        buttonProps={{
+          'aria-label': label,
+          className: size === 'sm' ? '-inset-y-2!' : undefined,
+        }}
       >
         {pill}
       </Clickable>

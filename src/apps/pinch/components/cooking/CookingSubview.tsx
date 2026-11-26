@@ -10,9 +10,7 @@ import {
 } from 'react';
 import { useStore } from 'react-redux';
 
-import AssistantOrb, {
-  type AssistantOrbState,
-} from '@/components/AssistantOrb';
+import type { AssistantOrbState } from '@/components/AssistantOrb';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 
@@ -3714,19 +3712,10 @@ function CookingSession({
                   'lg:mx-auto lg:w-full lg:max-w-2xl',
               )}
             >
-              {!isFinishShown && pepperOrbState !== 'off' && (
-                <div className='flex justify-center [@media(max-height:500px)]:shrink-0 [@media(max-height:500px)]:self-center'>
-                  <AssistantOrb
-                    state={pepperOrbState}
-                    word='Pepper'
-                    size='md'
-                    onClick={voice.toggle}
-                  />
-                </div>
-              )}
               {!isFinishShown && (
                 <CookVoiceLine
                   voice={voice}
+                  orbState={pepperOrbState}
                   ingredientExample={ingredientExample}
                   dishExample={dishExample}
                   className='[@media(max-height:500px)]:max-w-44 [@media(max-height:500px)]:shrink-0'
