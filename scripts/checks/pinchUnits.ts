@@ -491,5 +491,9 @@ assert.ok(
   isPouredIngredient({ id: 'cat-vanilla-extract', familyId: 'cat-fam-baking' }),
   'vanilla extract wets a spoon like any liquid',
 );
+assert.ok(
+  isPouredIngredient({ id: 'cat-lemon-juice', familyId: 'cat-fam-citrus' }),
+  'a cup of lemon juice goes in the liquid measuring cup',
+);
 assert.equal(unchanged.hint, null);
 console.log('pinch units: ok');
