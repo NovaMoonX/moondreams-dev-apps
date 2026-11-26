@@ -44,6 +44,9 @@ interface CookStepViewProps {
   index: number;
   /** The lines this step names, scaled. */
   ingredients: CookRow[];
+  /** Which of them the person has put in, and the tick that changes it. */
+  added: Record<string, boolean>;
+  onToggleAdded: (id: string, isAdded: boolean) => void;
   isAmountNoteShown: boolean;
   /** Where the first step leads with the recipe's latest note, until "Got it"; null elsewhere. */
   lastTime: {
@@ -99,6 +102,8 @@ function CookStepView({
   sections,
   index,
   ingredients,
+  added,
+  onToggleAdded,
   isAmountNoteShown,
   lastTime,
   entries,
@@ -250,6 +255,8 @@ function CookStepView({
           <CookStepDock
             key={stepNumber}
             rows={ingredients}
+            added={added}
+            onToggleAdded={onToggleAdded}
             isAmountNoteShown={isAmountNoteShown}
             entries={entries}
             onEdit={onEditEntry}

@@ -79,6 +79,7 @@ assert.ok(
 );
 
 const base: PepperScreenInput = {
+  isAddOffered: false,
   view: 'steps',
   recipeTitle: 'Adobo chicken',
   step: { number: 2, count: 6, text: 'Brown the chicken.', section: 'Cook' },
@@ -87,7 +88,10 @@ const base: PepperScreenInput = {
     { name: 'Rice', status: 'running', leftMs: 125_000 },
     { name: 'Pasta water', status: 'done', leftMs: 0 },
   ],
-  stepLines: [{ name: 'chicken thigh', amountText: '3 lb' }],
+  stepLines: [
+    { name: 'chicken thigh', amountText: '3 lb', isAdded: false },
+    { name: 'soy sauce', amountText: '2 tbsp', isAdded: true },
+  ],
   gather: null,
   entries: [
     {
@@ -113,6 +117,14 @@ assert.ok(screen.includes('- Adobo chicken: 6'));
 assert.ok(screen.includes('- Rice: 2:05 left, running'));
 assert.ok(screen.includes('- Pasta water: rang, waiting to be dismissed'));
 assert.ok(screen.includes('- 3 lb chicken thigh'));
+assert.ok(screen.includes('- 2 tbsp soy sauce (added)'));
+assert.ok(!screen.includes('already offered'));
+assert.ok(
+  buildPepperScreen({ ...base, isAddOffered: true }).includes(
+    'already offered',
+  ),
+);
+assert.ok(!screen.includes('chicken thigh (added)'));
 assert.ok(screen.includes('id n-here, tip, step 2: Do not crowd the pan'));
 assert.ok(
   screen.includes(
@@ -151,6 +163,7 @@ const crowded = buildPepperScreen({
   stepLines: Array.from({ length: 300 }, (_, at) => ({
     name: `thing ${at}`,
     amountText: '1 cup',
+    isAdded: false,
   })),
   timers: Array.from({ length: 10 }, (_, at) => ({
     name: `Timer ${at}`,

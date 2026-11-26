@@ -20,8 +20,10 @@ import { getSpokenServings } from '../../src/apps/pinch/utils/cooks.ts';
 import { readHeardCount } from '../../src/lib/speech/heardCount.ts';
 
 import {
+  describeAdded,
   describeAmounts,
   describeTimersLeft,
+  readAddedLines,
   formatSpokenTime,
   normalizeTranscript,
   parseCookCommand,
@@ -2816,6 +2818,226 @@ assert.match(
   spoons.speak,
   /Measuring spoons: 1 tablespoon and half a teaspoon\./,
   'spoons read in words',
+);
+
+// Scrolling is heard on every view.
+[
+  ['scroll down', 'DOWN'],
+  ['scroll down a bit', 'DOWN'],
+  ['page down', 'DOWN'],
+  ['please scroll down', 'DOWN'],
+  ['scroll up', 'UP'],
+  ['page up', 'UP'],
+  ['scroll to the top', 'TOP'],
+  ['go to the top', 'TOP'],
+  ['top of the list', 'TOP'],
+  ['scroll to the bottom', 'BOTTOM'],
+  ['bottom of the list', 'BOTTOM'],
+].forEach(([phrase, to]) => {
+  [plate, gather, { ...plate, isStepView: true }].forEach((context) =>
+    assert.deepEqual(
+      parse(phrase, context),
+      { kind: 'SCROLL', to },
+      `scroll: "${phrase}"`,
+    ),
+  );
+});
+[
+  'down',
+  'up',
+  'top',
+  'bottom',
+  'scroll',
+  'go down',
+  'the bottom of the pan',
+].forEach((phrase) =>
+  assert.equal(
+    parse(phrase)?.kind === 'SCROLL',
+    false,
+    `not a scroll: "${phrase}"`,
+  ),
+);
+
+// A step's added ticks.
+const stepView: CookVoiceContext = {
+  ...plate,
+  isStepView: true,
+  lines: [
+    { id: 'flour', names: ['Flour', 'all-purpose flour'], isInStep: true },
+    { id: 'butter', names: ['Butter'], isInStep: true },
+    { id: 'eggs', names: ['Eggs'], isInStep: true },
+    { id: 'sugar', names: ['Sugar'], isInStep: false },
+  ],
+};
+const parseS = (text: string | string[], context = stepView) =>
+  parseCookCommand(text, context);
+const added = (queries: string[], isAdded = true): CookCommand => ({
+  kind: 'MARK_ADDED',
+  queries,
+  isAdded,
+});
+[
+  ['I added the flour', ['flour']],
+  ['added the butter', ['butter']],
+  ["I've added the butter", ['butter']],
+  ["the butter's in", ['butter']],
+  ['butter is in', ['butter']],
+  ['I put the flour in', ['flour']],
+  ['mark the eggs', ['eggs']],
+  ['mark off the eggs', ['eggs']],
+  ['tick off the sugar', ['sugar']],
+  ['added flour and butter', ['flour', 'butter']],
+].forEach(([phrase, queries]) =>
+  assert.deepEqual(
+    parseS(phrase as string),
+    added(queries as string[]),
+    `added: "${phrase}"`,
+  ),
+);
+[
+  ['unmark the flour', ['flour']],
+  ["I didn't add the flour", ['flour']],
+].forEach(([phrase, queries]) =>
+  assert.deepEqual(
+    parseS(phrase as string),
+    added(queries as string[], false),
+    `unadded: "${phrase}"`,
+  ),
+);
+[
+  'added everything',
+  'all in',
+  "it's all in",
+  'mark everything',
+  'tick off everything',
+].forEach((phrase) =>
+  assert.deepEqual(
+    parseS(phrase),
+    { kind: 'MARK_ALL_ADDED' },
+    `all added: "${phrase}"`,
+  ),
+);
+[
+  'flour',
+  'the butter',
+  'added',
+  'I added the oven',
+  'the oven is in',
+  'mark the oven',
+  'I added the flour yesterday',
+].forEach((phrase) =>
+  assert.equal(
+    parseS(phrase)?.kind === 'MARK_ADDED',
+    false,
+    `not an added tick: "${phrase}"`,
+  ),
+);
+assert.equal(
+  parse('I added the flour', plate),
+  null,
+  'added is heard only on a step view',
+);
+assert.equal(
+  parseS('I added the flour', { ...stepView, choice: { kind: 'LENGTH' } })
+    ?.kind === 'MARK_ADDED',
+  false,
+  'no added tick while a question waits',
+);
+assert.deepEqual(
+  parseG('tick off the garlic'),
+  got('garlic'),
+  'gather keeps tick off as got out',
+);
+assert.deepEqual(
+  parseG('tick off the garlic', { ...gather, isStepView: true }),
+  got('garlic'),
+  'gather wins over the step view',
+);
+assert.deepEqual(
+  readAddedLines(['flour', 'sugar', 'truffle'], stepView.lines),
+  { lineIds: ['flour'], outside: ['sugar', 'truffle'] },
+  'only the step lines are marked; others are outside',
+);
+assert.equal(
+  describeAdded({
+    names: ['Flour'],
+    already: [],
+    outside: [],
+    isAdded: true,
+    left: 2,
+  }),
+  'Ticked the flour. 2 left.',
+);
+assert.equal(
+  describeAdded({
+    names: ['Butter'],
+    already: [],
+    outside: [],
+    isAdded: true,
+    left: 0,
+  }),
+  "That's everything for this step.",
+);
+assert.equal(
+  describeAdded({
+    names: [],
+    already: [],
+    outside: [{ name: 'flour', step: null }],
+    isAdded: true,
+    left: 3,
+  }),
+  "Flour isn't in this step.",
+);
+assert.equal(
+  describeAdded({
+    names: [],
+    already: [],
+    outside: [{ name: 'Salt', step: 6 }],
+    isAdded: true,
+    left: 3,
+  }),
+  'The salt is for step 6.',
+);
+assert.equal(
+  describeAdded({
+    names: ['Flour'],
+    already: [],
+    outside: [],
+    isAdded: false,
+    left: 3,
+  }),
+  'Unticked the flour. 3 left.',
+);
+assert.equal(
+  describeAdded({
+    names: [],
+    already: ['Flour'],
+    outside: [],
+    isAdded: true,
+    left: 3,
+  }),
+  "The flour's already ticked.",
+);
+assert.equal(
+  describeAdded({
+    names: [],
+    already: ['Flour'],
+    outside: [],
+    isAdded: false,
+    left: 3,
+  }),
+  "The flour's already unticked.",
+);
+const dillView: CookVoiceContext = {
+  ...stepView,
+  lines: [{ id: 'dill', names: ['Dill'], isInStep: true }],
+};
+['mark done', 'tick off done', 'put in ten minutes'].forEach((phrase) =>
+  assert.equal(
+    parseS(phrase, dillView)?.kind === 'MARK_ADDED',
+    false,
+    `not an added tick beside dill: "${phrase}"`,
+  ),
 );
 
 console.log('pinchVoice: all checks passed');

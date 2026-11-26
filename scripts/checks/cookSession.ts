@@ -525,15 +525,15 @@ assert.deepEqual(
 assert.deepEqual(
   applyResumePositions(
     {
-      adobo: { stepIndex: 0, servings: 4, gotOut: {} },
-      rice: { stepIndex: 0, servings: 2, gotOut: {} },
+      adobo: { stepIndex: 0, servings: 4, gotOut: {}, added: {} },
+      rice: { stepIndex: 0, servings: 2, gotOut: {}, added: {} },
     },
     { adobo: { stepIndex: 9, servings: 6 } },
     { adobo: 3, rice: 2 },
   ),
   {
-    adobo: { stepIndex: 2, servings: 6, gotOut: {} },
-    rice: { stepIndex: 0, servings: 2, gotOut: {} },
+    adobo: { stepIndex: 2, servings: 6, gotOut: {}, added: {} },
+    rice: { stepIndex: 0, servings: 2, gotOut: {}, added: {} },
   },
   'saved positions sit over a fresh start, held to the recipe, and a recipe not saved starts fresh',
 );

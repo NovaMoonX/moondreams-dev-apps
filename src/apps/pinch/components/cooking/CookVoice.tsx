@@ -437,6 +437,8 @@ function CookVoiceSheet({
         ['ingredients', 'Shows the ingredient list'],
         ['timers', 'Shows all your timers'],
         ['steps', 'Back to the steps'],
+        ['scroll down', 'Moves the list down, or say “scroll up”'],
+        ['scroll to the top', 'Or “scroll to the bottom”'],
       ],
     },
     {
@@ -446,6 +448,8 @@ function CookVoiceSheet({
           'ingredients for this step',
           'Opens what this step uses, and reads it',
         ],
+        ['I added the flour', 'Ticks it off in this step’s amounts'],
+        ['unmark the flour', 'Or say “added everything”'],
         ['note from last time', 'Opens it on the first step, and reads it'],
         ['show me the tips', 'Opens this step’s tips on screen'],
         ['show my notes', 'Opens your notes for this step'],
