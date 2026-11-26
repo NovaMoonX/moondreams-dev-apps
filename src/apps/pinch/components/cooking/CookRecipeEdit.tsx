@@ -7,7 +7,7 @@ import { selectNotesById } from '@apps/pinch/store/selectors';
 interface CookRecipeEditProps {
   uid: string;
   recipeId: string;
-  /** The planned changes being applied to the recipe, quoted at the top of the form. */
+  /** The planned changes being applied to the recipe: they start ticked in the form, beside the recipe's other open changes. */
   changeIds: string[];
   isDirtyRef: RefObject<boolean>;
   backStepRef: RefObject<(() => boolean) | null>;
