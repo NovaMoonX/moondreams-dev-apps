@@ -210,3 +210,63 @@ export function getMeasuringTools(
     ];
   });
 }
+
+interface SharedMeasureRow {
+  id: string;
+  name: string;
+  isLiquid: boolean;
+  measure: { amount: number; unit: Unit; gramsPerMl: number | null } | null;
+}
+
+const getRowSizes = (row: SharedMeasureRow) =>
+  row.measure === null || row.measure.amount <= 0
+    ? []
+    : getSizes({ ...row.measure, name: row.name, isLiquid: row.isLiquid });
+
+const nameList = (names: string[], many: string) =>
+  names.length === 1
+    ? names[0]
+    : names.length === 2
+      ? `${names[0]} and ${names[1]}`
+      : many;
+
+/** A step's lines with the dry ones measured before a liquid that needs the same cup or spoon, so the measure stays dry, and the line that says so; otherwise the lines as written and no hint. */
+export function orderDryFirst<T extends SharedMeasureRow>(
+  rows: T[],
+): { rows: T[]; hint: string | null } {
+  const sized = rows.map((row) => ({ row, sizes: getRowSizes(row) }));
+  const dry = sized.filter(({ row }) => !row.isLiquid);
+  const pairs = sized
+    .filter(({ row }) => row.isLiquid)
+    .flatMap((liquid) =>
+      dry.flatMap((solid) => {
+        const size = liquid.sizes.find((each) => solid.sizes.includes(each));
+        return size === undefined
+          ? []
+          : [{ liquid: liquid.row, solid: solid.row, size }];
+      }),
+    );
+  if (pairs.length === 0) return { rows, hint: null };
+
+  const liquidIds = new Set(pairs.map((pair) => pair.liquid.id));
+  const solidIds = new Set(pairs.map((pair) => pair.solid.id));
+  const rest = rows.filter((row) => !liquidIds.has(row.id));
+  const lastSolid = rest.reduce(
+    (last, row, index) => (solidIds.has(row.id) ? index : last),
+    -1,
+  );
+  const moved = rows.filter((row) => liquidIds.has(row.id));
+  const ordered = [
+    ...rest.slice(0, lastSolid + 1),
+    ...moved,
+    ...rest.slice(lastSolid + 1),
+  ];
+  const solids = rest.filter((row) => solidIds.has(row.id)).map((row) => row.name);
+  const liquids = moved.map((row) => row.name);
+  const sizes = Array.from(new Set(pairs.map((pair) => pair.size)));
+  const measure = sizes.length === 1 ? `the ${sizes[0]}` : 'the same measures';
+  return {
+    rows: ordered,
+    hint: `Same measure: ${nameList(solids, 'the dry ones')} first, then ${nameList(liquids, 'the liquids')}, so ${measure} stays dry.`,
+  };
+}
