@@ -56,11 +56,12 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
     appIds: ['helm', 'pinch'],
     keys: [],
     isBound: false,
-    setup: 'not available: the emulator never calls Google speech',
-    note: 'fixtures (always in the emulator)',
+    setup:
+      'not available locally: with a Gemini key (below) the same voice comes from Gemini, otherwise a test tone',
+    note: 'Gemini when its key is set, else a test tone',
   },
   gemini: {
-    apps: 'voice in Helm and Pinch (Gemini speech)',
+    apps: 'voice in Helm and Pinch (Gemini speech, and locally the default voice too)',
     appIds: ['helm', 'pinch'],
     keys: ['GEMINI_API_KEY'],
     isBound: false,
