@@ -24,6 +24,7 @@ import {
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import ChoiceTilesSheet from '@/components/ChoiceTilesSheet';
 import DetailSheet from '@/components/DetailSheet';
 import FallbackImage from '@/components/FallbackImage';
 import UndoSnackbar from '@/components/UndoSnackbar';
@@ -67,6 +68,8 @@ interface PhotoSetPickerProps {
   onRemove: (id: string) => Promise<void>;
   /** Said in place of the add buttons at the cap. */
   fullMessage?: string;
+  /** Adds from a small tile at the end of the row instead of the full-width buttons, for a record where photos are a side detail; the count line says when it is full. */
+  hasAddTile?: boolean;
 }
 
 interface Notice {
@@ -95,8 +98,8 @@ interface DragState {
   x: number;
 }
 
-// A thumb (5.5rem) plus the row's gap (0.5rem).
-const SLOT = '6rem';
+// A thumb plus the row's gap; thumbs shrink on the narrowest phones.
+const SLOT = 'calc(var(--thumb) + 0.5rem)';
 
 const thumbStyle = (
   drag: DragState | null,
@@ -125,7 +128,7 @@ interface ThumbFrameProps {
 
 function ThumbFrame({ isCover = false, children }: ThumbFrameProps) {
   return (
-    <div className='bg-muted border-border relative size-22 shrink-0 snap-start overflow-hidden rounded-xl border'>
+    <div className='bg-muted border-border relative size-(--thumb) shrink-0 snap-start overflow-hidden rounded-xl border'>
       {children}
       {isCover && (
         <span className='bg-accent text-accent-foreground absolute bottom-1 left-1 rounded-md px-1.5 py-0.5 text-xs font-semibold'>
@@ -213,7 +216,7 @@ function UploadThumb({ upload, onRetry, onDismiss }: UploadThumbProps) {
   );
 }
 
-/** Several photos for one record: a camera loop, a library multi-pick, the first as the cover, and a tapped photo's sheet to make it the cover, move it or remove it (with undo). Each photo is shrunk on the device and saved on its own (`usePhotoSetUploads`), so one uploading never holds the screen. */
+/** Several photos for one record: a camera loop (or one small add tile ending the row, `hasAddTile`), a library multi-pick, the first as the cover, and a tapped photo's sheet to make it the cover, move it or remove it (with undo). Each photo is shrunk on the device and saved on its own (`usePhotoSetUploads`), so one uploading never holds the screen. */
 function PhotoSetPicker({
   photos,
   uploads,
@@ -221,6 +224,7 @@ function PhotoSetPicker({
   onReorder,
   onRemove,
   fullMessage = `That's ${max}, the most you can add.`,
+  hasAddTile = false,
 }: PhotoSetPickerProps) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
@@ -235,6 +239,7 @@ function PhotoSetPicker({
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [isChoosing, setIsChoosing] = useState(false);
   const { pending: undoPending, showUndo, undo } = useUndoRemoval();
   const removal = useRef<{ id: string; timer: number } | null>(null);
   const removeRef = useRef(onRemove);
@@ -474,6 +479,26 @@ function PhotoSetPicker({
 
   const openPicker = (input: HTMLInputElement | null) => input?.click();
 
+  const addTile = (
+    <li className='shrink-0'>
+      <Button
+        type='button'
+        variant='tertiary'
+        className='border-border text-muted-foreground size-(--thumb) flex-col gap-1 rounded-xl border-2 border-dashed px-1! py-1! text-xs font-normal whitespace-normal'
+        onClick={() =>
+          isTouch ? setIsChoosing(true) : openPicker(libraryRef.current)
+        }
+      >
+        {isTouch ? (
+          <Camera className='size-6' aria-hidden='true' />
+        ) : (
+          <ImagePlus className='size-6' aria-hidden='true' />
+        )}
+        {count === 0 ? 'Add a photo' : 'Add another'}
+      </Button>
+    </li>
+  );
+
   const handleChosen = (event: ChangeEvent<HTMLInputElement>) => {
     addFiles(Array.from(event.target.files ?? []));
     event.target.value = '';
@@ -497,11 +522,13 @@ function PhotoSetPicker({
         className='hidden'
         onChange={handleChosen}
       />
-      {count > 0 && (
+      {(count > 0 || hasAddTile) && (
         <div className='space-y-1'>
-          <p className='text-muted-foreground text-xs tabular-nums'>
-            {count} of {max}
-          </p>
+          {count > 0 && (
+            <p className='text-muted-foreground text-xs tabular-nums'>
+              {count} of {max}
+            </p>
+          )}
           {shown.length > 1 && (
             <p className='text-muted-foreground text-xs'>
               {isTouch
@@ -512,7 +539,7 @@ function PhotoSetPicker({
           <ul
             ref={listRef}
             className={join(
-              '-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 py-1',
+              '-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 py-1 [--thumb:5.5rem] max-[359px]:[--thumb:5rem]',
               drag === null ? 'snap-x' : 'snap-none',
             )}
           >
@@ -577,10 +604,11 @@ function PhotoSetPicker({
                 />
               </li>
             ))}
+            {hasAddTile && remaining > 0 && addTile}
           </ul>
         </div>
       )}
-      {remaining === 0 ? (
+      {hasAddTile ? null : remaining === 0 ? (
         <p className='text-muted-foreground text-sm'>{fullMessage}</p>
       ) : (
         <div ref={addAreaRef} className='space-y-2'>
@@ -620,6 +648,32 @@ function PhotoSetPicker({
         >
           {notice.message}
         </p>
+      )}
+      {isChoosing && (
+        <ChoiceTilesSheet
+          title='Add a photo'
+          choices={[
+            {
+              key: 'camera',
+              icon: <Camera />,
+              label: 'Take a photo',
+              onPick: () => {
+                setIsChoosing(false);
+                openPicker(cameraRef.current);
+              },
+            },
+            {
+              key: 'library',
+              icon: <ImagePlus />,
+              label: 'Choose from gallery',
+              onPick: () => {
+                setIsChoosing(false);
+                openPicker(libraryRef.current);
+              },
+            },
+          ]}
+          onClose={() => setIsChoosing(false)}
+        />
       )}
       <UndoSnackbar
         pending={undoPending}

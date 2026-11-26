@@ -46,6 +46,7 @@ import {
 } from '@apps/pinch/utils/containers';
 import {
   formatCookRating,
+  getCookPhotoPaths,
   getCookServings,
   getRatingAverage,
   isCookHistoryFull,
@@ -265,7 +266,9 @@ function CookingHistorySheet({
         ]
           .filter((part) => part !== null)
           .join(' · ');
-  const photoCooks = cooks.filter((cook) => cook.photoPath != null);
+  const cookPhotos = cooks.flatMap((cook) =>
+    getCookPhotoPaths(cook).map((path, index) => ({ cook, path, index })),
+  );
   const shownMode =
     (mode === 'photos' && photoCount > 0) ||
     (mode === 'changes' && tweaks.length > 0)
@@ -457,19 +460,20 @@ function CookingHistorySheet({
           </p>
         ) : shownMode === 'photos' ? (
           <ul className='grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto pt-2 sm:grid-cols-3'>
-            {photoCooks.slice(0, PHOTOS_SHOWN).map((cook) => {
+            {cookPhotos.slice(0, PHOTOS_SHOWN).map(({ cook, path, index }) => {
               const day = formatDateShort(cook.cookedAt);
               return (
-                <li key={cook.id}>
+                <li key={path}>
                   <Button
                     type='button'
                     variant='tertiary'
-                    aria-label={`The cook from ${day}${cook.rating == null ? '' : `, rated ${formatCookRating(cook.rating)}`}`}
+                    aria-label={`${index === 0 ? 'The' : `Photo ${index + 1} of the`} cook from ${day}${cook.rating == null ? '' : `, rated ${formatCookRating(cook.rating)}`}`}
                     className='h-auto w-full flex-col items-stretch gap-1.5 px-0! py-0 text-left font-normal'
                     onClick={() => openEdit(cook.id)}
                   >
                     <CookPhotoThumb
                       cook={cook}
+                      path={path}
                       className='aspect-square w-full rounded-2xl'
                     />
                     <span className='flex flex-wrap items-center gap-x-2 text-xs'>
@@ -484,7 +488,7 @@ function CookingHistorySheet({
                 </li>
               );
             })}
-            {photoCooks.length > PHOTOS_SHOWN && (
+            {cookPhotos.length > PHOTOS_SHOWN && (
               <li className='col-span-full text-muted-foreground text-xs'>
                 The latest {PHOTOS_SHOWN} are here; the rest are in All cooks.
               </li>

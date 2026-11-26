@@ -71,7 +71,7 @@ export const getCookSummaries = (cooks: Cook[]) => {
       lastCookedAt: Math.max(known?.lastCookedAt ?? -Infinity, cook.cookedAt),
       ratedCount: (known?.ratedCount ?? 0) + (cook.rating == null ? 0 : 1),
       ratingTotal: (known?.ratingTotal ?? 0) + (cook.rating ?? 0),
-      photoCount: (known?.photoCount ?? 0) + (cook.photoPath ? 1 : 0),
+      photoCount: (known?.photoCount ?? 0) + getCookPhotoPaths(cook).length,
     });
     return summaries;
   }, new Map<string, CookSummary>());
@@ -125,11 +125,24 @@ export const mergePlannedCook = (existing: Cook | null, incoming: Cook) =>
     ? { isNew: true, cook: incoming }
     : { isNew: false, cook: existing };
 
-/** The rules want every key on the merged document, so an edit writes back the one an older cook lacks. */
-export const getMissingCookFields = (existing: object) => ({
+/** A cook's photos, cover first; a cook from before `photoPaths` has its single `photoPath` as a one-item list. */
+export const getCookPhotoPaths = (
+  cook: Partial<Pick<Cook, 'photoPath' | 'photoPaths'>>,
+): string[] => {
+  if (Array.isArray(cook.photoPaths) && cook.photoPaths.length > 0) {
+    return cook.photoPaths;
+  }
+  return cook.photoPath ? [cook.photoPath] : [];
+};
+
+/** The rules want every key on the merged document, so an edit writes back the one an older cook lacks; an older cook's one photo becomes its list. */
+export const getMissingCookFields = (existing: Partial<Cook>) => ({
   ...('plannedMealId' in existing ? {} : { plannedMealId: null }),
   ...('rating' in existing ? {} : { rating: null }),
   ...('photoPath' in existing ? {} : { photoPath: null }),
+  ...('photoPaths' in existing
+    ? {}
+    : { photoPaths: getCookPhotoPaths(existing) }),
 });
 
 /** A rating the person can give: half a star to five, in half steps. */
@@ -139,7 +152,7 @@ export const isValidCookRating = (rating: number) =>
   rating <= 5 &&
   Number.isInteger(rating / COOK_RATING_STEP);
 
-/** The average of the ratings given, to one decimal, or null before any; and how many cooks have a photo. */
+/** The average of the ratings given, to one decimal, or null before any. */
 export const getRatingAverage = (summary: {
   ratedCount: number;
   ratingTotal: number;

@@ -171,7 +171,18 @@ const SEED_IDEAS = [
   }),
 ];
 
-// The first adobo cook and the rice cook keep the shape from before ratings and photos (no `rating` or `photoPath` key); the other adobo cooks are rated, and two of them have a photo (uploaded to the Storage emulator). Adobo three times over the past weeks at different servings and rice once, all marked from the recipe, plus the dinner
+const getSeedCookPhotos = (
+  photos: { isOldShape: boolean; paths: string[] } | undefined,
+  hasPhoto: boolean,
+) => {
+  if (!hasPhoto || photos === undefined) {
+    return { photoPath: null, photoPaths: [] };
+  }
+  if (photos.isOldShape) return { photoPath: photos.paths[0] };
+  return { photoPath: null, photoPaths: photos.paths };
+};
+
+// The first adobo cook and the rice cook keep the shape from before ratings and photos (no `rating` or `photoPath` key); the other adobo cooks are rated, and two of them have photos (uploaded to the Storage emulator): one in the older one-photo shape, one with two. Adobo three times over the past weeks at different servings and rice once, all marked from the recipe, plus the dinner
 // Alex marked from his plan three days ago (the deterministic id of `seed-pinch-planned-1`). Nachos and the chili have none.
 const SEED_COOKS = [
   {
@@ -1391,23 +1402,39 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     [176, 108, 52],
   );
   const seedShares = buildSeedShares(alex.uid, context.now, hasShareCover);
+  // The first photo cook keeps the shape from before several photos (one `photoPath`); the next has two in `photoPaths`.
   const cookPhotoPaths = new Map(
     (
       await Promise.all(
         SEED_COOKS.filter((cook) => cook.hasPhoto).map(async (cook, index) => {
           const cookedAt =
             today - cook.daysAgo * DAY_MS + cook.hour * 3_600_000;
-          const path = getCookPhotoPath(
-            alex.uid,
-            cook.id,
-            cookedAt + 3_600_000,
+          const colors: [number, number, number][] =
+            index === 0
+              ? [[196, 132, 60]]
+              : [
+                  [120, 84, 52],
+                  [176, 108, 52],
+                ];
+          const paths = await Promise.all(
+            colors.map(async (color, photo) => {
+              const path = getCookPhotoPath(
+                alex.uid,
+                cook.id,
+                cookedAt + (photo + 1) * 3_600_000,
+              );
+              const isUploaded = await uploadSeedImage(
+                path,
+                'that cook shows a camera tile',
+                color,
+              );
+              return isUploaded ? path : null;
+            }),
           );
-          const isUploaded = await uploadSeedImage(
-            path,
-            'that cook shows a camera tile',
-            index === 0 ? [196, 132, 60] : [120, 84, 52],
-          );
-          return isUploaded ? ([cook.id, path] as const) : null;
+          const uploaded = paths.filter((path) => path !== null);
+          return uploaded.length > 0
+            ? ([cook.id, { isOldShape: index === 0, paths: uploaded }] as const)
+            : null;
         }),
       )
     ).filter((entry) => entry !== null),
@@ -1485,11 +1512,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .set({
           ...fields,
           ...('rating' in cook
-            ? {
-                photoPath: hasPhoto
-                  ? (cookPhotoPaths.get(cook.id) ?? null)
-                  : null,
-              }
+            ? getSeedCookPhotos(cookPhotoPaths.get(cook.id), hasPhoto)
             : {}),
           cookedAt,
           createdAt: cookedAt,

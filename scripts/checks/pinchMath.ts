@@ -135,6 +135,7 @@ import {
   getRatingAverage,
   isValidCookRating,
   getMarkableRecipes,
+  getCookPhotoPaths,
   getMissingCookFields,
   getPlannedCookId,
   getPlannedCookedAt,
@@ -1547,18 +1548,38 @@ assert.deepEqual(
 );
 assert.deepEqual(
   getMissingCookFields({ id: 'x', recipeId: 'adobo' }),
-  { plannedMealId: null, rating: null, photoPath: null },
-  'an older cook gets the keys it lacks, as null',
+  { plannedMealId: null, rating: null, photoPath: null, photoPaths: [] },
+  'an older cook gets the keys it lacks, as null or an empty list',
 );
 assert.deepEqual(
-  getMissingCookFields({ plannedMealId: null, rating: null, photoPath: null }),
+  getMissingCookFields({
+    plannedMealId: null,
+    rating: null,
+    photoPath: null,
+    photoPaths: [],
+  }),
   {},
   'a cook with the keys, even null ones, lacks nothing',
 );
 assert.deepEqual(
   getMissingCookFields({ plannedMealId: 'p', rating: 4 }),
-  { photoPath: null },
-  'a cook rated before photos gets only the photo key',
+  { photoPath: null, photoPaths: [] },
+  'a cook rated before photos gets only the photo keys',
+);
+assert.deepEqual(
+  getMissingCookFields({ plannedMealId: 'p', rating: 4, photoPath: 'p/one' }),
+  { photoPaths: ['p/one'] },
+  "a cook from before several photos keeps its one photo as the list's first",
+);
+assert.deepEqual(
+  [
+    getCookPhotoPaths({}),
+    getCookPhotoPaths({ photoPath: 'p/old' }),
+    getCookPhotoPaths({ photoPath: 'p/old', photoPaths: [] }),
+    getCookPhotoPaths({ photoPath: null, photoPaths: ['p/a', 'p/b'] }),
+  ],
+  [[], ['p/old'], ['p/old'], ['p/a', 'p/b']],
+  "a cook's photos come from its list, else its one older photo",
 );
 
 {
@@ -1602,15 +1623,21 @@ assert.deepEqual(
     { ...cookOf('b', 'adobo', 200), rating: null, photoPath: null },
     { ...cookOf('c', 'adobo', 300) },
     { ...cookOf('d', 'adobo', 400), rating: 3, photoPath: null },
+    {
+      ...cookOf('e', 'adobo', 50),
+      rating: null,
+      photoPath: null,
+      photoPaths: ['p/e1', 'p/e2'],
+    },
   ] as Cook[];
   assert.deepEqual(
     getCookSummaries(rated).get('adobo'),
     {
-      count: 4,
+      count: 5,
       lastCookedAt: 400,
       ratedCount: 2,
       ratingTotal: 7.5,
-      photoCount: 1,
+      photoCount: 3,
     },
     'cooks with no rating (null, or a key an older cook lacks) are not counted as 0 stars',
   );
