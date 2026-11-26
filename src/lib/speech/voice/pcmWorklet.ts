@@ -3,6 +3,10 @@ import {
   recordSpeechEvent,
 } from '@/lib/speech/speechDiagnostics';
 import {
+  clearInputLevel,
+  reportInputFrame,
+} from '@/lib/speech/voice/inputLevel';
+import {
   createNoiseNode,
   failNoiseCleaning,
   hasNoiseCleaningFailed,
@@ -106,8 +110,10 @@ const openCapture = async ({
     });
     const silence = context.createGain();
     silence.gain.value = 0;
-    node.port.onmessage = (event: MessageEvent<ArrayBuffer>) =>
+    node.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+      reportInputFrame(event.data);
       onFrame(event.data);
+    };
     if (cleaner) {
       source.connect(cleaner);
       cleaner.connect(node);
@@ -117,6 +123,7 @@ const openCapture = async ({
     return {
       stop: () => {
         node.port.onmessage = null;
+        clearInputLevel();
         source.disconnect();
         cleaner?.disconnect();
         cleaner?.destroy();

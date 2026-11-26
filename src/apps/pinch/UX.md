@@ -1953,6 +1953,22 @@ flowchart LR
     K --> L["Older notes read: Written before you changed the recipe on Oct 20"]
 ```
 
+**Change a recipe with Pepper** (behind the `pepper-edits` switch)
+
+```mermaid
+flowchart LR
+    A["Recipe drawer · ⋯ More · Change with Pepper"] --> B["Recipe form · the box at the foot, focused"]
+    A2["Recipe form of a saved recipe, opened any other way"] --> B
+    B --> C["Type and send, or tap the mic and talk · Pepper's face while it listens and works"]
+    C --> D["Form scrolls to the first change · above the box: its one line · Took out: cream"]
+    D --> E["Changed rows with a soft gradient frame and a sparkle inside the corner · 2 changes to see ↑ ↓ Undo"]
+    E --> C
+    D -->|Undo| B
+    E --> F["Save · reason prefilled 'Asked Pepper: …' on a cooked recipe"]
+```
+
+The box is pinned at the foot of the form of a saved recipe, above Cancel and Save, like a chat: a growing text box (one line, up to five, 500 characters, "Ask Pepper"), a mic whenever the box is idle where the browser can listen (beside Send once something is typed), and a round Send; until the first send a quiet line under it says the recipe and the ask go to Claude, that Pepper may search the web to find a link, where speech goes, and that nothing is kept until Save. Pepper changes the links only when the ask is about them or plainly needs one ("add a video for the folding"), and searches the web to find a real page when it has to; a link it found that the search did not return, or whose page is gone, is left out, with "Couldn't confirm the link it found, so left it out." (or "Left out 2 links it found that couldn't be confirmed.") after its line. A round that searched shows up to three sources under Pepper's line, each opening in a new tab. Pepper never changes the photo or the nutrition numbers. Tapping the mic swaps the box for Pepper's face in the orb (the look picked in Voice control, or the orb; "Listening" beside it from `sm`), a live audio wave that moves with the voice and Stop, and no words; when the person stops, a small spinner and "Writing it down…" show for a moment, then the words land in the box after anything already typed, with the caret at the end, to read, fix and send with Send (never sent by themselves; a send that fails keeps them in the box). The words are heard by the site's cloud listener (smart formatting, the recipe's title and ingredients as names to expect) and by the browser's own listening when that can't start; the line under the box says so. "Ask Pepper" shows whenever the box is empty and idle and is gone only while typing or talking. Once a change lands the form scrolls to the first changed item, and the box lets go of focus so the keyboard closes, and above the box sit Pepper's line (two lines, one on a short screen; who changed what when Pepper gave no line), what it took out on its own line, and the finder ("2 changes to see" with up and down) beside Undo. The box grows to three lines instead of five on a screen under 600px tall. A change that can't be made shows Pepper's one line alone, with nothing marked. After twelve sends in one sitting the box gives way to "That's as many changes as one sitting takes. Save, then ask again."
+
 **Say how to keep a recipe**
 
 ```mermaid

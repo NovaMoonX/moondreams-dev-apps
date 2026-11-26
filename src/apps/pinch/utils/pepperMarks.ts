@@ -1,0 +1,192 @@
+import { formatList } from '@/utils/formatUtils';
+import type { RecipeFormData } from '@apps/pinch/components/recipes/recipeFormModel';
+import { MAX_RECIPE_NOTE_LENGTH } from '@apps/pinch/constants';
+import type { RevisionMarks } from '@apps/pinch/utils/pepperRevision';
+
+const same = (a: unknown, b: unknown) =>
+  JSON.stringify(a) === JSON.stringify(b);
+
+const countOf = (n: number, one: string, many: string) =>
+  n === 1 ? one : `${n} ${many}`;
+
+/** What is still as Pepper left it: a mark ends once the person edits that item. */
+export function getLiveMarks(
+  marks: RevisionMarks,
+  applied: RecipeFormData,
+  current: RecipeFormData,
+): RevisionMarks {
+  const currentRows = new Map(current.ingredients.map((row) => [row.id, row]));
+  const appliedRows = new Map(applied.ingredients.map((row) => [row.id, row]));
+  const isRowKept = (id: string) =>
+    currentRows.has(id) && same(currentRows.get(id), appliedRows.get(id));
+  const markedSteps = new Set(
+    marks.changedStepIndices
+      .map((index) => applied.steps[index])
+      .filter((step) => step !== undefined),
+  );
+  const live = {
+    title: marks.title && current.title === applied.title,
+    description:
+      marks.description && current.description === applied.description,
+    servings:
+      marks.servings && current.basics.servings === applied.basics.servings,
+    times:
+      marks.times &&
+      current.basics.prep === applied.basics.prep &&
+      current.basics.cook === applied.basics.cook,
+    categories:
+      marks.categories && same(current.categories, applied.categories),
+    care: marks.care && same(current.care, applied.care),
+    source: marks.source && same(current.sourceChoice, applied.sourceChoice),
+    collections:
+      marks.collections && same(current.collections, applied.collections),
+    links: marks.links && same(current.links, applied.links),
+    addedIngredientIds: marks.addedIngredientIds.filter(isRowKept),
+    changedIngredientIds: marks.changedIngredientIds.filter(isRowKept),
+    removedIngredientNames: marks.removedIngredientNames,
+    changedStepIndices: current.steps.reduce<number[]>(
+      (indices, step, index) =>
+        markedSteps.has(step) ? [...indices, index] : indices,
+      [],
+    ),
+  };
+
+  return {
+    ...live,
+    isEmpty:
+      !live.title &&
+      !live.description &&
+      !live.servings &&
+      !live.times &&
+      !live.categories &&
+      !live.care &&
+      !live.source &&
+      !live.collections &&
+      !live.links &&
+      live.addedIngredientIds.length === 0 &&
+      live.changedIngredientIds.length === 0 &&
+      live.changedStepIndices.length === 0,
+  };
+}
+
+/** Every round's marks that still stand, together: an earlier round stays marked until saved. */
+export function getAllLiveMarks(
+  rounds: { marks: RevisionMarks; data: RecipeFormData }[],
+  current: RecipeFormData,
+): RevisionMarks | null {
+  if (rounds.length === 0) return null;
+  const lives = rounds.map((round) =>
+    getLiveMarks(round.marks, round.data, current),
+  );
+  const any = (
+    key:
+      | 'title'
+      | 'description'
+      | 'servings'
+      | 'times'
+      | 'categories'
+      | 'care'
+      | 'source'
+      | 'collections'
+      | 'links',
+  ) => lives.some((live) => live[key]);
+  const union = <T>(pick: (live: RevisionMarks) => T[]) =>
+    Array.from(new Set(lives.flatMap(pick)));
+  const addedIngredientIds = union((live) => live.addedIngredientIds);
+
+  return {
+    title: any('title'),
+    description: any('description'),
+    servings: any('servings'),
+    times: any('times'),
+    categories: any('categories'),
+    care: any('care'),
+    source: any('source'),
+    collections: any('collections'),
+    links: any('links'),
+    addedIngredientIds,
+    changedIngredientIds: union((live) => live.changedIngredientIds).filter(
+      (id) => !addedIngredientIds.includes(id),
+    ),
+    removedIngredientNames: union((live) => live.removedIngredientNames),
+    changedStepIndices: union((live) => live.changedStepIndices).sort(
+      (a, b) => a - b,
+    ),
+    isEmpty: lives.every((live) => live.isEmpty),
+  };
+}
+
+/** What a change did, to follow the name: "changed 2 ingredients and a step". */
+export function describePepperChange(
+  marks: RevisionMarks,
+  ingredientNames: string[] = [],
+) {
+  const ingredientCount =
+    marks.addedIngredientIds.length + marks.changedIngredientIds.length;
+  const stepCount = marks.changedStepIndices.length;
+  const namedIngredients =
+    ingredientNames.length === ingredientCount && ingredientCount <= 2
+      ? ingredientNames.map((name) =>
+          /^[A-Z][a-z]/.test(name)
+            ? name[0].toLowerCase() + name.slice(1)
+            : name,
+        )
+      : null;
+  const changed = [
+    marks.title && 'the title',
+    marks.description && 'the description',
+    marks.servings && 'the servings',
+    marks.times && 'the times',
+    marks.categories && 'the categories',
+    marks.care && 'how it keeps',
+    marks.source && "where it's from",
+    marks.collections && 'the collections',
+    marks.links && 'the links',
+    ...(namedIngredients ??
+      (ingredientCount > 0
+        ? [countOf(ingredientCount, 'an ingredient', 'ingredients')]
+        : [])),
+    stepCount > 0 && countOf(stepCount, 'a step', 'steps'),
+  ].filter((part): part is string => part !== false);
+  if (changed.length > 0) return `changed ${formatList(changed)}`;
+  const removedCount = marks.removedIngredientNames.length;
+
+  return `took out ${countOf(removedCount, 'an ingredient', 'ingredients')}`;
+}
+
+/** The reason a save starts with when the person asked Pepper for the change. */
+export function getPepperReason(asks: string[]) {
+  if (asks.length === 0) return null;
+  const text = `Asked Pepper: ${asks.join('; ')}`;
+
+  return text.length > MAX_RECIPE_NOTE_LENGTH
+    ? `${text.slice(0, MAX_RECIPE_NOTE_LENGTH - 1)}…`
+    : text;
+}
+
+/** The change key a step's row carries: its text, since a step's marks follow its text and it has no lasting id. */
+export const getStepChangeKey = (step: string) =>
+  `step:${step.replace(/\s+/g, ' ').trim()}`;
+
+/** The change keys of what one round of Pepper's changes marked, as the form's rows carry them. */
+export const getRoundChangeKeys = (marks: RevisionMarks, steps: string[]) => [
+  ...(
+    [
+      'title',
+      'categories',
+      'servings',
+      'times',
+      'description',
+      'source',
+      'collections',
+      'care',
+      'links',
+    ] as const
+  ).filter((field) => marks[field]),
+  ...[...marks.addedIngredientIds, ...marks.changedIngredientIds].map(
+    (id) => `ingredient-${id}`,
+  ),
+  ...marks.changedStepIndices.map((index) =>
+    getStepChangeKey(steps[index] ?? ''),
+  ),
+];

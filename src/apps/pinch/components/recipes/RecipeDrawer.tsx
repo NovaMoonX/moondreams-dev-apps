@@ -10,6 +10,7 @@ import {
   History,
   PackagePlus,
   PenLine,
+  Sparkles,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -18,6 +19,7 @@ import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import GroupRow from '@/components/GroupRow';
 import StarButton from '@/components/StarButton';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import StockRows from '@apps/pinch/components/containers/StockRows';
@@ -209,6 +211,7 @@ function RecipeDrawer({
   const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
   const recipeNotes = useAppSelector(selectNotesByRecipe).get(recipeId);
   const { openSubview } = usePinchOverlay();
+  const isPepperEditOn = useIsGateOpen('pinch', 'pepper-edits');
   const toggleFavorite = useRecipeFavorite(uid);
   const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
   const isStockReady = useAppSelector(selectIsContainersReady);
@@ -390,6 +393,24 @@ function RecipeDrawer({
                       kind: 'recipe',
                       id: recipe.id,
                       fromChangeIds: plannedChangeIds,
+                    });
+                  }}
+                />
+              )}
+              {isPepperEditOn && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<Sparkles />}
+                  label='Change with Pepper'
+                  subtitle='Say or type what to change, and see it before you save'
+                  onClick={() => {
+                    onClose();
+                    openSubview({
+                      kind: 'recipe',
+                      id: recipe.id,
+                      withPepper: true,
                     });
                   }}
                 />
