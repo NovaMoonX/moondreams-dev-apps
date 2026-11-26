@@ -19,6 +19,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronLeft, ListChecks, Pause, Play, Timer } from 'lucide-react';
 
+import { useTurnLogRecording } from '@/hooks/useTurnLog';
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import Subview from '@/components/Subview';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -89,7 +90,7 @@ import {
   type CookVoiceActions,
   type CookVoiceResult,
 } from '@apps/pinch/hooks/useCookVoice';
-import { usePepper, type PepperTrace } from '@apps/pinch/hooks/usePepper';
+import { usePepper } from '@apps/pinch/hooks/usePepper';
 import { usePepperActions } from '@apps/pinch/hooks/usePepperActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { usePantryTake } from '@apps/pinch/hooks/usePantryTake';
@@ -2905,7 +2906,7 @@ function CookingSession({
     isDishAmbiguous: isGatherView && isPlate,
   });
   const isPepperOn = useIsGateOpen('pinch', 'pepper');
-  const pepperTrace = useRef<PepperTrace[]>([]);
+  useTurnLogRecording();
   const pepper = usePepper({
     speak: (text, { canAnswer }) => voice.speakInOrder(text, { canAnswer }),
     onAction: (action) => {
@@ -2919,9 +2920,6 @@ function CookingSession({
       void voice.speakInOrder(getPepperProblemLine(held), {
         canAnswer: false,
       });
-    },
-    onTrace: (entry) => {
-      pepperTrace.current = [...pepperTrace.current, entry].slice(-50);
     },
   });
   const pepperStatus = useRef(pepper.status);

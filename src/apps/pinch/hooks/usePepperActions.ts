@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'react-redux';
 
 import { useAppDispatch, type RootState } from '@/store';
+import { recordTurn, type TurnLogValue } from '@/lib/speech/turnLog';
 import { generateUuid } from '@/utils';
 import type { PepperAction } from '@apps/pinch/hooks/usePepper';
 import type {
@@ -65,6 +66,8 @@ export interface PepperScreen {
 
 export interface PepperRun {
   said?: string;
+  /** The screen refused it, for the conversation log. */
+  isRefused?: boolean;
 }
 
 interface UndoEntry {
@@ -81,7 +84,7 @@ const CONFIRM_MS = 60_000;
 const NO_ENTRY = "I can't find that one.";
 
 const toSaid = (result: CookVoiceResult): PepperRun =>
-  result.ok ? {} : { said: result.spoken ?? result.reason };
+  result.ok ? {} : { said: result.spoken ?? result.reason, isRefused: true };
 
 const toUndoSaid = (result: CookVoiceResult, done: string) =>
   result.ok ? done : (result.spoken ?? result.reason);
@@ -350,9 +353,8 @@ export function usePepperActions(screen: PepperScreen) {
     };
   }, []);
 
-  const run = useCallback(
-    (action: Pick<PepperAction, 'name' | 'input'>): PepperRun => {
-      const command = readPepperAction(action);
+  const execute = useCallback(
+    (command: PepperCommand): PepperRun => {
       pendingRemoval.current = null;
       switch (command.kind) {
         case 'cook':
@@ -380,6 +382,35 @@ export function usePepperActions(screen: PepperScreen) {
       }
     },
     [addEntry, addToShopping, askRemoval, editEntry, runCook, undo],
+  );
+
+  const run = useCallback(
+    (action: Pick<PepperAction, 'name' | 'input'>): PepperRun => {
+      const command = readPepperAction(action);
+      const result = execute(command);
+      const isRefused =
+        result.isRefused === true ||
+        command.kind === 'invalid' ||
+        command.kind === 'unknown' ||
+        command.kind === 'finish';
+      recordTurn(
+        'action',
+        `${action.name}${command.kind === 'cook' ? ` (${command.command.kind})` : ''}`,
+        {
+          input: toLoggedInput(action.input),
+          outcome: isRefused
+            ? 'refused'
+            : result.said === undefined
+              ? 'done on screen'
+              : 'said something',
+          said: result.said ?? null,
+          undoSteps: undoStack.current.length,
+          isConfirmWaiting: pendingRemoval.current !== null,
+        },
+      );
+      return result;
+    },
+    [execute],
   );
 
   const hasPending = useCallback(() => {
@@ -441,6 +472,14 @@ export function usePepperActions(screen: PepperScreen) {
 
   return { run, hasPending, confirm, decline, answerPending };
 }
+
+const toLoggedInput = (input: unknown): TurnLogValue => {
+  try {
+    return (JSON.parse(JSON.stringify(input ?? null)) ?? null) as TurnLogValue;
+  } catch {
+    return String(input);
+  }
+};
 
 const getInverse = (command: PepperCookCommand): CookActionCommand | null => {
   if (command.kind === 'PAUSE_TIMER') {

@@ -7,6 +7,8 @@ import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { useSpeechCommands } from '@/hooks/useSpeechCommands';
 import type { ListeningCue } from '@/lib/speech/listeningSound';
 import { readMicrophonePermission } from '@/lib/speech/microphonePermission';
+import { getNaturalVoiceState } from '@/lib/speech/naturalVoice/naturalVoiceEngine';
+import { recordTurn, type TurnLogData } from '@/lib/speech/turnLog';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import type { MeasureUnit } from '@/utils/measureUtils';
 import { COOK_WINDOW_MS } from '@apps/pinch/constants';
@@ -32,6 +34,7 @@ import {
   getWakeWaitEnd,
   planHeard,
   readAddressedGuesses,
+  readWakeWord,
   recordWakeBusy,
   reduceVoice,
   type VoiceEvent,
@@ -260,6 +263,24 @@ const getListenLang = () => {
 const isExplainedStop = (stop: VoiceStop | null) =>
   stop !== null && stop !== 'wake-idle' && stop !== 'lock-ended';
 
+/** Notes what a heard phrase became in the conversation log. */
+const routed = (text: string, data?: TurnLogData) =>
+  recordTurn('routed', text, data ?? null);
+
+/** Why a line was read by the browser's voice: the cloud voice isn't used in cooking mode, and the natural voice was off or failed. */
+const getVoiceReason = (isNaturalWanted: boolean) => {
+  const { status, problem } = getNaturalVoiceState();
+  return [
+    'cloud voice not wired into cooking mode yet',
+    isNaturalWanted
+      ? status === 'ready'
+        ? 'natural voice was on but too slow or failed on this line'
+        : `natural voice was on but not used (${status}${problem === null ? '' : `: ${problem}`})`
+      : 'natural voice is off',
+    ...(navigator.onLine ? [] : ['offline']),
+  ].join('; ');
+};
+
 const quote = (text: string) =>
   text.length > MAX_QUOTE_CHARS
     ? `${text.slice(0, MAX_QUOTE_CHARS).trimEnd()}…`
@@ -467,11 +488,15 @@ export function useCookVoice({
   ) => {
     const { command, transcript } = heard;
     if (command.kind === 'STOP_LISTENING') {
+      routed('set command: STOP_LISTENING');
       send({ type: 'STOP' });
       setMessage(null);
       return true;
     }
-    if (hasDialogOnTop()) return false;
+    if (hasDialogOnTop()) {
+      routed(`nothing: ${command.kind} heard while a dialog is open`);
+      return false;
+    }
 
     const key = getCookCommandKey(command);
     const now = Date.now();
@@ -479,12 +504,23 @@ export function useCookVoice({
       key === lastHeard.current.key &&
       now - lastHeard.current.at < REPEAT_GUARD_MS
     ) {
+      routed(
+        `nothing: ${command.kind} again within ${REPEAT_GUARD_MS} ms, taken as an echo`,
+      );
       return true;
     }
     lastHeard.current = { key, at: now };
 
     send({ type: 'COMMAND_HEARD' });
     const result = run(command);
+    routed(
+      result.ok
+        ? `set command: ${command.kind}`
+        : `set command: ${command.kind}, refused`,
+      result.ok
+        ? { said: result.speak ?? result.show ?? null }
+        : { reason: result.reason, said: result.spoken ?? result.reason },
+    );
     if (!result.ok) {
       show(result.reason, 'PROBLEM');
       notesQueue.current = null;
@@ -502,6 +538,9 @@ export function useCookVoice({
   };
 
   const carryPepperRun = (run: { said?: string }, route: CookPepperRoute) => {
+    routed('answered Pepper’s question (yes or no)', {
+      said: run.said ?? null,
+    });
     send({ type: 'WAKE_HEARD' }, { isSilent: true });
     setMessage(null);
     if (run.said === undefined) return true;
@@ -512,7 +551,15 @@ export function useCookVoice({
   };
 
   const carryAsk = (guesses: string[], route: CookPepperRoute) => {
-    if (hasDialogOnTop()) return false;
+    if (hasDialogOnTop()) {
+      routed('nothing: a question for Pepper while a dialog is open', {
+        guesses,
+      });
+      return false;
+    }
+    routed(`asked Pepper (natural language): “${guesses[0]}”`, {
+      alternatives: guesses.slice(1),
+    });
     send({ type: 'WAKE_HEARD' }, { isSilent: true });
     show(`Heard “${quote(guesses[0])}”`, 'HEARD');
     notesQueue.current = null;
@@ -523,12 +570,30 @@ export function useCookVoice({
     return true;
   };
 
-  const handleTranscript = (alternatives: string[]) => {
+  const handleTranscript = (
+    alternatives: string[],
+    confidences: (number | null)[],
+  ) => {
     setHeard(null);
-    if (handlers.current === null) return false;
-    const { context: shown, run } = handlers.current;
     const route = pepperRoute.current;
     const { phase: heardPhase } = machineRef.current;
+    recordTurn('heard', `“${alternatives[0]}”`, {
+      listener: 'browser speech recognition',
+      phase: heardPhase,
+      hasWakePhrase: readWakeWord(alternatives) !== null,
+      isAssistantOn: route !== null,
+      alternatives: alternatives.map((guess, at) => {
+        const confidence = confidences[at];
+        return typeof confidence === 'number' && confidence > 0
+          ? `${guess} (${confidence.toFixed(2)})`
+          : guess;
+      }),
+    });
+    if (handlers.current === null) {
+      routed('nothing: the cooking screen is not ready for commands');
+      return false;
+    }
+    const { context: shown, run } = handlers.current;
     if (route !== null && route.hasPending() && !hasDialogOnTop()) {
       const answered = readAddressedGuesses(heardPhase, alternatives).reduce<{
         said?: string;
@@ -536,12 +601,20 @@ export function useCookVoice({
       if (answered !== null) return carryPepperRun(answered, route);
     }
     const plan = planHeard(heardPhase, alternatives, shown, route !== null);
-    if (plan.kind === 'IGNORE') return false;
+    if (plan.kind === 'IGNORE') {
+      routed(
+        heardPhase === 'OFF'
+          ? 'nothing: the mic is off'
+          : 'nothing: no wake phrase (waiting for it)',
+      );
+      return false;
+    }
     if (plan.kind === 'COMMAND') return carryOut(plan.heard, run);
     if (plan.kind === 'ASK') {
       return route === null ? false : carryAsk(plan.guesses, route);
     }
     if (plan.kind === 'CLEAR') {
+      routed('nothing: no command matched and no wake phrase');
       setMessage(null);
       return false;
     }
@@ -549,15 +622,27 @@ export function useCookVoice({
       if (plan.heard?.command.kind === 'STOP_LISTENING') {
         return carryOut(plan.heard, run);
       }
-      if (hasDialogOnTop()) return false;
+      if (hasDialogOnTop()) {
+        routed('nothing: wake phrase while a dialog is open');
+        return false;
+      }
+      if (plan.heard === null) {
+        routed('nothing: the wake phrase alone, now listening for a command');
+      }
       send({ type: 'WAKE_HEARD' }, { isSilent: plan.heard !== null });
       setMessage(null);
       return plan.heard === null ? true : carryOut(plan.heard, run);
     }
     if (hasDialogOnTop()) {
+      routed('nothing: no command matched, and a dialog is open');
       setMessage(null);
       return false;
     }
+    routed(
+      route === null
+        ? 'nothing: no command matched, and Pepper is off'
+        : 'nothing: no command matched, and no words were left to send to Pepper',
+    );
     show(`Not a command: “${quote(alternatives[0])}”`, 'MISSED');
     return false;
   };
@@ -571,6 +656,12 @@ export function useCookVoice({
       if (key !== null) setHeard({ key, text });
     },
     isNaturalVoice: natural.isOn,
+    onVoice: (voice, text) =>
+      recordTurn('spoken', `“${text}”`, {
+        voice:
+          voice === 'natural' ? 'natural on-device voice' : 'browser voice',
+        ...(voice === 'natural' ? {} : { why: getVoiceReason(natural.isOn) }),
+      }),
     onHalt: (error) => {
       if (error !== 'idle') send({ type: 'ENGINE_STOPPED', reason: error });
     },

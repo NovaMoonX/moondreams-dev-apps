@@ -44,6 +44,10 @@ import PepperFace from '@apps/pinch/components/cooking/PepperFace';
 import PepperLookView, {
   PepperLookMark,
 } from '@apps/pinch/components/cooking/PepperLookView';
+import {
+  CookTurnLogRow,
+  CookTurnLogView,
+} from '@apps/pinch/components/cooking/CookTurnLog';
 import type { CookVoice } from '@apps/pinch/hooks/useCookVoice';
 import type { VoiceMode, VoiceStop } from '@apps/pinch/utils/cookVoiceMode';
 
@@ -362,11 +366,13 @@ function CookVoiceSheet({
   const [isSayShown, setIsSayShown] = useState(false);
   const [isMoreShown, setIsMoreShown] = useState(false);
   const [isLookShown, setIsLookShown] = useState(false);
+  const [isLogShown, setIsLogShown] = useState(false);
   const doneRef = useRef<HTMLButtonElement>(null);
   const close = () => {
     setIsSayShown(false);
     setIsMoreShown(false);
     setIsLookShown(false);
+    setIsLogShown(false);
     voice.closeSheet();
   };
   const { dialogId, onDialogClose } = useSheetHistory(voice.isSheetOpen, close);
@@ -495,7 +501,12 @@ function CookVoiceSheet({
       title='Voice control'
       className='border-border border'
     >
-      <div className='space-y-3 text-left text-sm'>
+      {isLogShown && (
+        <CookTurnLogView voice={voice} onBack={() => setIsLogShown(false)} />
+      )}
+      <div
+        className={join('space-y-3 text-left text-sm', isLogShown && 'hidden')}
+      >
         {isLookShown ? (
           <PepperLookView
             look={voice.look}
@@ -601,6 +612,7 @@ function CookVoiceSheet({
             )}
           </>
         )}
+        {!isLookShown && <CookTurnLogRow onOpen={() => setIsLogShown(true)} />}
         <div
           className={join(
             PINNED_FOOTER,

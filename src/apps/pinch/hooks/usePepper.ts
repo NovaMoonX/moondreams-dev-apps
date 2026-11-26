@@ -4,6 +4,11 @@ import {
   streamAssistantTurn,
   type AssistantTurnEvent,
 } from '@/lib/speech/assistant/streamAssistantTurn';
+import {
+  recordTurn,
+  type TurnLogData,
+  type TurnLogKind,
+} from '@/lib/speech/turnLog';
 import { createSentenceFeed } from '@/lib/speech/assistant/sentenceFeed';
 import {
   getHttpFunctionUrl,
@@ -19,7 +24,12 @@ export type PepperStatus = 'idle' | 'thinking' | 'speaking' | 'held' | 'failed';
 
 export type PepperAction = Extract<AssistantTurnEvent, { type: 'action' }>;
 
-export type PepperTrace = { at: number; text: string };
+export type PepperTrace = {
+  at: number;
+  text: string;
+  kind: TurnLogKind;
+  data: TurnLogData | null;
+};
 
 export type PepperQuestion = {
   standing: string;
@@ -62,9 +72,18 @@ export function usePepper({
     latest.current = { speak, onAction, onProblem, onTrace };
   });
 
-  const trace = useCallback((text: string) => {
-    latest.current.onTrace?.({ at: Date.now(), text });
-  }, []);
+  const trace = useCallback(
+    (
+      kind: TurnLogKind,
+      text: string,
+      data: TurnLogData | null = null,
+      isLogged = true,
+    ) => {
+      if (isLogged) recordTurn(kind, text, data);
+      latest.current.onTrace?.({ at: Date.now(), text, kind, data });
+    },
+    [],
+  );
 
   const cancel = useCallback(() => {
     turn.current?.aborter.abort();
@@ -107,12 +126,17 @@ export function usePepper({
       const isCurrent = () => turn.current === current;
       const startedAt = Date.now();
       setStatus('thinking');
-      trace(`asked: ${heard}`);
+      trace('request', `asked Pepper: “${heard}”`, {
+        alternatives,
+        historyPairs: history.current.length / 2,
+        standingChars: standing.length,
+        screenChars: screen.length,
+      });
 
       const headers = await getSignedHeaders().catch(() => null);
       if (!isCurrent()) return;
       if (headers === null) {
-        trace('failed: signin');
+        trace('error', 'could not sign the request: no signed-in session');
         setStatus('failed');
         latest.current.onProblem(null);
         return;
@@ -143,14 +167,14 @@ export function usePepper({
         if (event.type === 'text') {
           if (state.isFirstText) {
             state.isFirstText = false;
-            trace(`first text: ${Date.now() - startedAt} ms`);
+            trace('latency', 'first text', { ms: Date.now() - startedAt });
           }
           state.text += event.text;
           feed.push(event.text);
         }
-        if (event.type === 'searching') trace('searching');
+        if (event.type === 'searching') trace('note', 'Pepper is searching');
         if (event.type === 'action') {
-          trace(`action: ${event.name}`);
+          trace('action', event.name, null, false);
           latest.current.onAction(event);
         }
         if (event.type === 'done') {
@@ -179,9 +203,18 @@ export function usePepper({
         if (isCurrent()) {
           history.current = trimHistory(appendExchange(history.current, done));
         }
-        trace(
-          `done: ${done.endedBy}, ${done.ms} ms, ${done.searches} lookups, in ${done.usage.inputTokens} out ${done.usage.outputTokens} cached ${done.usage.cacheReadTokens}`,
-        );
+        trace('reply', done.assistant);
+        trace('done', done.endedBy, {
+          ms: done.ms,
+          searches: done.searches,
+          in: done.usage.inputTokens,
+          out: done.usage.outputTokens,
+          cacheRead: done.usage.cacheReadTokens,
+          cacheWrite: done.usage.cacheWriteTokens,
+          model: done.model ?? null,
+          isStandIn: done.isStandIn === true,
+          isCurrent: isCurrent(),
+        });
         await Promise.allSettled(spoken);
         if (isCurrent()) {
           turn.current = null;
@@ -192,14 +225,14 @@ export function usePepper({
       if (!isCurrent()) return;
       turn.current = null;
       if (result.status === 'held') {
-        trace(`held: ${result.reason}`);
+        trace('held', result.reason);
         setStatus('held');
         latest.current.onProblem(result.reason);
         return;
       }
-      trace(
-        `failed: ${result.code}${result.cause === undefined ? '' : `, ${String(result.cause)}`}`,
-      );
+      trace('failed', result.code, {
+        cause: result.cause === undefined ? null : String(result.cause),
+      });
       setStatus('failed');
       latest.current.onProblem(null);
     },
