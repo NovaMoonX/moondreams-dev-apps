@@ -216,7 +216,7 @@ function UploadThumb({ upload, onRetry, onDismiss }: UploadThumbProps) {
   );
 }
 
-/** Several photos for one record: a camera loop (or one small add tile ending the row, `hasAddTile`), a library multi-pick, the first as the cover, and a tapped photo's sheet to make it the cover, move it or remove it (with undo). Each photo is shrunk on the device and saved on its own, so one uploading never holds the screen. */
+/** Several photos for one record, cover first, each shrunk and saved on its own so one upload never holds the screen. */
 function PhotoSetPicker({
   photos,
   uploads,
