@@ -711,6 +711,8 @@ export const COOK_RATING_STEP = 0.5;
 export const SOFT_MAX_COOKS_PER_RECIPE = 500;
 
 export const MAX_COOK_PHOTOS = 3;
+/** The longest a cook can say it took, typed or timed: a two-day braise fits, a cooking screen left open for a week does not. */
+export const MAX_COOK_DURATION_HOURS = 99;
 /** Under Firestore's 500 writes per batch. */
 export const COOK_BATCH_SIZE = 400;
 export const COOK_HISTORY_FIRST_PAGE = 8;
