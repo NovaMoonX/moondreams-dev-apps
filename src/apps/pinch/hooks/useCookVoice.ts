@@ -130,6 +130,7 @@ export interface CookVoiceActions {
   undoEntry: () => CookVoiceResult;
   startCooking: () => CookVoiceResult;
   gotIngredient: (queries: string[], isOut: boolean) => CookVoiceResult;
+  gotGroup: (group: string, isOut: boolean) => CookVoiceResult;
   markAdded: (queries: string[], isAdded: boolean) => CookVoiceResult;
   markAllAdded: () => CookVoiceResult;
   scroll: (to: CookScrollTo) => CookVoiceResult;
@@ -261,6 +262,8 @@ export const runCookCommand = (
       return actions.startCooking();
     case 'GOT_INGREDIENT':
       return actions.gotIngredient(command.queries, command.isOut);
+    case 'GOT_GROUP':
+      return actions.gotGroup(command.group, command.isOut);
     case 'MARK_ADDED':
       return actions.markAdded(command.queries, command.isAdded);
     case 'MARK_ALL_ADDED':
@@ -300,10 +303,12 @@ const ANSWERED_QUESTIONS = new Set<CookCommand['kind']>([
   'CONVERT_AMOUNT',
   'TELL_SERVINGS',
   'TIME_LEFT',
+  'READ_TOOLS',
 ]);
 const UNANSWERED_QUESTIONS = new Set<CookCommand['kind']>([
   'AMOUNT',
   'CONVERT',
+  'READ_TOOLS',
 ]);
 
 /** A question the app reads itself that Pepper says back in its own words: what the app found keeps it exact, and an ingredient the app couldn't find is Pepper's to reason about. */
@@ -610,7 +615,8 @@ export function useCookVoice({
       routed(`asked Pepper to answer ${command.kind} in its own words`, {
         found,
       });
-      show(result.ok ? (found ?? transcript) : result.reason, 'ANSWER');
+      // What the app couldn't find may be in Pepper's earlier answer ("how much sugar again?"), so its refusal isn't shown as the answer.
+      show(result.ok ? (found ?? transcript) : transcript, 'ANSWER');
       notesQueue.current = null;
       route.cancel();
       clearLines();

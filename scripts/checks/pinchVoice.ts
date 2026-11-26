@@ -51,6 +51,7 @@ import {
   describeGatherLeft,
   describeGatherTools,
   planGatherTick,
+  planGroupTick,
   type GatherDish,
   type GatherItem,
 } from '../../src/apps/pinch/utils/cookGather.ts';
@@ -2657,6 +2658,55 @@ assert.equal(
   planGatherTick(['garlic'], items, true, false).speak,
   'Garlic is already ticked.',
   'already ticked',
+);
+
+const groupRow = (id: string, group: string | null) => ({
+  id,
+  name: id,
+  note: null,
+  amountText: '1 cup',
+  isMeasured: true,
+  group,
+  measure: null,
+  ingredientKey: id,
+  isLiquid: false,
+});
+const chiliDish = {
+  recipe: { id: 'chili', title: 'Chili and cornbread' },
+  rows: [
+    groupRow('beans', 'For the chili'),
+    groupRow('cornmeal', 'For the cornbread'),
+    groupRow('milk', 'For the cornbread'),
+  ],
+  gotOut: { milk: true } as Record<string, boolean>,
+};
+const groupTick = planGroupTick(
+  'everything for the cornbread',
+  [chiliDish],
+  true,
+);
+assert.deepEqual(
+  [groupTick.ok, groupTick.speak, groupTick.sources],
+  [
+    true,
+    'Ticked everything for cornbread. 1 left.',
+    [{ recipeId: 'chili', lineId: 'cornmeal' }],
+  ],
+  'a part ticks only its own untick lines',
+);
+assert.equal(
+  planGroupTick(
+    'the cornbread',
+    [{ ...chiliDish, gotOut: { cornmeal: true, milk: true } }],
+    true,
+  ).speak,
+  'Everything for cornbread is already ticked.',
+  'a ticked part says so',
+);
+assert.equal(
+  planGroupTick('dessert', [chiliDish], true).ok,
+  false,
+  'an unknown part is refused',
 );
 assert.equal(
   planGatherTick(['garlic'], items, false, false).speak,
