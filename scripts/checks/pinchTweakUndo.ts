@@ -93,6 +93,8 @@ const tweak = (
   stepText: null,
   reason: null,
   previous,
+  resolvedAt: null,
+  resolvedBy: null,
   by: { kind: 'you', name: null },
   createdAt,
   updatedAt: createdAt,

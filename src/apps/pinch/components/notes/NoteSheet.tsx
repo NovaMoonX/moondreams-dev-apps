@@ -8,6 +8,7 @@ interface NoteSheetProps {
   noteId: string | null;
   initialCookId: string | null;
   initialKind?: WrittenNoteKind | null;
+  onKindChange?: (kind: WrittenNoteKind) => void;
   initialStepIndex?: number | null;
   onClose: () => void;
 }
@@ -18,6 +19,7 @@ function NoteSheet({
   noteId,
   initialCookId,
   initialKind = null,
+  onKindChange,
   initialStepIndex = null,
   onClose,
 }: NoteSheetProps) {
@@ -30,6 +32,7 @@ function NoteSheet({
         noteId={noteId}
         initialCookId={initialCookId}
         initialKind={initialKind}
+        onKindChange={onKindChange}
         initialStepIndex={initialStepIndex}
         onCancel={onClose}
         onDone={onClose}

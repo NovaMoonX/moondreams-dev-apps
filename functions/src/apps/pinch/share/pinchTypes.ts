@@ -625,7 +625,7 @@ export interface RecipeNote {
   text: string | null;
   /** A TWEAK's short summaries of what the edit changed, fixed when it was saved; empty for every other kind. Immutable. */
   changes: string[];
-  /** Immutable. The cook this follows up, for a NOTE; a cook that no longer exists reads as none. A TIP never has one. */
+  /** The cook a NOTE, TIP or CHANGE came from (a tip stays advice for the whole recipe, and says which cook it came from); a cook that no longer exists reads as none. A TWEAK applied from a change keeps that change's cook. */
   cookId: string | null;
   /** The step (0-based) a NOTE, TIP or CHANGE is about, so cooking shows it with that step; null is the whole recipe. A document written before steps lacks the key, which reads as null. */
   stepIndex: number | null;
@@ -635,6 +635,10 @@ export interface RecipeNote {
   reason: string | null;
   /** A TWEAK's recipe as it was before the edit, so the edit can be undone while it is the recipe's latest; null for every other kind and for a tweak written before undo existed. Immutable. A missing key reads as null. */
   previous: RecipeSnapshot | null;
+  /** When a CHANGE was marked done; null while it is still planned and for every other kind. A missing key reads as null. */
+  resolvedAt: number | null;
+  /** The TWEAK that took care of a done CHANGE; null when it was marked done without naming an edit, while it is planned, and for every other kind. A missing key reads as null. */
+  resolvedBy: string | null;
   /** Who made a TWEAK; null for every other kind and for an entry written before this was kept, which reads as the person. Immutable. A missing key reads as null. */
   by: RecipeNoteBy | null;
   /** An instant, shown in local time. Immutable, except that applying a CHANGE dates the TWEAK it becomes. */

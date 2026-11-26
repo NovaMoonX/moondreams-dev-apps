@@ -1196,6 +1196,8 @@ export const updateRecipe = async (
       stepText: null,
       reason: null,
       previous: changes.every(isUnrestoredLine) ? null : before,
+      resolvedAt: null,
+      resolvedBy: null,
       by: toBy(ctx.actor),
       createdAt: ctx.now,
       updatedAt: ctx.now,
