@@ -927,7 +927,8 @@ html[data-pressing] * {
 .ai-changed {
   /* Declared here, not on :root, so it follows the --ai-mark an app sets on its own scope. */
   --ai-mark-end: color-mix(in oklab, var(--ai-mark) 55%, #8b5cf6);
-  --ai-glow: 0 4px 14px -6px color-mix(in oklab, var(--ai-mark-end) 45%, transparent);
+  --ai-glow: 0 4px 14px -6px
+    color-mix(in oklab, var(--ai-mark-end) 45%, transparent);
   position: relative;
   box-shadow: var(--ai-glow);
   padding-inline-end: 1.75rem;
