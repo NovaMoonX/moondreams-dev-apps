@@ -27,6 +27,7 @@ import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   SUMMARY_GROUP_FRAME,
+  SUMMARY_GROUP_ROUNDING,
   type SummaryGroupPosition,
 } from '@/components/summaryGroup';
 import UndoSnackbar from '@/components/UndoSnackbar';
@@ -768,17 +769,26 @@ function RecipeForm({
     };
     const groupFields = groupRows.map((row, index) => {
       const position = getPosition(index);
+      const isMarked = Boolean(
+        (row.name === 'sourceChoice' && liveMarks?.source) ||
+        (row.name === 'collections' && liveMarks?.collections) ||
+        (row.name === 'care' && liveMarks?.care),
+      );
       return custom({
         name: row.name,
         label: '',
-        className: join(
-          SUMMARY_GROUP_FRAME[position],
-          ((row.name === 'sourceChoice' && liveMarks?.source) ||
-            (row.name === 'collections' && liveMarks?.collections) ||
-            (row.name === 'care' && liveMarks?.care)) &&
-            'ai-changed',
+        className: SUMMARY_GROUP_FRAME[position],
+        renderComponent: (props) => (
+          <div
+            className={join(
+              isMarked && 'ai-changed',
+              isMarked && SUMMARY_GROUP_ROUNDING[position],
+            )}
+            data-change-key={row.name === 'sourceChoice' ? 'source' : row.name}
+          >
+            {row.render(props, position)}
+          </div>
         ),
-        renderComponent: (props) => row.render(props, position),
       });
     });
 

@@ -51,6 +51,7 @@ export function useChangeFinder(
   const seenRef = useRef<Set<string>>(seen);
   const pendingJump = useRef<{
     before: Set<string>;
+    beforeElements: Set<HTMLElement>;
     changed: Set<string>;
     until: number;
   } | null>(null);
@@ -79,10 +80,18 @@ export function useChangeFinder(
       .filter(({ rect }) => rect.top < 0 || rect.bottom > visibleBottom);
     return {
       above: offScreen
-        .filter(({ rect }) => rect.bottom <= middle)
+        .filter(
+          ({ rect }) =>
+            rect.bottom <= middle ||
+            (rect.top < 0 && rect.bottom <= visibleBottom),
+        )
         .map(({ element }) => element),
       below: offScreen
-        .filter(({ rect }) => rect.top >= middle)
+        .filter(
+          ({ rect }) =>
+            rect.top >= middle ||
+            (rect.bottom > visibleBottom && rect.top >= 0),
+        )
         .map(({ element }) => element),
     };
   }, [rootRef, getElements]);
@@ -131,6 +140,7 @@ export function useChangeFinder(
         return;
       }
       const fresh = elements.filter((element) => {
+        if (jump.beforeElements.has(element)) return false;
         const key = getKey(element);
         return jump.changed.has(key) || !jump.before.has(key);
       });
@@ -229,8 +239,10 @@ export function useChangeFinder(
     goAbove: () => go('above'),
     goBelow: () => go('below'),
     goFirstOnNextChange: (changedKeys = []) => {
+      const current = getElements();
       pendingJump.current = {
-        before: new Set(getElements().map(getKey)),
+        before: new Set(current.map(getKey)),
+        beforeElements: new Set(current),
         changed: new Set(changedKeys),
         until: Date.now() + JUMP_WAIT_MS,
       };
