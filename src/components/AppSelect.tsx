@@ -51,7 +51,9 @@ const place = (box: HTMLElement) => {
   const trigger = box.querySelector<HTMLElement>('[data-select-trigger]');
   if (!list || !trigger) return;
   list.setAttribute('data-no-swipe', '');
-  const viewport = list.querySelector<HTMLElement>('[data-scroll-area-viewport]');
+  const viewport = list.querySelector<HTMLElement>(
+    '[data-scroll-area-viewport]',
+  );
   const at = trigger.getBoundingClientRect();
   const screen = window.visualViewport;
   const screenTop = screen?.offsetTop ?? 0;
@@ -65,11 +67,15 @@ const place = (box: HTMLElement) => {
   const fixedBox = findFixedBox(box);
   const isRightAligned = at.left + at.width / 2 > window.innerWidth / 2;
   const vars: Record<string, string> = {
-    '--app-select-top': isAbove ? 'auto' : `${at.bottom + GAP_PX - fixedBox.top}px`,
+    '--app-select-top': isAbove
+      ? 'auto'
+      : `${at.bottom + GAP_PX - fixedBox.top}px`,
     '--app-select-bottom': isAbove
       ? `${fixedBox.bottom - at.top + GAP_PX}px`
       : 'auto',
-    '--app-select-left': isRightAligned ? 'auto' : `${at.left - fixedBox.left}px`,
+    '--app-select-left': isRightAligned
+      ? 'auto'
+      : `${at.left - fixedBox.left}px`,
     '--app-select-right': isRightAligned
       ? `${fixedBox.right - at.right}px`
       : 'auto',
@@ -82,11 +88,7 @@ const place = (box: HTMLElement) => {
   list.setAttribute('data-placement', isAbove ? 'top' : 'bottom');
 };
 
-/**
- * Dreamer UI's `Select` with its list floated over the page: it escapes a sheet's or a card's scroll
- * box, opens upward when there is more room above, fits the space it has and follows its button while
- * the page scrolls or the keyboard opens.
- */
+/** Dreamer UI's `Select` with its list floated over any scroll box, opening upward when there is more room above. */
 function AppSelect({ dropdownClassName, ...props }: AppSelectProps) {
   const boxRef = useRef<HTMLDivElement | null>(null);
 
@@ -107,7 +109,8 @@ function AppSelect({ dropdownClassName, ...props }: AppSelectProps) {
     };
     const state = { isOpen: false };
     const sync = () => {
-      const isOpen = box.querySelector(':scope > [data-select-content]') !== null;
+      const isOpen =
+        box.querySelector(':scope > [data-select-content]') !== null;
       if (isOpen) place(box);
       if (isOpen !== state.isOpen) listen(isOpen);
       state.isOpen = isOpen;
