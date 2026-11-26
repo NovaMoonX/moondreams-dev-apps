@@ -906,7 +906,7 @@ html[data-pressing] * {
   }
 }
 
-/* What an AI changed in a form: a quiet tint with a hairline that follows the item's own corners, and a small sparkle on its top-leading corner, all in the app's --ai-mark, settling from a stronger tint once. */
+/* An app sets --ai-mark to its own accent. */
 :root {
   --ai-mark: var(--color-primary);
 }

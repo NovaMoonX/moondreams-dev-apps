@@ -1428,6 +1428,7 @@ function RecipeIngredients({
                     'ai-changed -mx-2 rounded-lg border-transparent px-2',
                 )}
                 data-ingredient-row={row.id}
+                data-change-key={`ingredient-${row.id}`}
                 data-ingredient-unresolved={isUnresolved || undefined}
                 data-ingredient-amount-wrong={
                   (!isUnresolved && !isRowAmountValid(row)) || undefined

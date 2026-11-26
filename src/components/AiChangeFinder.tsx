@@ -18,12 +18,12 @@ function AiChangeFinder({ finder, className }: AiChangeFinderProps) {
   const getLabel = () => {
     if (finder.unseen === 0) {
       return finder.total === 1
-        ? 'You’ve seen the change'
-        : `You’ve seen all ${finder.total} changes`;
+        ? '1 change · seen'
+        : `${finder.total} changes · all seen`;
     }
     return finder.unseen === 1
-      ? '1 change left to see'
-      : `${finder.unseen} changes left to see`;
+      ? '1 change to see'
+      : `${finder.unseen} changes to see`;
   };
   return (
     <div className={join('flex items-center gap-2', className)}>

@@ -790,6 +790,7 @@ function RecipeForm({
             className={join(
               liveMarks?.title && 'ai-changed -mx-2 rounded-xl px-2',
             )}
+            data-change-key='title'
           >
             <RecipeTitleField
               value={String(props.value)}
@@ -807,6 +808,7 @@ function RecipeForm({
             className={join(
               liveMarks?.categories && 'ai-changed -mx-2 rounded-xl px-2',
             )}
+            data-change-key='categories'
           >
             <CategoryField
               value={props.value as DishCategory[]}
@@ -829,6 +831,7 @@ function RecipeForm({
                   'flex min-h-11 items-center justify-between gap-3',
                   liveMarks?.servings && 'ai-changed -mx-2 rounded-xl px-2',
                 )}
+                data-change-key='servings'
               >
                 <span className='text-sm font-medium'>Servings</span>
                 <Stepper
@@ -841,6 +844,7 @@ function RecipeForm({
                 className={join(
                   liveMarks?.times && 'ai-changed -mx-2 rounded-xl px-2',
                 )}
+                data-change-key='times'
               >
                 <RecipeTimesField
                   prep={basics.prep}
@@ -860,6 +864,7 @@ function RecipeForm({
             className={join(
               liveMarks?.description && 'ai-changed -mx-2 rounded-xl px-2',
             )}
+            data-change-key='description'
           >
             <RecipeDescriptionField
               value={String(props.value)}
@@ -1428,7 +1433,7 @@ function RecipeForm({
   const pepperDock = isPepperOn && ask === null && (
     <PepperDock
       rounds={pepper.sent}
-      isStartFocused={autoFocusPepper}
+      isStartFocused={autoFocusPepper && pepper.sent === 0}
       look={voiceSettings.look}
       onSend={sendToPepper}
       above={

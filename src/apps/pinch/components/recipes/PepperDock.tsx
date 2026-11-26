@@ -27,6 +27,7 @@ import {
 import type { PepperLook } from '@apps/pinch/types';
 
 const ASK_MAX_LINES = 5;
+const SHORT_SCREEN_ASK_LINES = 3;
 const ROUND_BUTTON =
   "relative size-9 shrink-0 before:absolute before:-inset-0.5 before:content-['']";
 
@@ -66,7 +67,11 @@ function PepperDock({
   } | null>(null);
   const [needsMicrophone, setNeedsMicrophone] = useState(false);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
-  useGrowingTextarea(fieldRef, text, ASK_MAX_LINES);
+  useGrowingTextarea(
+    fieldRef,
+    text,
+    window.innerHeight < 600 ? SHORT_SCREEN_ASK_LINES : ASK_MAX_LINES,
+  );
 
   useEffect(() => {
     const field = fieldRef.current;
@@ -99,6 +104,7 @@ function PepperDock({
     try {
       await onSend(ask);
       if (!isSpoken) setText('');
+      fieldRef.current?.blur();
     } catch (sendError) {
       if (isSpoken) setText(ask);
       setFailure({
@@ -178,13 +184,14 @@ function PepperDock({
             state={getOrbState()}
             word={spokenAsk !== null ? 'Changing it…' : 'Listening'}
             reserveWord='Changing it…'
+            placement='header'
             avatar={look === 'ORB' ? undefined : <PepperFace look={look} />}
             name='Pepper'
             className='shrink-0'
           />
           <p
             className={join(
-              'min-w-0 flex-1 text-sm',
+              'line-clamp-3 min-w-0 flex-1 text-sm',
               voice.heard.trim() === '' &&
                 text.trim() === '' &&
                 spokenAsk === null &&
@@ -256,13 +263,13 @@ function PepperDock({
       )}
       {failure !== null && (
         <div className='space-y-1.5'>
-          <p className='text-destructive text-sm' role='alert'>
+          <p className='text-destructive line-clamp-2 text-sm' role='alert'>
             {failure.message}
           </p>
           <DebugDetails message={failure.detail} />
         </div>
       )}
-      {rounds === 0 && failure === null && (
+      {rounds === 0 && failure === null && !isVoiceShown && (
         <p className='text-muted-foreground px-3 text-xs'>
           Your recipe and request go to Gemini, and speech to your browser.
           Nothing is saved until you press Save.

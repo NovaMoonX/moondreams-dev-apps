@@ -17,7 +17,7 @@ interface AiChangeNoticeProps {
   undoLabel?: string;
   /** A line under the card's words, such as the finder for the changes still to look at. */
   footer?: ReactNode;
-  /** The tighter card for a pinned footer: the reply first, then who changed what and what it took out on one muted line. */
+  /** The tighter card for a pinned footer: the reply (or who changed what when there is none), what it took out, and Undo beside the footer. */
   isCompact?: boolean;
   className?: string;
 }
@@ -35,29 +35,18 @@ function AiChangeNotice({
   className,
 }: AiChangeNoticeProps) {
   const hasReply = reply !== null && reply.trim() !== '';
-  const getCompactLine = () =>
-    [
-      summary === '' ? '' : `${who} ${summary}.`,
-      removed.length > 0 ? `Took out: ${removed.join(', ')}.` : '',
-    ]
-      .filter((part) => part !== '')
-      .join(' ');
-  const compactLine = getCompactLine();
+  const getCompactText = () => {
+    if (hasReply) return reply;
+    return summary === '' ? '' : `${who} ${summary}.`;
+  };
   const words = isCompact ? (
     <div className='min-w-0 flex-1 space-y-0.5'>
-      {hasReply && (
-        <p className='line-clamp-2 text-sm [@media(max-height:700px)]:line-clamp-1'>
-          {reply}
-        </p>
-      )}
-      {compactLine !== '' && (
-        <p
-          className={join(
-            'line-clamp-2 [@media(max-height:700px)]:line-clamp-1',
-            hasReply ? 'text-muted-foreground text-xs' : 'text-sm',
-          )}
-        >
-          {compactLine}
+      <p className='line-clamp-2 text-sm [@media(max-height:700px)]:line-clamp-1'>
+        {getCompactText()}
+      </p>
+      {removed.length > 0 && (
+        <p className='text-muted-foreground line-clamp-2 text-xs'>
+          Took out: {removed.join(', ')}
         </p>
       )}
     </div>
@@ -84,6 +73,19 @@ function AiChangeNotice({
       )}
     </div>
   );
+  const undoButton = onUndo && (
+    <Button
+      type='button'
+      variant='secondary'
+      size='sm'
+      rounded='full'
+      className="relative -my-0.5 shrink-0 gap-1 before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+      onClick={onUndo}
+    >
+      <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
+      {undoLabel}
+    </Button>
+  );
   return (
     <div
       className={join(
@@ -98,21 +100,16 @@ function AiChangeNotice({
           aria-hidden='true'
         />
         {words}
-        {onUndo && (
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            rounded='full'
-            className="relative -my-0.5 shrink-0 gap-1 before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-            onClick={onUndo}
-          >
-            <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
-            {undoLabel}
-          </Button>
-        )}
+        {!isCompact && undoButton}
       </div>
-      {footer}
+      {isCompact && (footer || undoButton) ? (
+        <div className='flex items-center gap-2'>
+          <div className='min-w-0 flex-1'>{footer}</div>
+          {undoButton}
+        </div>
+      ) : (
+        footer
+      )}
     </div>
   );
 }

@@ -1960,14 +1960,14 @@ flowchart LR
     A["Recipe drawer · ⋯ More · Change with Pepper"] --> B["Recipe form · the box at the foot, focused"]
     A2["Recipe form of a saved recipe, opened any other way"] --> B
     B --> C["Type and send, or tap the mic and talk · Pepper's face while it listens and works"]
-    C --> D["Form scrolls to the first change · above the box: its one line · Pepper changed … · Took out: cream · Undo"]
-    D --> E["Changed rows tinted with a hairline and a corner sparkle · 2 changes left to see ↑ ↓"]
+    C --> D["Form scrolls to the first change · above the box: its one line · Took out: cream"]
+    D --> E["Changed rows tinted with a hairline and a corner sparkle · 2 changes to see ↑ ↓ Undo"]
     E --> C
     D -->|Undo| B
     E --> F["Save · reason prefilled 'Asked Pepper: …' on a cooked recipe"]
 ```
 
-The box is pinned at the foot of the form of a saved recipe, above Cancel and Save, like a chat: a growing text box (one line, up to five, 500 characters, "Ask Pepper"), a mic while it is empty where the browser can listen, and a round Send; until the first send a quiet line under it says the recipe and the ask go to Gemini, speech to the browser, and nothing is kept until Save. Tapping the mic swaps the box for Pepper's face in the orb (the look picked in Voice control, or the orb), "Listening", the words as they are heard and Stop; when the person stops talking the words send by themselves and the face shows "Changing it…"; a send that fails puts the words back in the box. Once a change lands the form scrolls to the first changed item, and above the box sit Pepper's line, then who changed what and what it took out (each cut to two lines, one on a short screen), Undo, and the finder ("2 changes left to see" with up and down). A change that can't be made shows Pepper's one line alone, with nothing marked. After twelve sends in one sitting the box gives way to "That's as many changes as one sitting takes. Save, then ask again."
+The box is pinned at the foot of the form of a saved recipe, above Cancel and Save, like a chat: a growing text box (one line, up to five, 500 characters, "Ask Pepper"), a mic while it is empty where the browser can listen, and a round Send; until the first send a quiet line under it says the recipe and the ask go to Gemini, speech to the browser, and nothing is kept until Save. Tapping the mic swaps the box for Pepper's face in the orb (the look picked in Voice control, or the orb; "Listening" beside it from `sm`), the words as they are heard and Stop; when the person stops talking the words send by themselves and the face shows "Changing it…"; a send that fails puts the words back in the box. Once a change lands the form scrolls to the first changed item, and the box lets go of focus so the keyboard closes, and above the box sit Pepper's line (two lines, one on a short screen; who changed what when Pepper gave no line), what it took out on its own line, and the finder ("2 changes to see" with up and down) beside Undo. The box grows to three lines instead of five on a screen under 600px tall. A change that can't be made shows Pepper's one line alone, with nothing marked. After twelve sends in one sitting the box gives way to "That's as many changes as one sitting takes. Save, then ask again."
 
 **Say how to keep a recipe**
 

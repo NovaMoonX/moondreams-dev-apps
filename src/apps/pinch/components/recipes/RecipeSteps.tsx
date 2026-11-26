@@ -758,6 +758,7 @@ function RecipeSteps({
           'space-y-2',
           aiMarkedIndices.includes(index) && 'ai-changed -mx-2 rounded-lg px-2',
         )}
+        data-change-key={`step-${index}`}
       >
         <div className='flex items-start gap-1'>
           {isEditing ? (

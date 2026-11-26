@@ -10,30 +10,36 @@ interface ChangeFinder {
   hasBelow: boolean;
   goAbove: () => void;
   goBelow: () => void;
-  /** Scrolls to the first marked item the next time the marks change, such as after a new round of changes lands. */
+  /** Scrolls to the first newly marked item when the next round of marks appears. */
   goFirstOnNextChange: () => void;
 }
 
 const SEEN_SHARE = 0.6;
+const JUMP_WAIT_MS = 1500;
 
 const getKey = (element: HTMLElement) =>
   element.dataset.changeKey ??
   (element.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
 
-const getFooterHeight = (root: HTMLElement) =>
-  root.querySelector<HTMLElement>('.form-footer')?.offsetHeight ?? 0;
+const getFooter = (root: HTMLElement) =>
+  root.querySelector<HTMLElement>('.form-footer');
 
-const scrollToElement = (element: HTMLElement) => {
+const getFooterHeight = (root: HTMLElement) =>
+  getFooter(root)?.offsetHeight ?? 0;
+
+const scrollToElement = (element: HTMLElement, footerHeight: number) => {
   const isReduced = window.matchMedia(
     '(prefers-reduced-motion: reduce)',
   ).matches;
+  // A bottom scroll margin the footer's height centres the item in the part of the screen the footer leaves.
+  element.style.scrollMarginBottom = `${footerHeight}px`;
   element.scrollIntoView({
     block: 'center',
     behavior: isReduced ? 'auto' : 'smooth',
   });
 };
 
-/** Finds the items marked with `selector` inside `rootRef`, remembers which have been on screen (above a pinned `.form-footer`) and jumps to the previous or next one not yet seen, or to any once all are seen; an item that loses its mark drops out of the count. */
+/** Finds the items marked with `selector` inside `rootRef`, counts those not yet on screen above a pinned `.form-footer`, and jumps to the next one off screen. */
 export function useChangeFinder(
   rootRef: RefObject<HTMLElement | null>,
   selector: string,
@@ -41,8 +47,11 @@ export function useChangeFinder(
   const [keys, setKeys] = useState<string[]>([]);
   const [seen, setSeen] = useState<Set<string>>(() => new Set());
   const [edges, setEdges] = useState({ hasAbove: false, hasBelow: false });
+  const [footerHeight, setFooterHeight] = useState(0);
   const seenRef = useRef<Set<string>>(seen);
-  const isJumpPending = useRef(false);
+  const pendingJump = useRef<{ before: Set<string>; until: number } | null>(
+    null,
+  );
 
   const getElements = useCallback(
     () =>
@@ -52,40 +61,44 @@ export function useChangeFinder(
     [rootRef, selector],
   );
 
-  const getTargets = useCallback(
-    (direction: 'above' | 'below') => {
-      const root = rootRef.current;
-      if (root === null) return [];
-      const middle = (window.innerHeight - getFooterHeight(root)) / 2;
-      const elements = getElements();
-      const unseen = elements.filter(
-        (element) => !seenRef.current.has(getKey(element)),
-      );
-      const pool = unseen.length > 0 ? unseen : elements;
-      return pool.filter((element) => {
-        const { top, bottom } = element.getBoundingClientRect();
-        const center = (top + bottom) / 2;
-        return direction === 'above'
-          ? center < middle - 8
-          : center > middle + 8;
-      });
-    },
-    [rootRef, getElements],
-  );
+  const splitTargets = useCallback(() => {
+    const root = rootRef.current;
+    if (root === null) return { above: [], below: [] };
+    const visibleBottom = window.innerHeight - getFooterHeight(root);
+    const middle = visibleBottom / 2;
+    const elements = getElements();
+    const unseen = elements.filter(
+      (element) => !seenRef.current.has(getKey(element)),
+    );
+    const pool = unseen.length > 0 ? unseen : elements;
+    const offScreen = pool
+      .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.top < 0 || rect.bottom > visibleBottom);
+    return {
+      above: offScreen
+        .filter(({ rect }) => (rect.top + rect.bottom) / 2 < middle)
+        .map(({ element }) => element),
+      below: offScreen
+        .filter(({ rect }) => (rect.top + rect.bottom) / 2 >= middle)
+        .map(({ element }) => element),
+    };
+  }, [rootRef, getElements]);
 
   const measure = useCallback(() => {
-    const hasAbove = getTargets('above').length > 0;
-    const hasBelow = getTargets('below').length > 0;
+    const { above, below } = splitTargets();
+    const hasAbove = above.length > 0;
+    const hasBelow = below.length > 0;
     setEdges((current) =>
       current.hasAbove === hasAbove && current.hasBelow === hasBelow
         ? current
         : { hasAbove, hasBelow },
     );
-  }, [getTargets]);
+  }, [splitTargets]);
 
   useEffect(() => {
     const root = rootRef.current;
     if (root === null) return;
+    const frame = { id: 0 };
     const read = () => {
       const elements = getElements();
       const next = elements.map(getKey);
@@ -95,14 +108,33 @@ export function useChangeFinder(
           ? current
           : next,
       );
+      setFooterHeight(getFooterHeight(root));
       measure();
-      if (isJumpPending.current && elements.length > 0) {
-        isJumpPending.current = false;
-        scrollToElement(elements[0]);
+      const jump = pendingJump.current;
+      if (jump === null) return;
+      if (Date.now() > jump.until) {
+        pendingJump.current = null;
+        return;
       }
+      const fresh = elements.filter(
+        (element) => !jump.before.has(getKey(element)),
+      );
+      if (fresh.length === 0) return;
+      pendingJump.current = null;
+      const freshKeys = new Set(fresh.map(getKey));
+      const kept = new Set(
+        [...seenRef.current].filter((key) => !freshKeys.has(key)),
+      );
+      seenRef.current = kept;
+      setSeen(kept);
+      scrollToElement(fresh[0], getFooterHeight(root));
     };
-    const frame = requestAnimationFrame(read);
-    const observer = new MutationObserver(read);
+    const schedule = () => {
+      cancelAnimationFrame(frame.id);
+      frame.id = requestAnimationFrame(read);
+    };
+    schedule();
+    const observer = new MutationObserver(schedule);
     observer.observe(root, {
       subtree: true,
       childList: true,
@@ -110,15 +142,18 @@ export function useChangeFinder(
       attributes: true,
       attributeFilter: ['class'],
     });
+    const footer = getFooter(root);
+    const resize = new ResizeObserver(schedule);
+    if (footer !== null) resize.observe(footer);
     return () => {
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(frame.id);
       observer.disconnect();
+      resize.disconnect();
     };
   }, [rootRef, getElements, measure]);
 
   useEffect(() => {
-    const root = rootRef.current;
-    if (root === null || keys.length === 0) return;
+    if (keys.length === 0) return;
     const observer = new IntersectionObserver(
       (entries) => {
         const shown = entries
@@ -137,20 +172,20 @@ export function useChangeFinder(
         measure();
       },
       {
-        rootMargin: `0px 0px -${getFooterHeight(root)}px 0px`,
+        rootMargin: `0px 0px -${footerHeight}px 0px`,
         threshold: [0, SEEN_SHARE, 1],
       },
     );
     getElements().forEach((element) => observer.observe(element));
     return () => observer.disconnect();
-  }, [rootRef, keys, getElements, measure]);
+  }, [keys, footerHeight, getElements, measure]);
 
   useEffect(() => {
     if (keys.length === 0) return;
-    let frame = 0;
+    const frame = { id: 0 };
     const onScroll = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(measure);
+      cancelAnimationFrame(frame.id);
+      frame.id = requestAnimationFrame(measure);
     };
     window.addEventListener('scroll', onScroll, {
       capture: true,
@@ -158,27 +193,32 @@ export function useChangeFinder(
     });
     window.addEventListener('resize', onScroll);
     return () => {
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(frame.id);
       window.removeEventListener('scroll', onScroll, { capture: true });
       window.removeEventListener('resize', onScroll);
     };
   }, [keys.length, measure]);
+
+  const go = (direction: 'above' | 'below') => {
+    const root = rootRef.current;
+    if (root === null) return;
+    const targets = splitTargets()[direction];
+    const target = direction === 'above' ? targets.at(-1) : targets[0];
+    if (target) scrollToElement(target, getFooterHeight(root));
+  };
 
   return {
     total: keys.length,
     unseen: keys.filter((key) => !seen.has(key)).length,
     hasAbove: edges.hasAbove,
     hasBelow: edges.hasBelow,
-    goAbove: () => {
-      const target = getTargets('above').at(-1);
-      if (target) scrollToElement(target);
-    },
-    goBelow: () => {
-      const target = getTargets('below')[0];
-      if (target) scrollToElement(target);
-    },
+    goAbove: () => go('above'),
+    goBelow: () => go('below'),
     goFirstOnNextChange: () => {
-      isJumpPending.current = true;
+      pendingJump.current = {
+        before: new Set(getElements().map(getKey)),
+        until: Date.now() + JUMP_WAIT_MS,
+      };
     },
   };
 }
