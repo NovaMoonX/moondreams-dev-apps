@@ -573,7 +573,7 @@ export const goBackToChange = createAsyncThunk<
       if (refusal !== null) return rejectWithValue(refusal);
     } catch (error) {
       return rejectWithValue(
-        getWriteMessage(error, 'Unable to go back to before this change.'),
+        getWriteMessage(error, 'Unable to go back to before this edit.'),
       );
     }
 

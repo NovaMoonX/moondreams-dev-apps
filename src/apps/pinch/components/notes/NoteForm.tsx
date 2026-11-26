@@ -261,7 +261,7 @@ function NoteForm({
       formatDateTime,
     );
     return [
-      { value: NO_COOK, label: 'No, just a note' },
+      { value: NO_COOK, label: 'No' },
       ...choices.map((cook, index) => ({
         value: cook.id,
         label:

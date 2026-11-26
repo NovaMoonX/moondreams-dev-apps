@@ -98,7 +98,7 @@ function NoteEntry({
         )}
         {!isTweak && (
           <span className='bg-accent text-accent-foreground border-border rounded-full border px-2 py-0.5 text-xs font-normal whitespace-nowrap'>
-            {isChange ? 'To change' : NOTE_KIND_LABELS[note.kind]}
+            {isChange && !isDone ? 'To change' : NOTE_KIND_LABELS[note.kind]}
           </span>
         )}
         {isDone && (
