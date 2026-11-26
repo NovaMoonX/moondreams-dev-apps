@@ -1,56 +1,63 @@
-import { type ReactNode, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, CircleHelp, LoaderCircle, CircleCheck } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  CircleCheck,
+  CircleHelp,
+  LoaderCircle,
+} from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
+import CopyTextButton from '@/components/CopyTextButton';
 import InlineNotice from '@/components/InlineNotice';
-import SkipQuestionButton from '@/components/SkipQuestionButton';
 import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
 import EmailForwardingStatusLine from '@/components/emailForwarding/EmailForwardingStatusLine';
 import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
-import { hasConfirmNotice } from '@/lib/emailForwarding/address';
-import type { EmailConfirm } from '@/lib/emailForwarding/types';
-
-/** Where forwarding stands, live from the app's listener. */
-export interface EmailForwardingState {
-  /** The confirmation still worth showing, or null once it is settled or none came. */
-  confirm: EmailConfirm | null;
-  /** When the newest confirmation arrived, shown or not, so its own email never counts as the first one. */
-  confirmAt: number | null;
-  isTapped: boolean;
-  onConfirmTapped: () => void;
-  lastReceivedAt: number | null;
-}
-
-type StepState = 'done' | 'current' | 'later';
+import type {
+  EmailForwardingState,
+  SetupProgress,
+  SetupStepKey,
+  StepState,
+} from '@/lib/emailForwarding/setupProgress';
 
 interface StepProps {
   number: number;
   title: string;
   state: StepState;
+  isOpen: boolean;
+  onToggle: () => void;
   children?: ReactNode;
 }
 
-function Step({ number, title, state, children }: StepProps) {
+function Step({ number, title, state, isOpen, onToggle, children }: StepProps) {
+  const panelId = `email-setup-step-${number}`;
   return (
-    <li className='flex gap-3'>
-      <span
-        className={join(
-          'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-          state === 'done' && 'bg-primary text-primary-foreground',
-          state === 'current' && 'border-primary text-primary border-2',
-          state === 'later' && 'bg-muted text-muted-foreground',
-        )}
-        aria-hidden='true'
+    <li>
+      <Button
+        type='button'
+        variant='base'
+        className='flex h-auto min-h-11 w-full items-center justify-start gap-3 px-0! text-left whitespace-normal'
+        aria-expanded={isOpen}
+        aria-controls={panelId}
+        onClick={onToggle}
       >
-        {state === 'done' ? <Check className='size-3.5' /> : number}
-      </span>
-      <div className='min-w-0 flex-1 space-y-2 pt-0.5'>
-        <p
+        <span
           className={join(
-            'text-sm font-semibold',
+            'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+            state === 'done' && 'bg-primary text-primary-foreground',
+            state === 'current' && 'border-primary text-primary border-2',
+            state === 'later' && 'bg-muted text-muted-foreground',
+          )}
+          aria-hidden='true'
+        >
+          {state === 'done' ? <Check className='size-4' /> : number}
+        </span>
+        <span
+          className={join(
+            'min-w-0 flex-1 text-sm font-semibold',
             state === 'later' && 'text-muted-foreground',
           )}
         >
@@ -58,137 +65,177 @@ function Step({ number, title, state, children }: StepProps) {
           {state === 'done' && (
             <span className='sr-only'>, {WORDS.stepDone}</span>
           )}
-        </p>
-        {children}
-      </div>
+        </span>
+        <ChevronDown
+          className={join(
+            'text-muted-foreground size-4 shrink-0',
+            isOpen && 'rotate-180',
+          )}
+          aria-hidden='true'
+        />
+      </Button>
+      {isOpen && (
+        <div id={panelId} className='space-y-3 pb-2 pl-10'>
+          {children}
+        </div>
+      )}
     </li>
+  );
+}
+
+function StepLine({ children }: { children: ReactNode }) {
+  return <p className='text-muted-foreground text-sm'>{children}</p>;
+}
+
+function UndoButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type='button'
+      variant='outline'
+      size='sm'
+      className='relative before:absolute before:-inset-y-1 before:inset-x-0 before:content-[""]'
+      onClick={onClick}
+    >
+      {label}
+    </Button>
   );
 }
 
 interface EmailSetupStepsProps {
   appName: string;
+  address: string;
   forwarding: EmailForwardingState;
-  isCopied: boolean;
+  progress: SetupProgress;
+  openStep: SetupStepKey | null;
+  onOpenStep: (key: SetupStepKey | null) => void;
   onShowGuide: () => void;
+  onUndoForward: () => void;
+  onUndoSkip: () => void;
 }
 
-/** The setup as four general steps any email service fits: copy, forward, confirm if asked, first email; each ticks itself from what the app sees, or on the person's word. */
+/** The setup as four general steps any email service fits: copy, forward, confirm if asked, first email. One is open at a time; the footer acts on the current one, and a finished step reopens with what happened and its Undo. */
 function EmailSetupSteps({
   appName,
+  address,
   forwarding,
-  isCopied,
+  progress,
+  openStep,
+  onOpenStep,
   onShowGuide,
+  onUndoForward,
+  onUndoSkip,
 }: EmailSetupStepsProps) {
-  const { confirm, confirmAt, isTapped, onConfirmTapped, lastReceivedAt } =
-    forwarding;
-  const [isForwardSaid, setIsForwardSaid] = useState(false);
-  const [isConfirmSkipped, setIsConfirmSkipped] = useState(false);
-  const shownConfirm =
-    confirm !== null && hasConfirmNotice(confirm) ? confirm : null;
-  const isConfirmPending =
-    shownConfirm !== null && shownConfirm.autoConfirm !== 'confirmed';
-  const hasFirstEmail =
-    lastReceivedAt !== null &&
-    (confirmAt === null || lastReceivedAt > confirmAt);
-  const isForwarding =
-    confirmAt !== null || lastReceivedAt !== null || isForwardSaid;
-  const isConfirmSettled =
-    shownConfirm === null
-      ? hasFirstEmail || isConfirmSkipped || confirmAt !== null
-      : !isConfirmPending;
-  const isAllSet = hasFirstEmail && !isConfirmPending;
+  const { isTapped, onConfirmTapped, lastReceivedAt } = forwarding;
+  const { states, shownConfirm, isForwardSeen, isConfirmSkipShown } = progress;
+  const stepProps = (key: SetupStepKey) => ({
+    state: states[key],
+    isOpen: openStep === key,
+    onToggle: () => onOpenStep(openStep === key ? null : key),
+  });
+  const guideRow = (
+    <ActionRow
+      icon={<CircleHelp />}
+      label={WORDS.notSure}
+      subtitle={WORDS.notSureSub}
+      onClick={onShowGuide}
+      hasChevron
+    />
+  );
 
-  const stateOf = (isDone: boolean, isCurrent: boolean): StepState => {
-    if (isDone) return 'done';
-    return isCurrent ? 'current' : 'later';
+  const confirmBody = () => {
+    if (shownConfirm !== null) {
+      return (
+        <EmailConfirmNotice
+          appName={appName}
+          confirm={shownConfirm}
+          isTapped={isTapped}
+          onConfirmTapped={onConfirmTapped}
+          isActionInFooter
+        />
+      );
+    }
+    if (isConfirmSkipShown) {
+      return (
+        <>
+          <StepLine>{WORDS.stepConfirmSkipped}</StepLine>
+          <UndoButton label={WORDS.undoSkip} onClick={onUndoSkip} />
+        </>
+      );
+    }
+    if (states.confirm === 'done') {
+      return <StepLine>{WORDS.stepConfirmDone}</StepLine>;
+    }
+    return <StepLine>{WORDS.stepConfirmLine}</StepLine>;
   };
-  const copyState = stateOf(isCopied || isForwarding, true);
-  const forwardState = stateOf(isForwarding, copyState === 'done');
-  const confirmState = stateOf(isConfirmSettled, forwardState === 'done');
-  const firstState = stateOf(isAllSet, confirmState === 'done');
+
+  const firstBody = () => {
+    if (states.first === 'done') {
+      return <EmailForwardingStatusLine lastReceivedAt={lastReceivedAt} />;
+    }
+    if (states.first === 'later') {
+      return <StepLine>{WORDS.stepFirstLater}</StepLine>;
+    }
+    return (
+      <p
+        className='text-muted-foreground flex items-start gap-2 text-sm'
+        role='status'
+      >
+        <LoaderCircle
+          className='mt-0.5 size-4 shrink-0 motion-safe:animate-spin motion-reduce:hidden'
+          aria-hidden='true'
+        />
+        {WORDS.waitingForFirst}
+      </p>
+    );
+  };
 
   return (
     <div className='space-y-4'>
-      <ol className='space-y-4'>
-        <Step number={1} title={WORDS.stepCopy} state={copyState} />
-        <Step number={2} title={WORDS.stepForward} state={forwardState}>
-          {forwardState === 'current' && (
+      <ol className='space-y-1'>
+        <Step number={1} title={WORDS.stepCopy} {...stepProps('copy')}>
+          {states.copy === 'done' ? (
             <>
-              <p className='text-muted-foreground text-sm'>
-                {WORDS.stepForwardLine}
-              </p>
-              <ActionRow
-                icon={<CircleHelp />}
-                label={WORDS.notSure}
-                subtitle={WORDS.notSureSub}
-                onClick={onShowGuide}
-                hasChevron
+              <StepLine>{WORDS.stepCopyDone}</StepLine>
+              <CopyTextButton
+                text={address}
+                label={WORDS.copyAgain}
+                variant='tertiary'
+                isCompact
               />
-              <Button
-                type='button'
-                variant='secondary'
-                className='!mt-4 w-full'
-                onClick={() => setIsForwardSaid(true)}
-              >
-                {WORDS.forwardOnButton}
-              </Button>
+            </>
+          ) : (
+            <StepLine>{WORDS.stepCopyLine}</StepLine>
+          )}
+        </Step>
+        <Step number={2} title={WORDS.stepForward} {...stepProps('forward')}>
+          {states.forward === 'done' && isForwardSeen && (
+            <StepLine>{WORDS.stepForwardSeen}</StepLine>
+          )}
+          {states.forward === 'done' && !isForwardSeen && (
+            <>
+              <StepLine>{WORDS.stepForwardSaid}</StepLine>
+              <UndoButton label={WORDS.undoForward} onClick={onUndoForward} />
             </>
           )}
+          {states.forward !== 'done' && (
+            <StepLine>{WORDS.stepForwardLine}</StepLine>
+          )}
+          {guideRow}
         </Step>
-        <Step number={3} title={WORDS.stepConfirm} state={confirmState}>
-          {shownConfirm !== null && (
-            <EmailConfirmNotice
-              appName={appName}
-              confirm={shownConfirm}
-              isTapped={isTapped}
-              onConfirmTapped={onConfirmTapped}
-            />
-          )}
-          {shownConfirm === null && (hasFirstEmail || confirmAt !== null) && (
-            <p className='text-muted-foreground text-sm'>
-              {WORDS.stepConfirmDone}
-            </p>
-          )}
-          {shownConfirm === null &&
-            !hasFirstEmail &&
-            confirmAt === null &&
-            confirmState !== 'later' && (
-              <>
-                {!isConfirmSkipped && (
-                  <p className='text-muted-foreground text-sm'>
-                    {WORDS.stepConfirmLine}
-                  </p>
-                )}
-                <SkipQuestionButton
-                  label={WORDS.skipConfirm}
-                  skippedLabel={WORDS.skippedConfirm}
-                  note={WORDS.skipConfirmNote}
-                  skippedNote={WORDS.stepConfirmSkipped}
-                  isSkipped={isConfirmSkipped}
-                  onSkip={() => setIsConfirmSkipped((was) => !was)}
-                />
-              </>
-            )}
+        <Step number={3} title={WORDS.stepConfirm} {...stepProps('confirm')}>
+          {confirmBody()}
         </Step>
-        <Step number={4} title={WORDS.stepFirst} state={firstState}>
-          {firstState === 'done' && (
-            <EmailForwardingStatusLine lastReceivedAt={lastReceivedAt} />
-          )}
-          {firstState === 'current' && (
-            <p
-              className='text-muted-foreground flex items-start gap-2 text-sm'
-              role='status'
-            >
-              <LoaderCircle
-                className='mt-0.5 size-4 shrink-0 motion-safe:animate-spin motion-reduce:hidden'
-                aria-hidden='true'
-              />
-              {WORDS.waitingForFirst}
-            </p>
-          )}
+        <Step number={4} title={WORDS.stepFirst} {...stepProps('first')}>
+          {firstBody()}
         </Step>
       </ol>
-      {isAllSet && (
+      {progress.isAllSet && (
         <InlineNotice
           tone='success'
           icon={CircleCheck}

@@ -4,14 +4,20 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { copyToClipboard } from '@/utils/clipboardUtils';
-import { hasConfirmNotice } from '@/lib/emailForwarding/address';
+import {
+  CONFIRM_PROVIDER_NAMES,
+  readConfirmLink,
+} from '@/lib/emailForwarding/address';
 import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
 import EmailProviderGuide, {
   type EmailFilterSuggestion,
 } from '@/components/emailForwarding/EmailProviderGuide';
-import EmailSetupSteps, {
+import EmailSetupSteps from '@/components/emailForwarding/EmailSetupSteps';
+import {
   type EmailForwardingState,
-} from '@/components/emailForwarding/EmailSetupSteps';
+  readSetupProgress,
+  type SetupStepKey,
+} from '@/lib/emailForwarding/setupProgress';
 import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
 
 export type { EmailFilterSuggestion };
@@ -37,7 +43,14 @@ interface EmailSetupViewProps {
   onDone: () => void;
 }
 
-/** The whole forwarding setup on one screen: the ask, the address, Copy address as its one act, then what to do in their email. */
+interface OpenedStep {
+  key: SetupStepKey | null;
+  /** The person's pick holds only until the setup moves on or a confirmation arrives; then the step to act on opens. */
+  whileCurrent: SetupStepKey | null;
+  confirmAt: number | null;
+}
+
+/** The whole forwarding setup on one screen: the ask, the address, then four steps whose current one is the footer's single action. */
 function EmailSetupView({
   appName,
   setupLine,
@@ -54,38 +67,96 @@ function EmailSetupView({
   onDone,
 }: EmailSetupViewProps) {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
-  const [isCopyFailed, setIsCopyFailed] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [copyFailure, setCopyFailure] = useState<string | null>(null);
+  const [isForwardSaid, setIsForwardSaid] = useState(false);
+  const [isConfirmSkipped, setIsConfirmSkipped] = useState(false);
+  const [openedStep, setOpenedStep] = useState<OpenedStep | null>(null);
   const [guideOpenedAt, setGuideOpenedAt] = useState<{
     confirmAt: number | null;
   } | null>(null);
   const isGuideOpen =
     guideOpenedAt !== null && guideOpenedAt.confirmAt === forwarding.confirmAt;
-  const isConfirmPending =
-    forwarding.confirm !== null &&
-    hasConfirmNotice(forwarding.confirm) &&
-    forwarding.confirm.autoConfirm !== 'confirmed';
   const isCopied = address !== null && copiedAddress === address;
-  const isSetUp =
-    isCopied ||
-    forwarding.confirmAt !== null ||
-    forwarding.lastReceivedAt !== null;
+  const progress = readSetupProgress({
+    forwarding,
+    isCopied,
+    isForwardSaid,
+    isConfirmSkipped,
+  });
+  const openStep =
+    openedStep !== null &&
+    openedStep.whileCurrent === progress.current &&
+    openedStep.confirmAt === forwarding.confirmAt
+      ? openedStep.key
+      : progress.current;
+
+  const copyText = async (text: string, failure: string) => {
+    const didCopy = await copyToClipboard(text);
+    setCopyFailure(didCopy ? null : failure);
+    return didCopy;
+  };
 
   const copyAddress = async () => {
     if (address === null) return;
-    const didCopy = await copyToClipboard(address);
-    setIsCopyFailed(!didCopy);
+    const didCopy = await copyText(address, WORDS.copyFailed);
     setCopiedAddress(didCopy ? address : null);
+  };
+
+  const copyCode = async (code: string) => {
+    const didCopy = await copyText(code, WORDS.codeCopyFailed);
+    setCopiedCode(didCopy ? code : null);
+  };
+
+  const confirmAction = () => {
+    const pending = progress.pendingConfirm;
+    if (pending === null) {
+      return {
+        label: WORDS.skipConfirm,
+        onClick: () => setIsConfirmSkipped(true),
+      };
+    }
+    const url = readConfirmLink(pending);
+    const name =
+      pending.provider === null
+        ? null
+        : CONFIRM_PROVIDER_NAMES[pending.provider];
+    if (url !== null && !forwarding.isTapped) {
+      return {
+        label: WORDS.confirmButton(name),
+        onClick: () => {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          forwarding.onConfirmTapped();
+        },
+      };
+    }
+    if (url === null && pending.code !== null && copiedCode !== pending.code) {
+      const code = pending.code;
+      return { label: WORDS.copyCode, onClick: () => void copyCode(code) };
+    }
+    return { label: WORDS.done, onClick: onDone };
+  };
+
+  const stepAction = () => {
+    if (progress.current === 'copy') {
+      return { label: WORDS.copyAddress, onClick: () => void copyAddress() };
+    }
+    if (progress.current === 'forward') {
+      return {
+        label: WORDS.forwardOnButton,
+        onClick: () => setIsForwardSaid(true),
+      };
+    }
+    if (progress.current === 'confirm') return confirmAction();
+    return { label: WORDS.done, onClick: onDone };
   };
 
   const footerButton = () => {
     if (address !== null) {
+      const action = stepAction();
       return (
-        <Button
-          type='button'
-          variant={isSetUp && isConfirmPending ? 'secondary' : undefined}
-          onClick={isSetUp ? onDone : () => void copyAddress()}
-        >
-          {isSetUp ? WORDS.done : WORDS.copyAddress}
+        <Button type='button' onClick={action.onClick}>
+          {action.label}
         </Button>
       );
     }
@@ -118,11 +189,25 @@ function EmailSetupView({
       {address !== null && (
         <EmailSetupSteps
           appName={appName}
+          address={address}
           forwarding={forwarding}
-          isCopied={isCopied}
+          progress={progress}
+          openStep={openStep}
+          onOpenStep={(key) =>
+            setOpenedStep({
+              key,
+              whileCurrent: progress.current,
+              confirmAt: forwarding.confirmAt,
+            })
+          }
           onShowGuide={() =>
             setGuideOpenedAt({ confirmAt: forwarding.confirmAt })
           }
+          onUndoForward={() => {
+            setIsForwardSaid(false);
+            setIsConfirmSkipped(false);
+          }}
+          onUndoSkip={() => setIsConfirmSkipped(false)}
         />
       )}
       {address !== null && (
@@ -139,9 +224,9 @@ function EmailSetupView({
           {WORDS.addressLoadFailed}
         </p>
       )}
-      {isCopyFailed && (
+      {copyFailure !== null && (
         <p className='text-destructive text-sm' role='alert'>
-          {WORDS.copyFailed}
+          {copyFailure}
         </p>
       )}
       {error && (

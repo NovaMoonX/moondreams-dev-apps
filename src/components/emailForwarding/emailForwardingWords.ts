@@ -1,3 +1,6 @@
+const confirmButton = (provider: string | null) =>
+  provider === null ? 'Confirm forwarding' : `Confirm with ${provider}`;
+
 /** The words every forwarding screen shares; an app supplies its name and its setup line. */
 export const EMAIL_FORWARDING_WORDS = {
   getAddress: 'Get your address',
@@ -26,6 +29,10 @@ export const EMAIL_FORWARDING_WORDS = {
   noSearchStep:
     'If it asks which emails to forward, pick the ones you want sent here.',
   stepCopy: 'Copy your address',
+  stepCopyLine:
+    'Copy it now. You’ll paste it where your email asks where to forward.',
+  stepCopyDone: 'Copied. Paste it where your email asks where to forward.',
+  copyAgain: 'Copy again',
   stepForward: 'Turn on forwarding in your email',
   stepForwardLine:
     'Use your email’s own settings to forward these emails to your address.',
@@ -33,11 +40,15 @@ export const EMAIL_FORWARDING_WORDS = {
   stepConfirmLine:
     'Some email services send a confirmation to your address first. If yours does, it shows here.',
   stepConfirmDone: 'Nothing left to confirm',
+  stepForwardSaid: 'You said it’s on.',
+  stepForwardSeen: 'Your email is forwarding here.',
   forwardOnButton: 'I’ve turned it on',
+  undoForward: 'I haven’t turned it on yet',
   skipConfirm: 'My email didn’t ask',
-  skippedConfirm: 'Skipped · tap to undo',
-  skipConfirmNote: 'If a confirmation comes in later, it still shows here.',
-  stepConfirmSkipped: 'If a confirmation comes in anyway, it shows here.',
+  stepConfirmSkipped:
+    'You said your email didn’t ask. If a confirmation comes in anyway, it opens here.',
+  undoSkip: 'Undo skip',
+  stepFirstLater: 'Once forwarding is on, your first email shows here.',
   stepFirst: 'Your first email comes in',
   stepDone: 'Done',
   allSetTitle: 'You’re all set',
@@ -55,13 +66,15 @@ export const EMAIL_FORWARDING_WORDS = {
     'Your old address stops working. Anything still forwarding to it will be lost.',
   addressFailed: 'The address did not change. Try again in a moment.',
   confirmAsked: (provider: string) => `${provider} asked to confirm forwarding`,
-  confirmButton: (provider: string | null) =>
-    provider === null ? 'Confirm forwarding' : `Confirm with ${provider}`,
+  confirmButton,
   confirmCodeLine: (provider: string | null) =>
     provider === null
       ? 'Enter this code where you set up forwarding'
       : `Enter this code in ${provider}’s forwarding settings`,
   copyCode: 'Copy code',
+  codeCopyFailed: 'Couldn’t copy it. Press and hold the code to copy it.',
+  confirmWithFooter: (provider: string | null) =>
+    `Tap ${confirmButton(provider)} below to open it, then come back here.`,
   confirmedBy: (appName: string, provider: string) =>
     `${appName} confirmed ${provider}’s forwarding`,
   confirmWaiting:

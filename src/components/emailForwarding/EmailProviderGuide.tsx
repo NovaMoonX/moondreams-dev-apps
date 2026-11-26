@@ -48,7 +48,7 @@ const OPTIONS: readonly PillOption<ProviderChoice>[] = [
           ? undefined
           : WORDS.paidAria(guide.name, guide.paidPlan),
       icon: (
-        <span className='inline-flex rounded-full bg-white p-0.5'>
+        <span className='inline-flex rounded-full bg-white p-1'>
           <Mark className='size-4' />
         </span>
       ),
@@ -69,12 +69,12 @@ function GuidePart({ icon: Icon, children }: GuidePartProps) {
   return (
     <li className='flex gap-3'>
       <span
-        className='bg-muted text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-full'
+        className='bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full'
         aria-hidden='true'
       >
-        <Icon className='size-3.5' />
+        <Icon className='size-4' />
       </span>
-      <div className='min-w-0 flex-1 space-y-2 pt-0.5 text-sm'>{children}</div>
+      <div className='min-w-0 flex-1 space-y-2 pt-1.5 text-sm'>{children}</div>
     </li>
   );
 }
@@ -111,6 +111,7 @@ function EmailProviderGuide({
             options={OPTIONS}
             value={choice}
             onChange={setChoice}
+            hasRoundIcons
           />
         </div>
         {choice !== null && (

@@ -172,6 +172,8 @@ interface PillOptionsProps<T extends string> {
   showAll?: boolean;
   /** False when the caller searches several groups at once with its own box. */
   isSearchable?: boolean;
+  /** Options carry a round mark (a brand's logo on a disc): every pill grows to 40px, and a mark sits as far from the pill's edge as from its top and bottom. */
+  hasRoundIcons?: boolean;
 }
 
 /** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all", but only when more than three pills would be hidden. */
@@ -187,6 +189,7 @@ export function PillOptions<T extends string>({
   wrapsNarrow = false,
   showAll: wantsAll = false,
   isSearchable = true,
+  hasRoundIcons = false,
 }: PillOptionsProps<T>) {
   const showAll = wantsAll && options.length <= SEARCH_THRESHOLD;
   const isScrolling = isThin && options.some((option) => option.detail);
@@ -343,6 +346,8 @@ export function PillOptions<T extends string>({
                 isThin={isThin}
                 isSelected={isSelected(option.value)}
                 className={join(
+                  hasRoundIcons && !isThin && 'min-h-10! px-4!',
+                  hasRoundIcons && !isThin && option.icon && 'gap-2 pl-2!',
                   option.detail &&
                     !isScrolling &&
                     'max-[359px]:h-auto! max-[359px]:min-h-8! max-[359px]:py-0.5!',
@@ -432,6 +437,7 @@ interface PillGroupProps<T extends string> {
   isThin?: boolean;
   wrapsNarrow?: boolean;
   isSearchable?: boolean;
+  hasRoundIcons?: boolean;
 }
 
 /** Pick exactly one of a few options. */
@@ -444,6 +450,7 @@ export function PillGroup<T extends string>({
   isThin,
   wrapsNarrow,
   isSearchable,
+  hasRoundIcons,
 }: PillGroupProps<T>) {
   return (
     <PillOptions
@@ -453,6 +460,7 @@ export function PillGroup<T extends string>({
       isThin={isThin}
       wrapsNarrow={wrapsNarrow}
       isSearchable={isSearchable}
+      hasRoundIcons={hasRoundIcons}
       isSingle
       isSelected={(optionValue) => value === optionValue}
       onToggle={onChange}

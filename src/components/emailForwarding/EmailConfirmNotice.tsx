@@ -16,6 +16,8 @@ interface EmailConfirmNoticeProps {
   confirm: EmailConfirm;
   isTapped: boolean;
   onConfirmTapped: () => void;
+  /** The screen's footer carries the Confirm or Copy code button, so the notice only says what was asked. */
+  isActionInFooter?: boolean;
 }
 
 const openLink = (url: string) =>
@@ -46,6 +48,7 @@ function EmailConfirmNotice({
   confirm,
   isTapped,
   onConfirmTapped,
+  isActionInFooter = false,
 }: EmailConfirmNoticeProps) {
   const url = readConfirmLink(confirm);
   const name =
@@ -78,7 +81,12 @@ function EmailConfirmNotice({
       title={WORDS.confirmAsked(name ?? 'Your email')}
     >
       <div className='mt-2 space-y-2'>
-        {url !== null ? (
+        {url !== null && isActionInFooter && (
+          <p className='text-muted-foreground'>
+            {WORDS.confirmWithFooter(name)}
+          </p>
+        )}
+        {url !== null && !isActionInFooter && (
           <Button
             className='w-full'
             onClick={() => {
@@ -88,7 +96,8 @@ function EmailConfirmNotice({
           >
             {WORDS.confirmButton(name)}
           </Button>
-        ) : (
+        )}
+        {url === null && (
           <>
             <p className='text-muted-foreground'>
               {WORDS.confirmCodeLine(name)}
@@ -97,12 +106,14 @@ function EmailConfirmNotice({
               <span className='text-lg font-semibold tabular-nums'>
                 {confirm.code}
               </span>
-              <CopyTextButton
-                text={confirm.code ?? ''}
-                label={WORDS.copyCode}
-                variant='tertiary'
-                isCompact
-              />
+              {!isActionInFooter && (
+                <CopyTextButton
+                  text={confirm.code ?? ''}
+                  label={WORDS.copyCode}
+                  variant='tertiary'
+                  isCompact
+                />
+              )}
             </div>
           </>
         )}
