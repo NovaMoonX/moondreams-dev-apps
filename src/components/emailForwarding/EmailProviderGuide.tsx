@@ -49,7 +49,7 @@ const OPTIONS: readonly PillOption<ProviderChoice>[] = [
           : WORDS.paidAria(guide.name, guide.paidPlan),
       icon: (
         <span className='inline-flex rounded-full bg-white p-0.5'>
-          <Mark className='size-3.5' />
+          <Mark className='size-4' />
         </span>
       ),
     };

@@ -6,6 +6,7 @@ import { Check, CircleHelp, LoaderCircle, CircleCheck } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import InlineNotice from '@/components/InlineNotice';
+import SkipQuestionButton from '@/components/SkipQuestionButton';
 import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
 import EmailForwardingStatusLine from '@/components/emailForwarding/EmailForwardingStatusLine';
 import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
@@ -93,7 +94,7 @@ function EmailSetupSteps({
     confirmAt !== null || lastReceivedAt !== null || isForwardSaid;
   const isConfirmSettled =
     shownConfirm === null
-      ? hasFirstEmail || isConfirmSkipped
+      ? hasFirstEmail || isConfirmSkipped || confirmAt !== null
       : !isConfirmPending;
   const isAllSet = hasFirstEmail && !isConfirmPending;
 
@@ -126,7 +127,7 @@ function EmailSetupSteps({
               <Button
                 type='button'
                 variant='secondary'
-                className='w-full'
+                className='!mt-4 w-full'
                 onClick={() => setIsForwardSaid(true)}
               >
                 {WORDS.forwardOnButton}
@@ -143,28 +144,31 @@ function EmailSetupSteps({
               onConfirmTapped={onConfirmTapped}
             />
           )}
-          {shownConfirm === null && confirmState === 'done' && (
+          {shownConfirm === null && (hasFirstEmail || confirmAt !== null) && (
             <p className='text-muted-foreground text-sm'>
-              {isConfirmSkipped && !hasFirstEmail
-                ? WORDS.stepConfirmSkipped
-                : WORDS.stepConfirmDone}
+              {WORDS.stepConfirmDone}
             </p>
           )}
-          {shownConfirm === null && confirmState === 'current' && (
-            <>
-              <p className='text-muted-foreground text-sm'>
-                {WORDS.stepConfirmLine}
-              </p>
-              <Button
-                type='button'
-                variant='tertiary'
-                className='w-full'
-                onClick={() => setIsConfirmSkipped(true)}
-              >
-                {WORDS.skipConfirm}
-              </Button>
-            </>
-          )}
+          {shownConfirm === null &&
+            !hasFirstEmail &&
+            confirmAt === null &&
+            confirmState !== 'later' && (
+              <>
+                {!isConfirmSkipped && (
+                  <p className='text-muted-foreground text-sm'>
+                    {WORDS.stepConfirmLine}
+                  </p>
+                )}
+                <SkipQuestionButton
+                  label={WORDS.skipConfirm}
+                  skippedLabel={WORDS.skippedConfirm}
+                  note={WORDS.skipConfirmNote}
+                  skippedNote={WORDS.stepConfirmSkipped}
+                  isSkipped={isConfirmSkipped}
+                  onSkip={() => setIsConfirmSkipped((was) => !was)}
+                />
+              </>
+            )}
         </Step>
         <Step number={4} title={WORDS.stepFirst} state={firstState}>
           {firstState === 'done' && (

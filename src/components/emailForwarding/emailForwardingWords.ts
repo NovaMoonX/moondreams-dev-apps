@@ -35,8 +35,9 @@ export const EMAIL_FORWARDING_WORDS = {
   stepConfirmDone: 'Nothing left to confirm',
   forwardOnButton: 'I’ve turned it on',
   skipConfirm: 'My email didn’t ask',
-  stepConfirmSkipped:
-    'Skipped. If a confirmation comes in anyway, it shows here.',
+  skippedConfirm: 'Skipped · tap to undo',
+  skipConfirmNote: 'If a confirmation comes in later, it still shows here.',
+  stepConfirmSkipped: 'If a confirmation comes in anyway, it shows here.',
   stepFirst: 'Your first email comes in',
   stepDone: 'Done',
   allSetTitle: 'You’re all set',
