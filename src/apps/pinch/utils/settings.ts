@@ -12,6 +12,7 @@ import {
   toPepperLook,
 } from '@apps/pinch/constants';
 import type {
+  IngredientPick,
   PinchReminderSettings,
   PinchSettings,
   PinchStartTab,
@@ -48,6 +49,7 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
     hour: DEFAULT_REMINDER_HOUR,
     timeZone: null,
   },
+  ingredientPicks: {},
   updatedAt: 0,
   lastDigestDay: null,
 };
@@ -70,6 +72,7 @@ export const getSettingsWithDefaults = (
           look: toPepperLook(document.voice?.look),
         },
         units: { ...DEFAULT_PINCH_SETTINGS.units, ...document.units },
+        ingredientPicks: document.ingredientPicks ?? {},
         reminders: {
           ...DEFAULT_PINCH_SETTINGS.reminders,
           ...PREDATING_REMINDERS,
@@ -115,6 +118,8 @@ export interface PinchSettingsPatch {
   voice?: Partial<PinchVoiceSettings>;
   units?: Partial<PinchUnitSettings>;
   reminders?: Partial<PinchReminderSettings>;
+  /** Picks to remember, or `null` under a key to forget it. */
+  ingredientPicks?: Record<string, IngredientPick | null>;
 }
 
 /** The whole document for a person's first change: the defaults with their change on top, and the morning note in the zone of the device that made it (a note with no zone goes out at UTC). */
@@ -131,6 +136,11 @@ export const createSettings = (
   defaultTab: patch.defaultTab ?? DEFAULT_PINCH_SETTINGS.defaultTab,
   voice: { ...DEFAULT_PINCH_SETTINGS.voice, ...patch.voice },
   units: { ...DEFAULT_PINCH_SETTINGS.units, ...patch.units },
+  ingredientPicks: Object.fromEntries(
+    Object.entries(patch.ingredientPicks ?? {}).flatMap(([key, pick]) =>
+      pick === null ? [] : [[key, pick]],
+    ),
+  ),
   reminders: {
     ...DEFAULT_PINCH_SETTINGS.reminders,
     timeZone,
@@ -168,6 +178,10 @@ export const getSettingsUpdates = (
   ...Object.entries(patch.reminders ?? {}).flatMap(([key, value]) =>
     value === undefined ? [] : [{ path: ['reminders', key], value }],
   ),
+  ...Object.entries(patch.ingredientPicks ?? {}).map(([key, pick]) => ({
+    path: ['ingredientPicks', key],
+    value: pick,
+  })),
   { path: ['updatedAt'], value: now },
 ];
 

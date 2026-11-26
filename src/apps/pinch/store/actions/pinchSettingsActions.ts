@@ -1,6 +1,12 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { doc, FieldPath, runTransaction, updateDoc } from 'firebase/firestore';
+import {
+  deleteField,
+  doc,
+  FieldPath,
+  runTransaction,
+  updateDoc,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { getStorageErrorMessage } from '@/utils/errorUtils';
@@ -20,6 +26,10 @@ interface SavePinchSettingsInput {
 const OFFLINE_MESSAGE =
   "You're offline, so your first change can't save yet. Try again once you're back online.";
 
+/** A forgotten pick is the one null that removes its key rather than storing null. */
+const toStoredValue = (path: string[], value: unknown) =>
+  path[0] === 'ingredientPicks' && value === null ? deleteField() : value;
+
 /** The path and value pairs of a change, as `updateDoc` and a transaction's `update` take them. */
 const getUpdateArgs = (
   patch: PinchSettingsPatch,
@@ -28,8 +38,11 @@ const getUpdateArgs = (
   const [first, ...rest] = getSettingsUpdates(patch, now);
   return [
     new FieldPath(...first.path),
-    first.value,
-    ...rest.flatMap(({ path, value }) => [new FieldPath(...path), value]),
+    toStoredValue(first.path, first.value),
+    ...rest.flatMap(({ path, value }) => [
+      new FieldPath(...path),
+      toStoredValue(path, value),
+    ]),
   ];
 };
 

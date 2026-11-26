@@ -182,9 +182,18 @@ export interface PinchSettings {
   /** The units recipes are adapted to. A document written before this key lacks it, which reads as everything as written. */
   units: PinchUnitSettings;
   reminders: PinchReminderSettings;
+  /** The ingredient the person picked for a name a reading couldn't place ("Flour" is Bread flour), keyed by `getPickKey`, so the next reading uses it. A document written before this key lacks it, which reads as none. */
+  ingredientPicks: Record<string, IngredientPick>;
   updatedAt: number;
   /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */
   lastDigestDay: string | null;
+}
+
+/** One remembered pick: the name as the recipe wrote it and the ingredient chosen for it. */
+export interface IngredientPick {
+  name: string;
+  ingredientId: string;
+  pickedAt: number;
 }
 
 export type MealType =
