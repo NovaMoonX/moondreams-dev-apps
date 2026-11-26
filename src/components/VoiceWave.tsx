@@ -13,7 +13,7 @@ interface VoiceWaveProps {
   className?: string;
 }
 
-/** A classic audio wave of thin bars that scrolls left as the person speaks; the colour is `--voice-wave` (an app sets it), else the orb's accent, else the primary. Still under reduced motion and when no level is reported. */
+/** Thin bars scrolling left with the voice, coloured `--voice-wave`, else the orb accent, else primary; still without a level or under reduced motion. */
 function VoiceWave({ getLevel, className }: VoiceWaveProps) {
   const bars = useRef<(HTMLSpanElement | null)[]>([]);
   const getLevelRef = useRef(getLevel);

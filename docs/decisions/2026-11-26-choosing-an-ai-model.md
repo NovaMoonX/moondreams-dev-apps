@@ -22,11 +22,11 @@ The site calls two families of models: Claude (Haiku 5.5, Sonnet 5.5) through Cl
 
 Prices per million tokens, on the paid tier:
 
-| Model | Input | Output | Search |
-|---|---|---|---|
-| Claude Haiku 5.5 (prompts up to 100K) | $0.10 | $0.50 | $10 per 1,000 searches, no free allowance |
-| Gemini 3.5 Flash-Lite | $0.30 (text, image, video, audio) | $2.50 | 5,000 free a month across Gemini 3+, then $14 per 1,000 |
-| Gemini 3.8 Flash | $0.75 until Dec 31, 2026, then $1.50 | $3.75, then $7.50 | as above |
+| Model                                 | Input                                | Output            | Search                                                  |
+| ------------------------------------- | ------------------------------------ | ----------------- | ------------------------------------------------------- |
+| Claude Haiku 5.5 (prompts up to 100K) | $0.10                                | $0.50             | $10 per 1,000 searches, no free allowance               |
+| Gemini 3.5 Flash-Lite                 | $0.30 (text, image, video, audio)    | $2.50             | 5,000 free a month across Gemini 3+, then $14 per 1,000 |
+| Gemini 3.8 Flash                      | $0.75 until Dec 31, 2026, then $1.50 | $3.75, then $7.50 | as above                                                |
 
 - Claude prices: the claude-api reference's model table (cached 2026-11-03), "Claude Haiku 5.5 … $0.10 … $0.50", and "Prices above are for prompts up to 100K tokens ($0.50 / $2.50 beyond)". Anthropic web search: "$10 per 1,000 searches" ([web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)).
 - Gemini prices: [Gemini Developer API pricing](https://ai.google.dev/gemini-api/docs/pricing), read 2026-11-26: Flash-Lite "$0.30 (text / image / video / audio)", "$2.50"; Google Search "5,000 free search requests per month (shared across all Gemini 3 and newer models), then $14 per 1,000 requests". The free tier is marked "Used to improve our products: Yes", so nothing personal goes through it.

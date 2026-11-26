@@ -13,7 +13,7 @@ import VoiceWave from '@/components/VoiceWave';
 import type { Dictation } from '@/hooks/useDictation';
 
 const ROUND_BUTTON =
-  "relative size-9 shrink-0 before:absolute before:-inset-0.5 before:content-['']";
+  "relative size-9 shrink-0 before:absolute before:-inset-0.5 before:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 
 interface DictationFieldProps {
   dictation: Dictation;
@@ -78,7 +78,7 @@ function DictationField({
     <>
       <div
         className={join(
-          'border-border bg-background focus-within:border-foreground/40 flex gap-1.5 rounded-3xl border p-1.5 pl-3',
+          'border-border bg-background focus-within:border-foreground/60 focus-within:ring-primary/25 relative flex gap-1.5 rounded-3xl border p-1.5 pl-3 focus-within:ring-2',
           isIdle ? 'items-end' : 'items-center',
         )}
       >
@@ -89,7 +89,7 @@ function DictationField({
               getLevel={dictation.getLevel}
               className='flex-1 justify-center'
             />
-            <span role='status' className='sr-only'>
+            <span role='status' className='sr-only absolute'>
               {copy.listening}
             </span>
             <Button
@@ -127,7 +127,7 @@ function DictationField({
           value={value}
           disabled={isBusy}
           className={join(
-            'min-h-9 flex-1 resize-none bg-transparent px-0 py-2 text-sm placeholder:truncate focus:outline-none',
+            'placeholder:text-muted-foreground! min-h-9 flex-1 resize-none bg-transparent px-0! py-2 text-sm placeholder:truncate focus:outline-none',
             !isIdle && 'hidden',
           )}
           onChange={(event) => onChange(event.target.value)}

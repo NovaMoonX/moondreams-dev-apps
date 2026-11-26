@@ -207,7 +207,7 @@ function PepperDock({
         copy={DICTATION_COPY}
         leading={
           <AssistantOrb
-            state={dictation.phase === 'listening' ? 'listening' : 'thinking'}
+            state={dictation.phase === 'listening' ? 'listening' : 'waiting'}
             word={dictation.phase === 'listening' ? 'Listening' : 'Writing'}
             reserveWord='Listening'
             placement='header'
