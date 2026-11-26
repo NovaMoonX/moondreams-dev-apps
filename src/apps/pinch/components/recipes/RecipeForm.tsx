@@ -404,6 +404,9 @@ function RecipeForm({
     };
   });
   const [formData, setFormData] = useState<RecipeFormData>(formStart);
+  const openedHowToUrl =
+    (formStart.links as Partial<RecipeFormData['links']> | undefined)?.howTo
+      ?.url ?? '';
   const sectionsRef = useRef(formStart.stepSections);
   const [isSplitOpen, setIsSplitOpen] = useState(false);
   const splitRef = useRef<Pick<Recipe, 'steps' | 'stepSections'> | null>(null);
@@ -776,6 +779,17 @@ function RecipeForm({
             value={props.value as RecipeFormData['links']}
             onChange={props.onValueChange}
             position={position}
+            debug={
+              recipe === null
+                ? null
+                : {
+                    recipeId: recipe.id,
+                    savedAt: recipe.updatedAt,
+                    savedLinks: recipe.links,
+                    openedHowToUrl,
+                    isDraftRestored: isRestored,
+                  }
+            }
           />
         ),
       },
@@ -1075,6 +1089,8 @@ function RecipeForm({
     units,
     liveMarks,
     aiMarkedIds,
+    openedHowToUrl,
+    isRestored,
   ]);
 
   const handleDelete = async () => {
