@@ -156,8 +156,10 @@ function EmailProviderGuide({
               ) : (
                 <>
                   <p>{WORDS.searchStep}</p>
-                  <code className='bg-background border-border block rounded-xl border px-2.5 py-2 text-xs break-words select-all'>
-                    {toSearch(filter)}
+                  <code className='bg-background border-border block rounded-xl border px-2.5 py-2 text-xs select-all'>
+                    {'from:('}
+                    <EmailAddressText address={filter.sender} />
+                    {`) "${filter.phrase}"`}
                   </code>
                   <div className='flex justify-end'>
                     <CopyTextButton
@@ -178,9 +180,6 @@ function EmailProviderGuide({
                   </p>
                 </>
               )}
-            </Step>
-            <Step number={4}>
-              <p>{WORDS.confirmOther}</p>
             </Step>
           </ol>
         )}

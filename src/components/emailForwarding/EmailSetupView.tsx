@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { hasConfirmNotice } from '@/lib/emailForwarding/address';
 import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
 import EmailProviderGuide, {
   type EmailFilterSuggestion,
@@ -54,7 +55,15 @@ function EmailSetupView({
 }: EmailSetupViewProps) {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [isCopyFailed, setIsCopyFailed] = useState(false);
-  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [guideOpenedAt, setGuideOpenedAt] = useState<{
+    confirmAt: number | null;
+  } | null>(null);
+  const isGuideOpen =
+    guideOpenedAt !== null && guideOpenedAt.confirmAt === forwarding.confirmAt;
+  const isConfirmPending =
+    forwarding.confirm !== null &&
+    hasConfirmNotice(forwarding.confirm) &&
+    forwarding.confirm.autoConfirm !== 'confirmed';
   const isCopied = address !== null && copiedAddress === address;
   const isSetUp =
     isCopied ||
@@ -73,6 +82,7 @@ function EmailSetupView({
       return (
         <Button
           type='button'
+          variant={isSetUp && isConfirmPending ? 'secondary' : undefined}
           onClick={isSetUp ? onDone : () => void copyAddress()}
         >
           {isSetUp ? WORDS.done : WORDS.copyAddress}
@@ -110,13 +120,15 @@ function EmailSetupView({
           appName={appName}
           forwarding={forwarding}
           isCopied={isCopied}
-          onShowGuide={() => setIsGuideOpen(true)}
+          onShowGuide={() =>
+            setGuideOpenedAt({ confirmAt: forwarding.confirmAt })
+          }
         />
       )}
       {address !== null && (
         <EmailProviderGuide
           isOpen={isGuideOpen}
-          onClose={() => setIsGuideOpen(false)}
+          onClose={() => setGuideOpenedAt(null)}
           address={address}
           prefix={prefix}
           filter={filter}

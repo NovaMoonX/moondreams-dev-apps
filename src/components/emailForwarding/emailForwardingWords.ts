@@ -25,8 +25,6 @@ export const EMAIL_FORWARDING_WORDS = {
   searchStep: 'If it asks which emails to forward, use this search.',
   noSearchStep:
     'If it asks which emails to forward, pick the ones you want sent here.',
-  confirmOther:
-    'Some email services send a confirmation to this address first. If yours does, come back here: it shows on the setup screen.',
   stepCopy: 'Copy your address',
   stepForward: 'Turn on forwarding in your email',
   stepForwardLine:
