@@ -7,8 +7,8 @@ import {
   Input,
   Label,
   Modal,
-  Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { shallowEqual } from 'react-redux';
 
@@ -136,7 +136,7 @@ function ProductField({
 
   return (
     <div className='space-y-2'>
-      <Select
+      <AppSelect
         options={options}
         value={value.preset}
         placeholder='Select a product'
@@ -176,7 +176,7 @@ function TypeField({
 
   return (
     <div className='space-y-2'>
-      <Select
+      <AppSelect
         options={options}
         value={value.preset}
         placeholder='Select a type'
@@ -230,7 +230,7 @@ function AdditionalDetailsFields({
         </div>
         <div className='space-y-1'>
           <Label className='text-sm'>Clinic</Label>
-          <Select
+          <AppSelect
             options={clinicOptions.map((option) => ({ text: option.label, value: option.value }))}
             value={value.clinicId}
             disabled={disabled}
@@ -239,7 +239,7 @@ function AdditionalDetailsFields({
         </div>
         <div className='space-y-1'>
           <Label className='text-sm'>Doctor</Label>
-          <Select
+          <AppSelect
             options={doctorOptions.map((option) => ({ text: option.label, value: option.value }))}
             value={value.doctorId}
             disabled={disabled}
@@ -248,7 +248,7 @@ function AdditionalDetailsFields({
         </div>
         <div className='space-y-1'>
           <Label className='text-sm'>Linked visit</Label>
-          <Select
+          <AppSelect
             options={[{ text: 'None', value: '' }, ...visitOptions.map((option) => ({ text: option.label, value: option.value }))]}
             value={value.linkedVisitId}
             placeholder='Select a visit'

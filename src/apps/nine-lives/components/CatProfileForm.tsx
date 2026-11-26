@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Form, FormFactories, Input, Label, Select, Tabs, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, Input, Label, Tabs, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import AppCheckbox from '@/components/AppCheckbox';
 
 import { fromDateInputValue, toDateInputValue } from '@/utils';
@@ -399,7 +400,7 @@ function InsuranceFields({
     <div className='space-y-3'>
       <div className='space-y-1'>
         <Label className='text-sm'>Insurance provider</Label>
-        <Select
+        <AppSelect
           options={insuranceProviderOptions}
           value={value.insuranceProviderSelection.preset}
           onChange={(nextPreset) =>
@@ -640,7 +641,7 @@ function CatProfileForm({ cat, householdId, isSubmitting = false, onSubmit, onDe
               />
             </div>
             <div className='md:hidden'>
-              <Select
+              <AppSelect
                 options={TAB_OPTIONS.map((tab) => ({ text: tab.label, value: tab.value }))}
                 value={activeTab}
                 onChange={(value) => setActiveTab(value as TabId)}

@@ -1,4 +1,5 @@
-import { Label, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Label } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 
 import Pill from '@/components/Pill';
 import {
@@ -51,7 +52,7 @@ function WatchlistDetailsFields({
       </div>
       <div className='space-y-2'>
         <Label>Preferred format</Label>
-        <Select
+        <AppSelect
           options={FORMAT_OPTIONS}
           value={values.preferredFormat}
           onChange={(preferredFormat) =>

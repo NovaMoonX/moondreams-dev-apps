@@ -6,9 +6,9 @@ import {
   FormFactories,
   Input,
   Label,
-  Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { ArrowLeftRight, CalendarDays, ChevronUp, Link2, Pencil, Receipt, Route, StickyNote } from 'lucide-react';
@@ -534,7 +534,7 @@ function ExpenseFormModal({
                 resetField({ dayIndex: '' });
               }}
             >
-              <Select
+              <AppSelect
                 options={dayOptions.map(({ value, label }) => ({ value, text: label }))}
                 value={props.value as string}
                 onChange={(value) => props.onValueChange(value)}
