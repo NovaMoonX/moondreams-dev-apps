@@ -49,6 +49,7 @@ export { mintVoiceToken } from './voice/mintVoiceToken.js';
 export { signOutEverywhere } from './auth/signOutEverywhere.js';
 export { streamSpeech } from './voice/streamSpeech.js';
 export { pepperTurn } from './apps/pinch/pepper/pepperTurn.js';
+export { revisePinchRecipe } from './apps/pinch/pepper/revisePinchRecipe.js';
 export { deleteHelmData } from './apps/helm/deleteHelmData.js';
 export { runHelmScheduledActions } from './apps/helm/scheduledActions/runHelmScheduledActions.js';
 export { runHelmResearch } from './apps/helm/research/runHelmResearch.js';
