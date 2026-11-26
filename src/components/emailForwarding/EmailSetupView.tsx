@@ -1,24 +1,23 @@
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import CopyTextButton from '@/components/CopyTextButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { copyToClipboard } from '@/utils/clipboardUtils';
 import EmailAddressText from '@/components/emailForwarding/EmailAddressText';
-import EmailProviderGuide from '@/components/emailForwarding/EmailProviderGuide';
+import EmailProviderGuide, {
+  type EmailFilterSuggestion,
+} from '@/components/emailForwarding/EmailProviderGuide';
+import EmailSetupSteps, {
+  type EmailForwardingState,
+} from '@/components/emailForwarding/EmailSetupSteps';
 import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
 
-/** A mail search an app suggests for forwarding only its emails. */
-export interface EmailFilterSuggestion {
-  sender: string;
-  phrase: string;
-}
-
-const toGmailSearch = ({ sender, phrase }: EmailFilterSuggestion) =>
-  `from:(${sender}) "${phrase}"`;
+export type { EmailFilterSuggestion };
 
 interface EmailSetupViewProps {
+  /** Names the app where a step says who accepts a confirmation. */
+  appName: string;
   /** What to forward and what the app does with it, in one line. */
   setupLine: string;
   /** The address's local part before the token. */
@@ -28,17 +27,18 @@ interface EmailSetupViewProps {
   isFailed: boolean;
   isBusy: boolean;
   error: string | null;
-  /** Where forwarding stands, shown under the address so a confirmation lands without leaving setup. */
-  progress?: ReactNode;
-  /** Shown once there is an address, as a starting point for the person's own filter. */
+  /** Where forwarding stands, live, so each step ticks itself and a confirmation lands without leaving setup. */
+  forwarding: EmailForwardingState;
+  /** The search for only this app's emails, offered in the help once the person asks how. */
   filter?: EmailFilterSuggestion | null;
   onGetAddress: () => void;
   onRetry: () => void;
   onDone: () => void;
 }
 
-/** The whole forwarding setup on one screen: the ask, the address, and Copy address as its one act. */
+/** The whole forwarding setup on one screen: the ask, the address, Copy address as its one act, then what to do in their email. */
 function EmailSetupView({
+  appName,
   setupLine,
   prefix,
   address,
@@ -46,7 +46,7 @@ function EmailSetupView({
   isFailed,
   isBusy,
   error,
-  progress = null,
+  forwarding,
   filter = null,
   onGetAddress,
   onRetry,
@@ -54,7 +54,12 @@ function EmailSetupView({
 }: EmailSetupViewProps) {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [isCopyFailed, setIsCopyFailed] = useState(false);
-  const [isSearchCopyFailed, setIsSearchCopyFailed] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const isCopied = address !== null && copiedAddress === address;
+  const isSetUp =
+    isCopied ||
+    forwarding.confirm !== null ||
+    forwarding.lastReceivedAt !== null;
 
   const copyAddress = async () => {
     if (address === null) return;
@@ -65,13 +70,12 @@ function EmailSetupView({
 
   const footerButton = () => {
     if (address !== null) {
-      const isCopied = copiedAddress === address;
       return (
         <Button
           type='button'
-          onClick={isCopied ? onDone : () => void copyAddress()}
+          onClick={isSetUp ? onDone : () => void copyAddress()}
         >
-          {isCopied ? WORDS.done : WORDS.copyAddress}
+          {isSetUp ? WORDS.done : WORDS.copyAddress}
         </Button>
       );
     }
@@ -101,33 +105,22 @@ function EmailSetupView({
           <EmailAddressText address={address} prefix={prefix} />
         </p>
       )}
-      {address !== null && progress}
-      {address !== null && <EmailProviderGuide />}
-      {address !== null && filter !== null && (
-        <div className='bg-muted/40 space-y-2 rounded-2xl p-3'>
-          <p className='text-sm font-semibold'>{WORDS.filterTitle}</p>
-          <p className='text-muted-foreground text-sm break-words'>
-            {WORDS.filterLine(filter.sender, filter.phrase)}
-          </p>
-          <code className='bg-background border-border block rounded-xl border px-2.5 py-2 text-xs break-words select-all'>
-            {toGmailSearch(filter)}
-          </code>
-          <div className='flex justify-end'>
-            <CopyTextButton
-              isCompact
-              variant='secondary'
-              text={toGmailSearch(filter)}
-              label={WORDS.copySearch}
-              onFailed={() => setIsSearchCopyFailed(true)}
-            />
-          </div>
-          {isSearchCopyFailed && (
-            <p className='text-destructive text-sm' role='alert'>
-              {WORDS.searchCopyFailed}
-            </p>
-          )}
-          <p className='text-muted-foreground text-xs'>{WORDS.filterCheck}</p>
-        </div>
+      {address !== null && (
+        <EmailSetupSteps
+          appName={appName}
+          forwarding={forwarding}
+          isCopied={isCopied}
+          onShowGuide={() => setIsGuideOpen(true)}
+        />
+      )}
+      {address !== null && (
+        <EmailProviderGuide
+          isOpen={isGuideOpen}
+          onClose={() => setIsGuideOpen(false)}
+          address={address}
+          prefix={prefix}
+          filter={filter}
+        />
       )}
       {address === null && isFailed && (
         <p className='text-destructive text-sm' role='alert'>

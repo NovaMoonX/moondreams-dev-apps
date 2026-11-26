@@ -5,7 +5,6 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import EmailConfirmNotice from '@/components/emailForwarding/EmailConfirmNotice';
-import EmailForwardingProgress from '@/components/emailForwarding/EmailForwardingProgress';
 import EmailForwardingStatusLine from '@/components/emailForwarding/EmailForwardingStatusLine';
 import { EMAIL_FORWARDING_WORDS as WORDS } from '@/components/emailForwarding/emailForwardingWords';
 import EmailSetupView from '@/components/emailForwarding/EmailSetupView';
@@ -223,6 +222,7 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
       >
         {isSetupShown ? (
           <EmailSetupView
+            appName='A-List'
             setupLine={EMAIL_SETUP_LINE}
             prefix={EMAIL_ADDRESS_PREFIX}
             address={intake?.address ?? null}
@@ -230,22 +230,18 @@ function EmailTicketsBody({ uid, onClose }: BodyProps) {
             isFailed={loadError !== null}
             isBusy={isBusy}
             error={error}
-            progress={
-              <EmailForwardingProgress
-                appName='A-List'
-                confirm={shownConfirm}
-                isTapped={
-                  shownConfirm !== null &&
-                  (isConfirmTappedBefore || confirmTappedAt === shownConfirm.at)
-                }
-                onConfirmTapped={() => {
-                  if (shownConfirm === null) return;
-                  writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
-                  setConfirmTappedAt(shownConfirm.at);
-                }}
-                lastReceivedAt={intake?.lastReceivedAt ?? null}
-              />
-            }
+            forwarding={{
+              confirm: shownConfirm,
+              isTapped:
+                shownConfirm !== null &&
+                (isConfirmTappedBefore || confirmTappedAt === shownConfirm.at),
+              onConfirmTapped: () => {
+                if (shownConfirm === null) return;
+                writeConfirmTapped(CONFIRM_TAPPED_KEY, shownConfirm.at);
+                setConfirmTappedAt(shownConfirm.at);
+              },
+              lastReceivedAt: intake?.lastReceivedAt ?? null,
+            }}
             filter={EMAIL_FILTER}
             onGetAddress={() => void getNewAddress()}
             onRetry={() => window.location.reload()}

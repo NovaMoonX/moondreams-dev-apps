@@ -6,29 +6,43 @@ export const EMAIL_FORWARDING_WORDS = {
   copyAddress: 'Copy address',
   copyFailed: 'Couldn’t copy it. Press and hold the address to copy it.',
   done: 'Done',
-  filterTitle: 'A filter to start from',
-  filterLine: (sender: string, phrase: string) =>
-    `Emails from ${sender} that contain “${phrase}”. In Gmail this search finds them:`,
   filterCheck:
     'It’s a suggestion: search it first and check that every result is an email you want to send here.',
-  guideTitle: 'Set it up in your email',
-  guideLine:
-    'Your email’s own help shows how to forward automatically. Which do you use?',
-  guidePickLabel: 'Your email service',
+  notSure: 'Not sure how?',
+  notSureSub: 'Your email’s own guide, and what to paste',
+  guideTitle: 'Set up forwarding',
+  guidePickLabel: 'Which email do you use?',
   otherProvider: 'Other',
   paidPill: 'Paid',
   paidAria: (provider: string, plan: string) => `${provider}, needs ${plan}`,
-  paidLine: (provider: string, plan: string) =>
-    `${provider} forwards automatically only with ${plan}. You can still forward an email by hand.`,
+  paidLine: (plan: string) =>
+    `Forwarding on its own needs ${plan}. You can still forward an email by hand.`,
   openGuide: (provider: string) => `Open ${provider}’s guide`,
+  otherStep:
+    'Search your email’s help for “automatic forwarding” and follow it.',
   watchVideo: (provider: string) => `Watch ${provider}’s video`,
-  otherGuide:
-    'Search your email’s help for “automatic forwarding”, and use this address where it asks for one.',
+  addressStep: 'Where it asks for an address, paste yours.',
+  searchStep: 'If it asks which emails to forward, use this search.',
+  noSearchStep:
+    'If it asks which emails to forward, pick the ones you want sent here.',
+  confirmOther:
+    'Some email services send a confirmation to this address first. If yours does, come back here: it shows on the setup screen.',
+  stepCopy: 'Copy your address',
+  stepForward: 'Turn on forwarding in your email',
+  stepForwardLine:
+    'Use your email’s own settings to forward these emails to your address.',
+  stepConfirm: 'Confirm, if your email asks',
+  stepConfirmLine:
+    'Some email services send a confirmation to your address first. If yours does, it shows here.',
+  stepConfirmDone: 'Nothing left to confirm',
+  stepFirst: 'Your first email comes in',
+  stepDone: 'Done',
+  allSetTitle: 'You’re all set',
+  allSetLine: 'Nothing else to do. New emails come in on their own.',
   copySearch: 'Copy search',
   searchCopyFailed: 'Couldn’t copy it. Press and hold the search to copy it.',
   noEmailsYet: 'No emails yet',
-  waitingForFirst:
-    'Waiting for your first email. This updates on its own once one arrives.',
+  waitingForFirst: 'Waiting for it. This updates on its own once one arrives.',
   workingSince: (when: string) => `Working · last email ${when}`,
   addressRow: 'Your address',
   newAddress: 'Get a new address',
