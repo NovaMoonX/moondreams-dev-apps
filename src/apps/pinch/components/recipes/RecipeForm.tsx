@@ -16,7 +16,7 @@ import {
 import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ArrowUp, Sparkles, X } from 'lucide-react';
+import { ArrowUp, ChevronDown, Sparkles, X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -36,7 +36,6 @@ import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { store, useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatList } from '@/utils/formatUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import { canLoadImage } from '@/utils/imageUtils';
 import Stepper from '@/components/Stepper';
@@ -56,6 +55,7 @@ import RecipeSourceField from '@apps/pinch/components/recipes/RecipeSourceField'
 import {
   adaptRows,
   getDataFromExtracted,
+  getUsedPicks,
   getDataFromIdea,
   getInitialData,
   getReadSourceChoice,
@@ -153,6 +153,10 @@ import {
   toRecipeLinks,
 } from '@apps/pinch/utils/recipeLinks';
 import { getFreedIngredientIds } from '@apps/pinch/utils/freeLines';
+import {
+  getReadNotice,
+  MAX_DIRECT_NOTICE_DETAILS,
+} from '@apps/pinch/utils/readNotice';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
@@ -283,17 +287,23 @@ function RecipeForm({
   );
   const upload = useImageUpload(null, 'cover');
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
-  const units = useAppSelector(selectPinchSettings).units;
+  const { units, ingredientPicks } = useAppSelector(selectPinchSettings);
   const [readStart] = useState(() => {
     if (!initialRead) return null;
     const read = getDataFromExtracted(
       initialRead.recipe,
       ingredients,
       initialRead.extras,
+      ingredientPicks,
     );
     const adapted = adaptRows(read.ingredients, units);
     return { data: { ...read, ingredients: adapted.rows }, ids: adapted.ids };
   });
+  const [usedPicks] = useState(() =>
+    initialRead
+      ? getUsedPicks(initialRead.recipe, ingredients, ingredientPicks)
+      : [],
+  );
   const [adaptedIds, setAdaptedIds] = useState<string[]>(readStart?.ids ?? []);
   const [initialData] = useState(() =>
     initialRead && readStart
@@ -408,6 +418,13 @@ function RecipeForm({
     draft.hideNotice();
   };
   const [isNoteClosed, setIsNoteClosed] = useState(false);
+  const [isReadDetailOpen, setIsReadDetailOpen] = useState(false);
+  const readNotice = initialRead
+    ? getReadNotice(initialRead.recipe, usedPicks)
+    : null;
+  const isReadNoticeFolded =
+    readNotice !== null &&
+    readNotice.details.length > MAX_DIRECT_NOTICE_DETAILS;
   const [isAllChangesShown, setIsAllChangesShown] = useState(false);
   const [appliedIds, setAppliedIds] = useState(() =>
     initialChanges.map((change) => change.id),
@@ -1282,32 +1299,52 @@ function RecipeForm({
           )}
         </div>
       )}
-      {initialRead && !isNoteClosed && (
+      {readNotice && !isNoteClosed && (
         <div
           className='bg-accent mb-4 flex items-start gap-2 rounded-2xl p-3 text-sm'
           role='status'
         >
           <div className='min-w-0 flex-1 space-y-0.5'>
-            <p>
-              Filled in from {initialRead.label}. Take a look before you save.
-            </p>
-            {initialRead.recipe.isServingsEstimate &&
-              initialRead.recipe.servings !== null && (
-                <p className='text-muted-foreground text-xs'>
-                  The recipe didn&apos;t say how many it serves, so we guessed{' '}
-                  {initialRead.recipe.servings} from the amounts.
-                </p>
+            {isReadNoticeFolded ? (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                aria-expanded={isReadDetailOpen}
+                aria-controls='pinch-read-detail'
+                className="relative -mx-2 -my-1 h-auto w-full justify-between gap-2 px-2 py-1 text-left font-normal before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                onClick={() => setIsReadDetailOpen((open) => !open)}
+              >
+                <span className='min-w-0'>
+                  <span className='block'>{readNotice.headline}</span>
+                  {!isReadDetailOpen && (
+                    <span className='text-muted-foreground block text-xs'>
+                      Tap to see what we changed
+                    </span>
+                  )}
+                </span>
+                <ChevronDown
+                  className={join(
+                    'h-4 w-4 shrink-0',
+                    isReadDetailOpen && 'rotate-180',
+                  )}
+                  aria-hidden='true'
+                />
+              </Button>
+            ) : (
+              <p>{readNotice.headline}</p>
+            )}
+            {(!isReadNoticeFolded || isReadDetailOpen) &&
+              readNotice.details.length > 0 && (
+                <ul
+                  id='pinch-read-detail'
+                  className='text-muted-foreground list-disc space-y-1 pl-4 text-xs'
+                >
+                  {readNotice.details.map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
               )}
-            {initialRead.recipe.unread.length > 0 && (
-              <p className='text-muted-foreground text-xs'>
-                We couldn&apos;t read: {initialRead.recipe.unread.join(', ')}.
-              </p>
-            )}
-            {initialRead.recipe.guided.length > 0 && (
-              <p className='text-muted-foreground text-xs'>
-                Followed your guidance: {formatList(initialRead.recipe.guided)}.
-              </p>
-            )}
           </div>
           <Button
             type='button'

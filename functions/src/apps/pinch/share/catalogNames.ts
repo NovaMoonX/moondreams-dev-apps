@@ -106,6 +106,7 @@ export const CATALOG_NAMES: Record<string, string> = {
   "cat-olive-oil": "Olive oil",
   "cat-vegetable-oil": "Vegetable oil",
   "cat-canola-oil": "Canola oil",
+  "cat-cooking-spray": "Cooking spray",
   "cat-coconut-oil": "Coconut oil",
   "cat-sesame-oil": "Sesame oil",
   "cat-shortening": "Shortening",

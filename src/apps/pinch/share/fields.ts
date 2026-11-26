@@ -116,6 +116,7 @@ const PINCH_SETTINGS_FIELDS = {
   reminders: 'shared',
   updatedAt: 'notUseful',
   lastDigestDay: 'notUseful',
+  ingredientPicks: 'notUseful',
 } satisfies Record<keyof PinchSettings, ShareDecision>;
 
 const MEAL_ITEM_FIELDS = {

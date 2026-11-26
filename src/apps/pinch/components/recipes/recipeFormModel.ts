@@ -15,6 +15,7 @@ import {
   UNITS,
 } from '@apps/pinch/constants';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
+import type { ExtractedIngredient } from '@apps/pinch/utils/normalizeRecipe';
 import {
   cleanGroupName,
   getGroupKey,
@@ -31,6 +32,10 @@ import {
   splitPrep,
   toTypedIngredientName,
 } from '@apps/pinch/utils/ingredientNames';
+import {
+  findPickedIngredient,
+  getPickKey,
+} from '@apps/pinch/utils/ingredientPicks';
 import { findNearMatches } from '@apps/pinch/utils/catalogSearch';
 import {
   normalizeName,
@@ -62,6 +67,7 @@ import type {
   Collection,
   DishCategory,
   Idea,
+  IngredientPick,
   NutritionMetric,
   NutritionValues,
   Recipe,
@@ -177,11 +183,50 @@ export const getInitialData = (
 const clipNote = (note: string | null) =>
   note === null ? null : clipAtWord(note, MAX_NOTE_LENGTH);
 
+const findReadPick = (
+  line: ExtractedIngredient,
+  picks: Record<string, IngredientPick>,
+  ingredients: ResolvedIngredient[],
+) =>
+  [line.name, line.alsoCalled].reduce<{
+    name: string;
+    ingredient: ResolvedIngredient;
+  } | null>((found, name) => {
+    if (found || !name) return found;
+    const ingredient = findPickedIngredient(name, picks, ingredients);
+    return ingredient
+      ? { name: picks[getPickKey(name)]?.name ?? name, ingredient }
+      : null;
+  }, null);
+
+/** The lines a reading couldn't place by name that the person's remembered picks placed instead, once per name. */
+export const getUsedPicks = (
+  extracted: ExtractedRecipe,
+  ingredients: ResolvedIngredient[],
+  picks: Record<string, IngredientPick>,
+) =>
+  extracted.ingredients.reduce<{ name: string; ingredientName: string }[]>(
+    (acc, line) => {
+      if (
+        resolveReadName(line.name, line.alsoCalled, ingredients).resolution
+          .kind === 'match'
+      ) {
+        return acc;
+      }
+      const used = findReadPick(line, picks, ingredients);
+      return used && !acc.some((item) => item.name === used.name)
+        ? [...acc, { name: used.name, ingredientName: used.ingredient.name }]
+        : acc;
+    },
+    [],
+  );
+
 /** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick, cased like the app's own names with prep words such as "bone-in" moved to the line's note. A second line for an ingredient already listed under the same heading adds to it when the units agree and stays its own line when they don't, so no amount is lost; under another heading it is always its own line. A line the recipe gives no amount ("salt to taste") keeps none. The link a source came from (a video as the how-to, a page as the original recipe) starts the links. */
 export const getDataFromExtracted = (
   extracted: ExtractedRecipe,
   ingredients: ResolvedIngredient[],
   extras: ReadExtras = NO_EXTRAS,
+  picks: Record<string, IngredientPick> = {},
 ): RecipeFormData => {
   const blank = getInitialData(null);
   const rows = extracted.ingredients.reduce<IngredientRow[]>((acc, line) => {
@@ -190,10 +235,15 @@ export const getDataFromExtracted = (
       line.alsoCalled,
       ingredients,
     );
-    const match = resolution.kind === 'match' ? resolution.option : null;
+    const picked =
+      resolution.kind === 'match'
+        ? null
+        : (findReadPick(line, picks, ingredients)?.ingredient ?? null);
+    const match = resolution.kind === 'match' ? resolution.option : picked;
     const { prep } = splitPrep(line.name);
     const newName =
       resolution.kind === 'custom' &&
+      picked === null &&
       findNearMatches(ingredients, resolution.label).length === 0
         ? resolution.label
         : null;
@@ -245,10 +295,13 @@ export const getDataFromExtracted = (
             ? clipAtWord(line.amountText, MAX_AMOUNT_TEXT_LENGTH)
             : null,
         note: clipNote(
-          addPrepToNote(line.note, leftover ? [...prep, leftover] : prep),
+          addPrepToNote(
+            line.note,
+            leftover && !picked ? [...prep, leftover] : prep,
+          ),
         ),
         proposedName:
-          resolution.kind === 'custom' && newName === null
+          resolution.kind === 'custom' && newName === null && picked === null
             ? resolution.label
             : null,
         newName,

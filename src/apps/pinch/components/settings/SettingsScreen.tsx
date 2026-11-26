@@ -12,9 +12,14 @@ import NumbersRow from '@apps/pinch/components/settings/NumbersRow';
 import PhotosSection from '@apps/pinch/components/settings/PhotosSection';
 import RemindersSection from '@apps/pinch/components/settings/RemindersSection';
 import StartTabRow from '@apps/pinch/components/settings/StartTabRow';
+import PicksRow from '@apps/pinch/components/settings/PicksRow';
 import UnitsRow from '@apps/pinch/components/settings/UnitsRow';
 import SharedLinksSection from '@apps/pinch/components/settings/SharedLinksSection';
-import { selectPinchSettingsLoadError } from '@apps/pinch/store/selectors';
+import {
+  selectIngredientsById,
+  selectPinchSettings,
+  selectPinchSettingsLoadError,
+} from '@apps/pinch/store/selectors';
 
 interface SettingsScreenProps {
   uid: string;
@@ -23,6 +28,15 @@ interface SettingsScreenProps {
 /** The choices that reach every tab. A group whose document couldn't be read draws nothing to change, since its switches would show the defaults as the person's choices; the other groups read other documents and stay. */
 function SettingsScreen({ uid }: SettingsScreenProps) {
   const loadError = useAppSelector(selectPinchSettingsLoadError);
+  const hasPicks = useAppSelector((state) => {
+    const ingredientsById = selectIngredientsById(state);
+    return Object.values(selectPinchSettings(state).ingredientPicks).some(
+      (pick) => {
+        const ingredient = ingredientsById.get(pick.ingredientId);
+        return ingredient !== undefined && !ingredient.isArchived;
+      },
+    );
+  });
   const screenRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -45,7 +59,12 @@ function SettingsScreen({ uid }: SettingsScreenProps) {
               uid={uid}
               position={loadError === null ? 'middle' : 'only'}
             />
-            {loadError === null && <UnitsRow uid={uid} position='last' />}
+            {loadError === null && (
+              <UnitsRow uid={uid} position={hasPicks ? 'middle' : 'last'} />
+            )}
+            {loadError === null && hasPicks && (
+              <PicksRow uid={uid} position='last' />
+            )}
           </SettingsGroup>
           {loadError !== null ? (
             <IntroCard
