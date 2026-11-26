@@ -19,7 +19,6 @@ import {
   Pencil,
   Plus,
   Ruler,
-  Search,
   Trash2,
   Undo2,
   Ungroup,
@@ -38,7 +37,7 @@ import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
 import ReorderList, { type ReorderGroup } from '@/components/ReorderList';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import {
@@ -70,12 +69,19 @@ import {
   UNIT_LABELS,
 } from '@apps/pinch/constants';
 import type { PinchUnitSettings, Unit } from '@apps/pinch/types';
+import { savePinchSettings } from '@apps/pinch/store/actions/pinchSettingsActions';
 import {
+  selectIngredientFamiliesById,
   selectIngredients,
   selectIngredientsById,
   selectOftenUsedIngredientIds,
+  selectPinchSettings,
 } from '@apps/pinch/store/selectors';
-import { findNearMatches } from '@apps/pinch/utils/catalogSearch';
+import {
+  findNearMatches,
+  searchIngredients,
+} from '@apps/pinch/utils/catalogSearch';
+import { getRememberPatch } from '@apps/pinch/utils/ingredientPicks';
 import {
   cleanGroupName,
   getGroupKey,
@@ -107,6 +113,7 @@ import {
 import { hasUnitPreference } from '@apps/pinch/utils/units';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
+const MAX_TYPED_CHOICES = 5;
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 
@@ -414,7 +421,9 @@ function IngredientEditor({
   getName,
   onMove,
 }: IngredientEditorProps) {
-  const [isChoosing, setIsChoosing] = useState(false);
+  const dispatch = useAppDispatch();
+  const settings = useAppSelector(selectPinchSettings);
+  const familiesById = useAppSelector(selectIngredientFamiliesById);
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
   const [pending, setPending] = useState<PendingConversion | null>(null);
   const [groupNames] = useState(() => getGroupNames(rows));
@@ -500,15 +509,48 @@ function IngredientEditor({
     return () => window.clearTimeout(timer);
   }, [isReadyForAmount]);
 
-  const nearMatches = useMemo(() => {
+  const isTypedDifferently =
+    normalizeName(proposedName) !== normalizeName(openedName);
+  const typedName = proposedName.trim();
+  const choices = useMemo(() => {
     if (!isUnresolved) return [];
     const used = new Set(usedIds.split(','));
-    const result = findNearMatches(
-      ingredients.filter((ingredient) => !used.has(ingredient.id)),
-      openedName,
+    const pool = ingredients.filter(
+      (ingredient) => !used.has(ingredient.id) && !ingredient.isArchived,
     );
-    return result;
-  }, [isUnresolved, ingredients, openedName, usedIds]);
+    if (!isTypedDifferently) return findNearMatches(pool, openedName);
+    if (typedName === '') return [];
+    const seen = new Set<string>();
+    return [
+      ...searchIngredients(pool, typedName),
+      ...findNearMatches(pool, typedName),
+    ]
+      .filter(
+        (ingredient) => !seen.has(ingredient.id) && seen.add(ingredient.id),
+      )
+      .slice(0, MAX_TYPED_CHOICES);
+  }, [
+    isUnresolved,
+    isTypedDifferently,
+    ingredients,
+    openedName,
+    typedName,
+    usedIds,
+  ]);
+
+  const pickExisting = (ingredientId: string) => {
+    onUpdate({ ingredientId, proposedName: null, newName: null });
+    const ingredientPicks = getRememberPatch(
+      openedName,
+      ingredientId,
+      settings.ingredientPicks,
+      Date.now(),
+    );
+    if (ingredientPicks === null) return;
+    void dispatch(savePinchSettings({ uid, patch: { ingredientPicks } }))
+      .unwrap()
+      .catch(() => undefined);
+  };
 
   if (isUnresolved) {
     return (
@@ -520,57 +562,47 @@ function IngredientEditor({
           usedIds={usedInGroup}
           onRename={(name) => onUpdate({ proposedName: name })}
         />
-        {nearMatches.length > 0 && (
+        {choices.length > 0 && (
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs'>
-              Did you mean one of these?
+              {isTypedDifferently
+                ? 'In your ingredients'
+                : 'Did you mean one of these?'}
             </p>
             <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border'>
-              {nearMatches.map((ingredient) => (
-                <li key={ingredient.id}>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    aria-label={`Use ${ingredient.name}`}
-                    className='h-auto min-h-12 w-full justify-start px-4! py-2 text-left font-normal'
-                    onClick={() =>
-                      onUpdate({
-                        ingredientId: ingredient.id,
-                        proposedName: null,
-                        newName: null,
-                      })
-                    }
-                  >
-                    {ingredient.name}
-                  </Button>
-                </li>
-              ))}
+              {choices.map((ingredient) => {
+                const family = ingredient.familyId
+                  ? familiesById.get(ingredient.familyId)?.name
+                  : undefined;
+                return (
+                  <li key={ingredient.id}>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      aria-label={`Use ${ingredient.name}`}
+                      className='h-auto min-h-12 w-full justify-start px-4! py-2 text-left font-normal'
+                      onClick={() => pickExisting(ingredient.id)}
+                    >
+                      <span className='block min-w-0'>
+                        <span className='block'>{ingredient.name}</span>
+                        {family && family !== ingredient.name && (
+                          <span className='text-muted-foreground block text-xs'>
+                            {family}
+                          </span>
+                        )}
+                      </span>
+                    </Button>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
-        <ActionRow
-          icon={<Search className='h-4 w-4' />}
-          label='Pick from your ingredients'
-          hasChevron
-          onClick={() => setIsChoosing((current) => !current)}
-        />
-        {isChoosing && (
-          <ItemSearch
-            uid={uid}
-            excludeIds={usedInGroup}
-            onPick={(ingredientId) => {
-              setIsChoosing(false);
-              onUpdate({ ingredientId, proposedName: null, newName: null });
-            }}
-            onStageNew={(name) => {
-              setIsChoosing(false);
-              onUpdate({
-                ingredientId: getStagedId(rows, name),
-                newName: name,
-                proposedName: null,
-              });
-            }}
-          />
+        {isTypedDifferently && typedName !== '' && choices.length === 0 && (
+          <p className='text-muted-foreground text-xs'>
+            Nothing in your ingredients is called “{typedName}”. Add it as new
+            below.
+          </p>
         )}
         {moveChoices}
         <FreeLineOffer
@@ -1438,7 +1470,7 @@ function RecipeIngredients({
                     className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
                   >
                     <span className='min-w-0 flex-1'>
-                      <span className='flex min-w-0 items-center gap-2'>
+                      <span className='flex flex-wrap items-center gap-x-2 gap-y-1'>
                         <span className='line-clamp-2 font-medium break-words'>
                           {name}
                         </span>
@@ -1464,7 +1496,7 @@ function RecipeIngredients({
                         className={join(
                           'text-sm font-normal',
                           row.isAmountless
-                            ? 'max-w-[50%] wrap-break-word'
+                            ? 'max-w-[45%] wrap-break-word'
                             : 'shrink-0 whitespace-nowrap',
                           isRowAmountValid(row)
                             ? 'text-muted-foreground'
