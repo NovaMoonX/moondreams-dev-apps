@@ -130,9 +130,17 @@ export interface PepperScreenInput {
   gather:
     | {
         dish: string | null;
-        lines: { name: string; amountText: string; isOut: boolean }[];
+        lines: {
+          name: string;
+          amountText: string;
+          isOut: boolean;
+          /** The ingredient group the line is in ("For the cornbread"), or null. */
+          group?: string | null;
+        }[];
       }[]
     | null;
+  /** The measuring tools the recipe needs, as the app reads them out, on the gather and ingredient screens; null elsewhere. */
+  tools?: string | null;
   /** How the gather screen lists them now, when it can list them both ways: grouped (by part, or by dish on a plate) or all together; null when there is only one way. */
   gatherLayout?: { isTogether: boolean; groupWord: 'part' | 'dish' } | null;
   /** The shown recipe's tips, notes and changes. */
@@ -225,6 +233,9 @@ export const buildPepperScreen = (input: PepperScreenInput) => {
             ? `Listed all together; they can also be listed by ${input.gatherLayout.groupWord}.`
             : `Listed by ${input.gatherLayout.groupWord}; they can also be listed all together.`,
         ]),
+    ...(input.tools === undefined || input.tools === null
+      ? []
+      : [`Measuring tools needed: ${clip(plain(input.tools), MAX_STEP_TEXT)}`]),
     ...(input.isAddOffered
       ? [
           "You've already offered to tick off what they add; don't offer it again.",
@@ -251,16 +262,28 @@ export const buildPepperScreen = (input: PepperScreenInput) => {
     },
     ...(input.gather ?? []).flatMap((dish) => {
       const name = dish.dish === null ? '' : ` for ${plain(dish.dish)}`;
-      return [
-        {
-          heading: `Still to get out${name}:`,
-          lines: dish.lines.filter((line) => !line.isOut).map(getLineText),
-        },
-        {
-          heading: `Already got out${name}:`,
-          lines: dish.lines.filter((line) => line.isOut).map(getLineText),
-        },
-      ];
+      const groups = Array.from(
+        new Set(dish.lines.map((line) => line.group ?? null)),
+      );
+      const getPart = (group: string | null) =>
+        group === null || groups.length < 2
+          ? ''
+          : `, part “${clip(plain(group), MAX_NAME_CHARS)}”`;
+      return groups.flatMap((group) => {
+        const lines = dish.lines.filter(
+          (line) => (line.group ?? null) === group,
+        );
+        return [
+          {
+            heading: `Still to get out${name}${getPart(group)}:`,
+            lines: lines.filter((line) => !line.isOut).map(getLineText),
+          },
+          {
+            heading: `Already got out${name}${getPart(group)}:`,
+            lines: lines.filter((line) => line.isOut).map(getLineText),
+          },
+        ];
+      });
     }),
     {
       heading: 'Tips, notes and changes written for this recipe:',

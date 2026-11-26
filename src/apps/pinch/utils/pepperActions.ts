@@ -32,6 +32,7 @@ export type PepperCookCommand = Extract<
       | 'SET_SERVINGS'
       | 'SHOW_ENTRIES'
       | 'GOT_INGREDIENT'
+      | 'GOT_GROUP'
       | 'MARK_ADDED'
       | 'SCROLL'
       | 'SET_GATHER_LAYOUT';
@@ -276,6 +277,12 @@ export const readPepperAction = (action: {
     }
     case 'tick_ingredients':
       return readTicks(input);
+    case 'tick_group': {
+      const group = clipText(readText(input.group), MAX_NAME_CHARS);
+      return group === '' || typeof input.got !== 'boolean'
+        ? invalid("I didn't catch which part.")
+        : cook({ kind: 'GOT_GROUP', group, isOut: input.got });
+    }
     case 'mark_added':
       return readMarkAdded(input);
     case 'scroll': {

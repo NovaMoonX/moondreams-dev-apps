@@ -16,6 +16,7 @@ import CookToolsStrip from '@apps/pinch/components/cooking/CookToolsStrip';
 import type { Recipe } from '@apps/pinch/types';
 import type { CookMeasure } from '@apps/pinch/utils/cookConversions';
 import { stepCookServings } from '@apps/pinch/utils/cooks';
+import { sinkDone, useSettledTicks } from '@apps/pinch/hooks/useSettledTicks';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
@@ -183,7 +184,20 @@ function CookIngredientsView({
   isTickAllShown = false,
 }: CookIngredientsViewProps) {
   const outCount = rows.filter((row) => gotOut[row.id]).length;
-  const groups = groupIngredientLines(rows);
+  const settledOut = useSettledTicks(
+    rows.filter((row) => gotOut[row.id] === true).map((row) => row.id),
+  );
+  const groups = isTickAllShown
+    ? sinkDone(
+        groupIngredientLines(rows).map((group) => ({
+          ...group,
+          lines: sinkDone(group.lines, (row) => settledOut.has(row.id)),
+        })),
+        (group) =>
+          group.name !== null &&
+          group.lines.every((row) => settledOut.has(row.id)),
+      )
+    : groupIngredientLines(rows);
   const toggleAll = (lines: CookRow[], isOut: boolean) =>
     lines.forEach((row) => onToggle(row.id, isOut));
   const hintText = `${

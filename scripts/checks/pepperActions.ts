@@ -22,6 +22,7 @@ const valid: Record<string, unknown> = {
   set_servings: { servings: 6 },
   show: { what: 'tips' },
   tick_ingredients: { names: ['butter'], got: true },
+  tick_group: { group: 'cornbread', got: true },
   mark_added: { names: ['flour'], added: true },
   scroll: { direction: 'down' },
   gather_layout: { layout: 'together' },
@@ -175,6 +176,15 @@ assert.deepEqual(
     },
   },
 );
+assert.deepEqual(
+  read('tick_group', { group: ' For the cornbread ', got: true }),
+  {
+    kind: 'cook',
+    command: { kind: 'GOT_GROUP', group: 'For the cornbread', isOut: true },
+  },
+);
+assert.ok(isInvalid('tick_group', { group: '  ', got: true }));
+assert.ok(isInvalid('tick_group', { group: 'cornbread', got: 'yes' }));
 assert.ok(isInvalid('tick_ingredients', { names: [], got: true }));
 assert.ok(isInvalid('tick_ingredients', { names: ['  '], got: true }));
 assert.ok(isInvalid('tick_ingredients', { names: ['butter'], got: 'yes' }));

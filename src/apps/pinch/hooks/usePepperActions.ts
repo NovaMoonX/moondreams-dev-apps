@@ -48,6 +48,10 @@ export interface PepperScreen {
     queries: string[],
     isOut: boolean,
   ) => { recipeId: string; lineId: string }[];
+  getGroupTickChanges: (
+    group: string,
+    isOut: boolean,
+  ) => { recipeId: string; lineId: string }[];
   setTicks: (
     lines: { recipeId: string; lineId: string }[],
     isOut: boolean,
@@ -171,7 +175,9 @@ export function usePepperActions(screen: PepperScreen) {
       const ticked =
         command.kind === 'GOT_INGREDIENT'
           ? screenNow.getTickChanges(command.queries, command.isOut)
-          : [];
+          : command.kind === 'GOT_GROUP'
+            ? screenNow.getGroupTickChanges(command.group, command.isOut)
+            : [];
       const addedChange =
         command.kind === 'MARK_ADDED'
           ? screenNow.getAddedChanges(command.queries, command.isAdded)
@@ -190,7 +196,7 @@ export function usePepperActions(screen: PepperScreen) {
         }
         return {};
       }
-      if (command.kind === 'GOT_INGREDIENT') {
+      if (command.kind === 'GOT_INGREDIENT' || command.kind === 'GOT_GROUP') {
         if (ticked.length > 0) {
           push({
             cannot: 'that',
