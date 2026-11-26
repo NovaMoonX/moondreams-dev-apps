@@ -2855,7 +2855,10 @@ assert.deepEqual(
   const open = journal('open', 'CHANGE', 10);
   const legacy = { ...journal('legacy', 'CHANGE', 11) } as Partial<RecipeNote>;
   delete legacy.resolvedAt;
-  const done = journal('done', 'CHANGE', 12, { resolvedAt: 50, resolvedBy: 't2' });
+  const done = journal('done', 'CHANGE', 12, {
+    resolvedAt: 50,
+    resolvedBy: 't2',
+  });
   assert.equal(isOpenChange(open), true, 'a planned change is open');
   assert.equal(
     isOpenChange(legacy as RecipeNote),
@@ -11142,6 +11145,8 @@ assert.equal(
       reason,
       by: null,
       previous: null,
+      resolvedAt: null,
+      resolvedBy: null,
       createdAt,
       updatedAt: createdAt,
     }) as RecipeNote;

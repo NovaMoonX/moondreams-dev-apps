@@ -3325,8 +3325,7 @@ function CookingSession({
     if (!isIncludingEarlier) return written;
     const earlier = (notesByRecipe.get(recipeId) ?? NO_RECIPE_NOTES)
       .filter(
-        (found) =>
-          isOpenChange(found) && !capture.captured.includes(found.id),
+        (found) => isOpenChange(found) && !capture.captured.includes(found.id),
       )
       .map(toEntry)
       .reverse();
@@ -3334,8 +3333,8 @@ function CookingSession({
   };
   /** The recipes with a change still planned: Done asks about each in turn whether to update it now. */
   const changeTargets = followUpRecords.flatMap((record) => {
-    const changes = getReviewEntries(record.recipeId, true).filter(
-      (entry) => isOpenChange(entry.note),
+    const changes = getReviewEntries(record.recipeId, true).filter((entry) =>
+      isOpenChange(entry.note),
     );
     return changes.length === 0
       ? []
@@ -3832,8 +3831,8 @@ function CookingSession({
                 !putAway.isOpen &&
                 followUpRecords.map((record) => {
                   const reviewEntries = getReviewEntries(record.recipeId, true);
-                  const plannedChanges = reviewEntries.filter(
-                    (entry) => isOpenChange(entry.note),
+                  const plannedChanges = reviewEntries.filter((entry) =>
+                    isOpenChange(entry.note),
                   );
                   return (
                     <CookReview

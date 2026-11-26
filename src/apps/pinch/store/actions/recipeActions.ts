@@ -449,8 +449,7 @@ export const undoRecipeChange = createAsyncThunk<
     );
     const doneDocs = getState()
       .pinch.notes.items.filter(
-        (note) =>
-          isDoneChange(note) && noteIds.includes(note.resolvedBy ?? ''),
+        (note) => isDoneChange(note) && noteIds.includes(note.resolvedBy ?? ''),
       )
       .map((note) => noteDoc(uid, note.id));
     try {
