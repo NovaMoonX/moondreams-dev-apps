@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 import { isGateOpenFor } from '../../functions/src/gates/gateLogic.ts';
 import { FEATURE_GATES } from '../../src/lib/gates/gates.registry.ts';
@@ -57,3 +58,14 @@ calls.forEach((call) => {
 });
 
 console.log(`gates: ok (${cases.length} cases, ${calls.length} rule calls)`);
+
+// An app that never reads its switches sees only each one's default, so a person the admin let in stays out with no sign of why.
+const loadedApps = new Set(
+  execSync("git grep -h -o \"useLoadFeatureGates('[a-z-]*'\" -- 'src/apps'", { encoding: 'utf8' })
+    .split('\n')
+    .map((line) => /'([a-z-]+)'/.exec(line)?.[1])
+    .filter((appId): appId is string => appId !== undefined),
+);
+new Set(FEATURE_GATES.map((gate) => gate.appId)).forEach((appId) =>
+  assert.ok(loadedApps.has(appId), `${appId} has a feature switch but its shell never calls useLoadFeatureGates('${appId}', …)`),
+);
