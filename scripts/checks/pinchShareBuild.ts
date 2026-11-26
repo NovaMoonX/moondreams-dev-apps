@@ -196,6 +196,8 @@ const tipOf = (
   reason: null,
   by: null,
   previous: null,
+  resolvedAt: null,
+  resolvedBy: null,
   createdAt: 10,
   updatedAt: 10,
   ...extra,

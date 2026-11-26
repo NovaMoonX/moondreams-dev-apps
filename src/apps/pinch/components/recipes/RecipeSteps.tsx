@@ -498,6 +498,8 @@ interface RecipeStepsProps {
   onRemoved: (message: string, restore: () => void) => void;
   /** Drawn under "Add a step". */
   footerAction?: ReactNode;
+  /** Drawn under a step's row, by its index. */
+  renderStepExtra?: (index: number) => ReactNode;
 }
 
 const ADDED_ID = 'added-';
@@ -535,6 +537,7 @@ function RecipeSteps({
   onChange,
   onRemoved,
   footerAction,
+  renderStepExtra,
 }: RecipeStepsProps) {
   const isPhone = useMediaQuery().isBelow('sm');
   const [openStep, setOpenStep] = useState<number | null>(null);
@@ -810,6 +813,7 @@ function RecipeSteps({
             <X className='h-4 w-4' aria-hidden='true' />
           </Button>
         </div>
+        {renderStepExtra?.(index)}
         {isEditing && (
           <div className='space-y-3 pb-2 pl-9'>
             <SectionField

@@ -432,8 +432,8 @@ function CookPageView({
       {onAddNote && (
         <ActionRow
           icon={<NotebookPen className='h-4 w-4' />}
-          label='Add a note'
-          subtitle='About this cook'
+          label='Write something down'
+          subtitle='A tip, a note or a change for next time'
           onClick={onAddNote}
         />
       )}

@@ -20,6 +20,7 @@ import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import ChangeEntryView from '@apps/pinch/components/notes/ChangeEntryView';
 import ChangeRow from '@apps/pinch/components/notes/ChangeRow';
 import NoteForm from '@apps/pinch/components/notes/NoteForm';
+import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 import CookPageView from '@apps/pinch/components/recipes/CookPageView';
 import CookJournal from '@apps/pinch/components/recipes/CookJournal';
 import CookPhotoThumb from '@apps/pinch/components/shared/CookPhotoThumb';
@@ -63,20 +64,22 @@ const NO_IDS: string[] = [];
 const CHANGES_FIRST_SHOWN = 4;
 const UNDO_LINES_SHOWN = 3;
 
-/** What was written for a cook, in a few words: "A note", "A note and 2 changes". */
+/** What was written for a cook, in a few words: "A note", "A tip, a note and 2 changes". */
 const getWrittenLine = (kinds: string[] | undefined) => {
   if (kinds === undefined) return null;
-  const count = (wanted: string[]) =>
-    kinds.filter((kind) => wanted.includes(kind)).length;
-  const notes = count(['NOTE']);
-  const changes = count(['CHANGE', 'TWEAK']);
+  const count = (kind: string) =>
+    kinds.filter((entry) => entry === kind).length;
+  const part = (n: number, one: string, many: string) =>
+    n === 0 ? [] : [n === 1 ? `a ${one}` : `${n} ${many}`];
   const parts = [
-    ...(notes === 0 ? [] : [notes === 1 ? 'a note' : `${notes} notes`]),
-    ...(changes === 0
-      ? []
-      : [changes === 1 ? 'a change' : `${changes} changes`]),
+    ...part(count('TIP'), 'tip', 'tips'),
+    ...part(count('NOTE'), 'note', 'notes'),
+    ...part(count('CHANGE'), 'change', 'changes'),
   ];
-  const line = parts.join(' and ');
+  const line =
+    parts.length < 2
+      ? parts.join('')
+      : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
   return line === '' ? null : `${line[0].toUpperCase()}${line.slice(1)}`;
 };
 const BACK_LABEL = 'Back to recipe';
@@ -117,20 +120,11 @@ function CookingHistorySheet({
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
-  const notedCookIds = useMemo(
-    () =>
-      new Set(
-        (notes ?? [])
-          .filter((entry) => entry.kind === 'NOTE')
-          .map((entry) => entry.cookId ?? null),
-      ),
-    [notes],
-  );
   const writtenByCook = useMemo(
     () =>
       (notes ?? []).reduce(
         (counts, entry) =>
-          entry.cookId == null || entry.kind === 'TIP'
+          entry.cookId == null || entry.kind === 'TWEAK'
             ? counts
             : counts.set(entry.cookId, [
                 ...(counts.get(entry.cookId) ?? []),
@@ -153,6 +147,7 @@ function CookingHistorySheet({
   const [mode, setMode] = useState<'cooks' | 'photos' | 'changes'>('cooks');
   const [changesLimit, setChangesLimit] = useState(CHANGES_FIRST_SHOWN);
   const [undoError, setUndoError] = useState<string | null>(null);
+  const [lastKind, setLastKind] = useState<WrittenNoteKind>('NOTE');
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
   const lastToken = useRef(0);
@@ -222,7 +217,7 @@ function CookingHistorySheet({
     const day = formatDateShort(undone[0].createdAt);
     const confirmed = await confirm({
       title: 'Put the recipe back?',
-      message: `${recipe?.title ?? 'The recipe'} goes back to how it was before ${day}, which takes back: ${lines.slice(0, UNDO_LINES_SHOWN).join('; ')}${lines.length > UNDO_LINES_SHOWN ? `; and ${lines.length - UNDO_LINES_SHOWN} more` : ''}.${staysText} This record of the change is removed, and a change you had planned is not planned again.`,
+      message: `${recipe?.title ?? 'The recipe'} goes back to how it was before ${day}, which takes back: ${lines.slice(0, UNDO_LINES_SHOWN).join('; ')}${lines.length > UNDO_LINES_SHOWN ? `; and ${lines.length - UNDO_LINES_SHOWN} more` : ''}.${staysText} This record of the edit is removed, and any planned change it took care of is planned again.`,
       confirmText: 'Put it back',
       destructive: true,
     });
@@ -281,7 +276,7 @@ function CookingHistorySheet({
       ? [{ value: 'photos' as const, label: `Photos · ${photoCount}` }]
       : []),
     ...(tweaks.length > 0
-      ? [{ value: 'changes' as const, label: `Changes · ${tweaks.length}` }]
+      ? [{ value: 'changes' as const, label: `Edits · ${tweaks.length}` }]
       : []),
   ];
   const changesHidden = tweaks.length - changesLimit;
@@ -330,6 +325,8 @@ function CookingHistorySheet({
             recipeId={recipeId}
             noteId={noteView.noteId}
             initialCookId={noteView.cookId}
+            initialKind={noteView.noteId === null ? lastKind : null}
+            onKindChange={setLastKind}
             onCancel={closeNote}
             onDone={closeNote}
           />
@@ -348,13 +345,12 @@ function CookingHistorySheet({
           planNote={editedCook ? getPlanNote(editedCook) : null}
           onBack={() => closeView(editing.token)}
           onAddNote={
-            editedCook && isNotesReady && !notedCookIds.has(editedCook.id)
-              ? () => openNote(editedCook.id)
-              : null
+            editedCook && isNotesReady ? () => openNote(editedCook.id) : null
           }
           journal={
-            editedCook && writtenByCook.has(editedCook.id) ? (
+            editedCook ? (
               <CookJournal
+                uid={uid}
                 recipeId={recipeId}
                 cookId={editedCook.id}
                 onEdit={(noteId) => openNote(editedCook.id, noteId)}
@@ -552,15 +548,15 @@ function CookingHistorySheet({
                       aria-hidden='true'
                     />
                   </Button>
-                  {isNotesReady && !notedCookIds.has(cook.id) && (
+                  {isNotesReady && !writtenByCook.has(cook.id) && (
                     <ActionChips
                       className='pb-1'
                       actions={[
                         {
                           key: 'note',
                           icon: <NotebookPen className='h-4 w-4' />,
-                          label: 'Add a note',
-                          description: `Add a note about the cook from ${day}`,
+                          label: 'Add a tip, note or change',
+                          description: `Write a tip, a note or a change from the cook on ${day}`,
                           onClick: () => openNote(cook.id),
                         },
                       ]}
