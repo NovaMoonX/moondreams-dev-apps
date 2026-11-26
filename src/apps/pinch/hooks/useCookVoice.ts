@@ -30,6 +30,7 @@ import {
   getVoiceEffect,
   getWakeWaitEnd,
   planHeard,
+  readAddressedGuesses,
   recordWakeBusy,
   reduceVoice,
   type VoiceEvent,
@@ -54,6 +55,11 @@ const NO_SEGMENTS: CookReadingSegment[] = [];
 const DICTATION_PROMPT_WAIT_MS = 1600;
 const NOTES_LEAD = 'Your tips and notes for this step.';
 const MAX_QUOTE_CHARS = 22;
+const MAX_PEPPER_ALTERNATIVES = 4;
+/** How long a line may take to start before the next one goes ahead (a voice that is off never starts). */
+const LINE_START_WAIT_MS = 6000;
+const LINE_MS_PER_CHAR = 70;
+const WINDOW_HOLD_MS = 1000;
 
 export type CookVoiceResult =
   | { ok: true; show?: string; speak?: string }
@@ -118,6 +124,24 @@ export interface CookVoiceActions {
   readLeft: () => CookVoiceResult;
   readTools: () => CookVoiceResult;
   setGatherLayout: (layout: 'ALL' | 'PARTS') => CookVoiceResult;
+}
+
+/** What cooking mode hands the voice while Pepper is on: where words that are no command go, and the facts the listener must respect. */
+export interface CookPepperRoute {
+  /** A turn is being worked out or spoken: the window for talking stays open and a step moved by Pepper isn't read over it. */
+  isBusy: () => boolean;
+  hasPending: () => boolean;
+  /** Settles a waiting yes or no from one guess; null when none waits or the guess was neither. */
+  answerPending: (heard: string) => { said?: string } | null;
+  /** Sends what was heard, best guess first, with the others after it. */
+  ask: (heard: string, alternatives: string[]) => void;
+  cancel: () => void;
+}
+
+interface QueuedLine {
+  text: string;
+  canAnswer: boolean;
+  resolve: () => void;
 }
 
 export interface CookVoiceMessage {
@@ -333,6 +357,14 @@ export function useCookVoice({
     run: (command: CookActionCommand) => CookVoiceResult;
     context: CookVoiceContext;
   } | null>(null);
+  const pepperRoute = useRef<CookPepperRoute | null>(null);
+  const lines = useRef<{
+    items: QueuedLine[];
+    active: QueuedLine | null;
+    hasStarted: boolean;
+    timeoutId: number;
+  }>({ items: [], active: null, hasStarted: false, timeoutId: 0 });
+  const playLine = useRef<() => void>(() => undefined);
   const machineRef = useRef(machine);
   const lastHeard = useRef({ key: '', at: 0 });
   const messageCount = useRef(0);
@@ -350,13 +382,44 @@ export function useCookVoice({
     begin: () => void;
     stop: () => void;
     say: (text: string) => void;
+    quiet: () => void;
     cue: (kind: ListeningCue) => void;
   }>({
     begin: () => undefined,
     stop: () => undefined,
     say: () => undefined,
+    quiet: () => undefined,
     cue: () => undefined,
   });
+
+  const connectPepper = useCallback((route: CookPepperRoute | null) => {
+    pepperRoute.current = route;
+  }, []);
+
+  const clearLines = useCallback(() => {
+    const state = lines.current;
+    window.clearTimeout(state.timeoutId);
+    const pending = [...(state.active ? [state.active] : []), ...state.items];
+    lines.current = { ...state, items: [], active: null, hasStarted: false };
+    pending.forEach((line) => line.resolve());
+  }, []);
+
+  const sayInOrder = useCallback(
+    (text: string, options: { canAnswer: boolean }) =>
+      new Promise<void>((resolve) => {
+        if (text.trim() === '') {
+          resolve();
+          return;
+        }
+        lines.current.items.push({
+          text,
+          canAnswer: options.canAnswer,
+          resolve,
+        });
+        if (lines.current.active === null) playLine.current();
+      }),
+    [],
+  );
 
   const connect = useCallback(
     (
@@ -380,13 +443,17 @@ export function useCookVoice({
       if (next === previous) return;
       machineRef.current = next;
       setMachine(next);
+      if (next.phase === 'OFF') {
+        pepperRoute.current?.cancel();
+        clearLines();
+      }
       const effect = getVoiceEffect(previous, next);
       if (effect === 'START') controls.current.begin();
       if (effect === 'STOP') controls.current.stop();
       const cue = options?.isSilent ? null : getVoiceCue(previous, next);
       if (cue !== null) controls.current.cue(cue);
     },
-    [],
+    [clearLines],
   );
 
   const carryOut = (
@@ -429,13 +496,46 @@ export function useCookVoice({
     return true;
   };
 
+  const carryPepperRun = (run: { said?: string }, route: CookPepperRoute) => {
+    send({ type: 'WAKE_HEARD' }, { isSilent: true });
+    setMessage(null);
+    if (run.said === undefined) return true;
+    show(run.said, 'ANSWER');
+    notesQueue.current = null;
+    void sayInOrder(run.said, { canAnswer: route.hasPending() });
+    return true;
+  };
+
+  const carryAsk = (guesses: string[], route: CookPepperRoute) => {
+    if (hasDialogOnTop()) return false;
+    send({ type: 'WAKE_HEARD' }, { isSilent: true });
+    show(`Heard “${quote(guesses[0])}”`, 'HEARD');
+    notesQueue.current = null;
+    route.cancel();
+    clearLines();
+    controls.current.quiet();
+    route.ask(guesses[0], guesses.slice(1, 1 + MAX_PEPPER_ALTERNATIVES));
+    return true;
+  };
+
   const handleTranscript = (alternatives: string[]) => {
     setHeard(null);
     if (handlers.current === null) return false;
     const { context: shown, run } = handlers.current;
-    const plan = planHeard(machineRef.current.phase, alternatives, shown);
+    const route = pepperRoute.current;
+    const { phase: heardPhase } = machineRef.current;
+    if (route !== null && route.hasPending() && !hasDialogOnTop()) {
+      const answered = readAddressedGuesses(heardPhase, alternatives).reduce<{
+        said?: string;
+      } | null>((found, guess) => found ?? route.answerPending(guess), null);
+      if (answered !== null) return carryPepperRun(answered, route);
+    }
+    const plan = planHeard(heardPhase, alternatives, shown, route !== null);
     if (plan.kind === 'IGNORE') return false;
     if (plan.kind === 'COMMAND') return carryOut(plan.heard, run);
+    if (plan.kind === 'ASK') {
+      return route === null ? false : carryAsk(plan.guesses, route);
+    }
     if (plan.kind === 'CLEAR') {
       setMessage(null);
       return false;
@@ -516,11 +616,47 @@ export function useCookVoice({
       begin,
       stop,
       say,
+      quiet,
       cue: (kind) => {
         if (!isAlarmRinging) cue(kind);
       },
     };
   });
+
+  useEffect(() => {
+    playLine.current = () => {
+      const state = lines.current;
+      window.clearTimeout(state.timeoutId);
+      const finished = state.active;
+      state.active = null;
+      state.hasStarted = false;
+      finished?.resolve();
+      if (finished?.canAnswer) send({ type: 'WAKE_HEARD' }, { isSilent: true });
+      const next = state.items.shift();
+      if (next === undefined) return;
+      state.active = next;
+      controls.current.say(next.text);
+      state.timeoutId = window.setTimeout(
+        () => {
+          const now = lines.current;
+          if (now.active === next && !now.hasStarted) playLine.current();
+        },
+        speech.status === 'off'
+          ? Math.max(1500, next.text.length * LINE_MS_PER_CHAR)
+          : LINE_START_WAIT_MS,
+      );
+    };
+  });
+
+  useEffect(() => {
+    const state = lines.current;
+    if (state.active === null) return;
+    if (speech.status === 'speaking') {
+      state.hasStarted = true;
+      return;
+    }
+    if (state.hasStarted) playLine.current();
+  }, [speech.status]);
 
   useEffect(() => {
     if (!shouldAutoWait || !speech.isSupported) return;
@@ -543,11 +679,16 @@ export function useCookVoice({
 
   useEffect(() => {
     if (phase !== 'WINDOW' || !isListening) return;
-    const timeoutId = window.setTimeout(
-      () => send({ type: 'WINDOW_ENDED' }),
-      COOK_WINDOW_MS,
-    );
-    return () => window.clearTimeout(timeoutId);
+    const timer = { id: 0 };
+    const settle = () => {
+      if (pepperRoute.current?.isBusy()) {
+        timer.id = window.setTimeout(settle, WINDOW_HOLD_MS);
+        return;
+      }
+      send({ type: 'WINDOW_ENDED' });
+    };
+    timer.id = window.setTimeout(settle, COOK_WINDOW_MS);
+    return () => window.clearTimeout(timer.id);
   }, [phase, epoch, isListening, send]);
 
   useEffect(() => {
@@ -625,9 +766,11 @@ export function useCookVoice({
   useEffect(() => {
     const previous = lastReading.current;
     lastReading.current = { isAloud: isReadingAloud, stepKey };
+    const isPepperBusy = pepperRoute.current?.isBusy() ?? false;
     if (isHearing && isReadingAloud && spoken !== null) {
       if (readStepKey.current === stepKey) return;
       readStepKey.current = stepKey;
+      if (isPepperBusy) return;
       notesQueue.current =
         isReadingNotes && segments.length > 0 && stepKey !== null
           ? {
@@ -645,6 +788,7 @@ export function useCookVoice({
     // Only a step that moved on or a setting that went off cuts a reading short: a spoken answer starting up flips the status too and must not be cancelled by it.
     if (
       stepKey !== null &&
+      !isPepperBusy &&
       (previous.isAloud !== isReadingAloud || previous.stepKey !== stepKey)
     ) {
       quiet();
@@ -761,6 +905,13 @@ export function useCookVoice({
     openSheet: () => setIsSheetOpen(true),
     closeSheet: () => setIsSheetOpen(false),
     connect,
+    connectPepper,
+    /** Says a line after the ones before it, resolving once it has been said; `canAnswer` opens a window to answer it without the wake phrase. */
+    speakInOrder: sayInOrder,
+    cancelSpeech: () => {
+      clearLines();
+      quiet();
+    },
     turnOn,
     toggle,
     stop: stopVoice,

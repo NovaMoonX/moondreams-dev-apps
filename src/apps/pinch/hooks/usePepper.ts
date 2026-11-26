@@ -35,6 +35,8 @@ type PepperOptions = {
     options: { turnKey: number; canAnswer: boolean },
   ) => Promise<unknown> | void;
   onAction: (action: PepperAction) => void;
+  /** A turn that got no answer: `held` is the server's reason when a limit stopped it, null when it failed. */
+  onProblem: (held: string | null) => void;
   onTrace?: (entry: PepperTrace) => void;
 };
 
@@ -44,15 +46,20 @@ const ENDS_WITH_QUESTION = /\?["'”’)]*\s*$/;
 type Turn = { aborter: AbortController; key: number };
 
 /** One cook's conversation with Pepper: sends each spoken question with the history so far, says the answer as it streams and hands each on-screen action to the caller. */
-export function usePepper({ speak, onAction, onTrace }: PepperOptions) {
+export function usePepper({
+  speak,
+  onAction,
+  onProblem,
+  onTrace,
+}: PepperOptions) {
   const [status, setStatus] = useState<PepperStatus>('idle');
   const history = useRef<PepperLine[]>([]);
   const turn = useRef<Turn | null>(null);
   const lastKey = useRef(0);
   const isWarmed = useRef(false);
-  const latest = useRef({ speak, onAction, onTrace });
+  const latest = useRef({ speak, onAction, onProblem, onTrace });
   useEffect(() => {
-    latest.current = { speak, onAction, onTrace };
+    latest.current = { speak, onAction, onProblem, onTrace };
   });
 
   const trace = useCallback((text: string) => {
@@ -107,6 +114,7 @@ export function usePepper({ speak, onAction, onTrace }: PepperOptions) {
       if (headers === null) {
         trace('failed: signin');
         setStatus('failed');
+        latest.current.onProblem(null);
         return;
       }
 
@@ -186,12 +194,14 @@ export function usePepper({ speak, onAction, onTrace }: PepperOptions) {
       if (result.status === 'held') {
         trace(`held: ${result.reason}`);
         setStatus('held');
+        latest.current.onProblem(result.reason);
         return;
       }
       trace(
         `failed: ${result.code}${result.cause === undefined ? '' : `, ${String(result.cause)}`}`,
       );
       setStatus('failed');
+      latest.current.onProblem(null);
     },
     [trace],
   );
