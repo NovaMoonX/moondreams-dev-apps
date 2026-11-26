@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Badge, Button, Form, FormFactories, HelpIcon, Label, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Form, FormFactories, HelpIcon, Label } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { shallowEqual } from 'react-redux';
@@ -258,7 +259,7 @@ function CatConditionFormFields({
       {showCatField && (
         <div className='max-w-40 space-y-1'>
           <Label className='text-sm'>Cat</Label>
-          <Select
+          <AppSelect
             options={(catOptions ?? []).map((option) => ({ text: option.label, value: option.value }))}
             value={catId}
             placeholder='Select a cat'
@@ -284,7 +285,7 @@ function CatConditionFormFields({
             placement='bottom'
           />
         </div>
-        <Select
+        <AppSelect
           options={STATUS_OPTIONS}
           value={status}
           onChange={(value) => setStatus(value as CatCondition['status'])}

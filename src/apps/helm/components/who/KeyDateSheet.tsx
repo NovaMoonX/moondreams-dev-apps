@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 
-import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import DetailSheet from '@/components/DetailSheet';
@@ -472,7 +473,7 @@ function KeyDateForm({
           <span className='text-sm font-medium'>
             {HELM_COPY.momentDecadeLabel}
           </span>
-          <Select
+          <AppSelect
             options={DECADES}
             value={draft.year}
             placeholder={HELM_COPY.momentDecadeLabel}
@@ -485,7 +486,7 @@ function KeyDateForm({
           <span className='text-sm font-medium'>
             {HELM_COPY.keyDateMonthLabel}
           </span>
-          <Select
+          <AppSelect
             className='h-10 min-h-10'
             options={MONTHS}
             value={draft.month}

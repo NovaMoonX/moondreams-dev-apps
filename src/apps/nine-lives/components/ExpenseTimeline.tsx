@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Input, Pagination, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Input, Pagination } from '@moondreamsdev/dreamer-ui/components';
+import AppSelect from '@/components/AppSelect';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import AppToggle from '@/components/AppToggle';
@@ -210,7 +211,7 @@ function ExpenseTimeline({
             <div className='flex flex-wrap items-center gap-2'>
               {cats.length > 1 && (
                 <div className='max-w-36 flex-1'>
-                  <Select
+                  <AppSelect
                     options={catFilterOptions}
                     value={catFilter}
                     onChange={setCatFilter}
@@ -219,7 +220,7 @@ function ExpenseTimeline({
                 </div>
               )}
               <div className='max-w-40 flex-1'>
-                <Select
+                <AppSelect
                   options={categoryFilterOptions}
                   value={categoryFilter}
                   onChange={setCategoryFilter}
@@ -227,7 +228,7 @@ function ExpenseTimeline({
                 />
               </div>
               <div className='max-w-36 flex-1'>
-                <Select
+                <AppSelect
                   options={CADENCE_FILTER_OPTIONS}
                   value={cadenceFilter}
                   onChange={(value) => setCadenceFilter(value as CadenceFilter)}
@@ -246,7 +247,7 @@ function ExpenseTimeline({
           <div className='flex items-center gap-2'>
             <span className='text-muted-foreground text-sm'>Sort by:</span>
             <div className='max-w-48 flex-1'>
-              <Select
+              <AppSelect
                 options={SORT_OPTIONS}
                 value={sortOption}
                 onChange={(value) => setSortOption(value as SortOption)}
