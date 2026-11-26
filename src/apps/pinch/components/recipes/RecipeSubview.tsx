@@ -73,6 +73,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     subview?.kind === 'recipe' ? (subview.fromIdeaId ?? null) : null;
   const fromChangeIds =
     subview?.kind === 'recipe' ? (subview.fromChangeIds ?? []) : [];
+  const withPepper = subview?.kind === 'recipe' && subview.withPepper === true;
   const fromCalendar =
     subview?.kind === 'recipe' && subview.fromCalendar === true;
   const isDirtyRef = useRef(false);
@@ -154,10 +155,15 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
 
   const leave = async () => {
     if (isDirtyRef.current) {
-      const confirmed = await askToDiscard(
-        'Discard this recipe?',
-        "It isn't saved yet. If you leave now, what you typed or read in is lost.",
-      );
+      const confirmed = await (recipeId === null
+        ? askToDiscard(
+            'Discard this recipe?',
+            "It isn't saved yet. If you leave now, what you typed or read in is lost.",
+          )
+        : askToDiscard(
+            'Discard your changes?',
+            'The recipe stays as it was saved. Your edits, and any changes Pepper made, are lost.',
+          ));
       if (!confirmed) return;
     }
     closeSubview();
@@ -289,6 +295,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
           initialRead={read}
           initialIdea={fromIdea}
           initialChanges={fromChanges}
+          autoFocusPepper={withPepper}
           isDirtyRef={isDirtyRef}
           backStepRef={backStepRef}
           onLeave={() => void leave()}

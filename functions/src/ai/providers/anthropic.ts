@@ -275,6 +275,40 @@ const SEARCH_TURN_TIMEOUT_MS = 120_000;
 const MAX_SEARCH_OUTPUT_TOKENS = 16_000;
 // The API pauses a long server-tool turn; each pause is resent as it is, and past this many the work is given up.
 const MAX_PAUSES = 6;
+const MAX_SOURCES = 5;
+
+/** Notes each page a response's searches returned, and each the model's text cites. */
+function collectSources(
+  content: Anthropic.Beta.Messages.BetaContentBlock[],
+  found: Map<string, string>,
+  cited: Map<string, string>,
+) {
+  content.forEach((block) => {
+    if (
+      block.type === 'web_search_tool_result' &&
+      Array.isArray(block.content)
+    ) {
+      block.content.forEach((result) => {
+        if (
+          result.type === 'web_search_result' &&
+          /^https?:\/\//i.test(result.url)
+        ) {
+          found.set(result.url, result.title || result.url);
+        }
+      });
+    }
+    if (block.type === 'text') {
+      (block.citations ?? []).forEach((citation) => {
+        if (
+          citation.type === 'web_search_result_location' &&
+          /^https?:\/\//i.test(citation.url)
+        ) {
+          cited.set(citation.url, citation.title || citation.url);
+        }
+      });
+    }
+  });
+}
 
 /** The Anthropic API with the web search server tool: a paused turn is continued by sending the assistant's content back, and the loop ends in the terminal tool. */
 export function createAnthropicSearchProvider(
@@ -294,6 +328,8 @@ export function createAnthropicSearchProvider(
     const startedAt = Date.now();
     const messages: Message[] = [{ role: 'user', content: message }];
     const state = { usage: EMPTY_USAGE, searches: 0, pauses: 0, asked: false };
+    const found = new Map<string, string>();
+    const cited = new Map<string, string>();
     const timeLeft = () => maxMillis - (Date.now() - startedAt);
     const end = (
       endedBy: WebSearchResult['endedBy'],
@@ -305,12 +341,20 @@ export function createAnthropicSearchProvider(
       errorCode,
       usage: state.usage,
       searches: state.searches,
+      sources: [...cited, ...found]
+        .filter(
+          ([url], index, all) =>
+            all.findIndex(([other]) => other === url) === index,
+        )
+        .slice(0, MAX_SOURCES)
+        .map(([url, title]) => ({ title, url })),
+      foundUrls: [...new Set([...cited.keys(), ...found.keys()])],
     });
     const tools: Anthropic.Beta.Messages.BetaToolUnion[] = [
       ...(maxSearches > 0
         ? [
             {
-              type: 'web_search_20260209' as const,
+              type: spec.webSearchTool ?? ('web_search_20260209' as const),
               name: 'web_search' as const,
               max_uses: maxSearches,
             },
@@ -349,6 +393,7 @@ export function createAnthropicSearchProvider(
         if (response.stop_reason === 'max_tokens') {
           return end('error', null, 'maxTokens');
         }
+        collectSources(response.content, found, cited);
         messages.push({
           role: 'assistant',
           content: response.content as Block[],

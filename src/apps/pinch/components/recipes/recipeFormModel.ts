@@ -15,6 +15,7 @@ import {
   UNITS,
 } from '@apps/pinch/constants';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
+import type { ExtractedIngredient } from '@apps/pinch/utils/normalizeRecipe';
 import {
   cleanGroupName,
   getGroupKey,
@@ -177,6 +178,61 @@ export const getInitialData = (
 const clipNote = (note: string | null) =>
   note === null ? null : clipAtWord(note, MAX_NOTE_LENGTH);
 
+/** The row a name read from a source becomes: linked to the ingredient it matches, staged as new when nothing is near (sharing the id of an already staged row of that name in `rows`), or kept as a "Choose" name when near ones exist, with prep words moved to the note. */
+export const getRowFromRead = (
+  line: ExtractedIngredient,
+  ingredients: ResolvedIngredient[],
+  rows: IngredientRow[],
+): { row: IngredientRow; match: ResolvedIngredient | null } => {
+  const { resolution, leftover } = resolveReadName(
+    line.name,
+    line.alsoCalled,
+    ingredients,
+  );
+  const match = resolution.kind === 'match' ? resolution.option : null;
+  const { prep } = splitPrep(line.name);
+  const newName =
+    resolution.kind === 'custom' &&
+    findNearMatches(ingredients, resolution.label).length === 0
+      ? resolution.label
+      : null;
+  const stagedId =
+    newName === null
+      ? null
+      : (rows.find(
+          (row) =>
+            row.newName !== null &&
+            normalizeName(row.newName) === normalizeName(newName),
+        )?.ingredientId ?? generateUuid());
+  const { amount } = line;
+
+  return {
+    match,
+    row: {
+      id: generateUuid(),
+      ingredientId: match?.id ?? stagedId ?? '',
+      freeText: null,
+      amount: amount === null ? '' : formatAmountText(amount),
+      unit: line.unit ?? match?.serving.unit ?? 'EACH',
+      isAmountless: amount === null,
+      amountText:
+        amount === null && line.amountText
+          ? clipAtWord(line.amountText, MAX_AMOUNT_TEXT_LENGTH)
+          : null,
+      note: clipNote(
+        addPrepToNote(line.note, leftover ? [...prep, leftover] : prep),
+      ),
+      proposedName:
+        resolution.kind === 'custom' && newName === null
+          ? resolution.label
+          : null,
+      newName,
+      group: cleanGroupName(line.group),
+      adaptedFrom: null,
+    },
+  };
+};
+
 /** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick, cased like the app's own names with prep words such as "bone-in" moved to the line's note. A second line for an ingredient already listed under the same heading adds to it when the units agree and stays its own line when they don't, so no amount is lost; under another heading it is always its own line. A line the recipe gives no amount ("salt to taste") keeps none. The link a source came from (a video as the how-to, a page as the original recipe) starts the links. */
 export const getDataFromExtracted = (
   extracted: ExtractedRecipe,
@@ -185,77 +241,32 @@ export const getDataFromExtracted = (
 ): RecipeFormData => {
   const blank = getInitialData(null);
   const rows = extracted.ingredients.reduce<IngredientRow[]>((acc, line) => {
-    const { resolution, leftover } = resolveReadName(
-      line.name,
-      line.alsoCalled,
-      ingredients,
-    );
-    const match = resolution.kind === 'match' ? resolution.option : null;
-    const { prep } = splitPrep(line.name);
-    const newName =
-      resolution.kind === 'custom' &&
-      findNearMatches(ingredients, resolution.label).length === 0
-        ? resolution.label
-        : null;
-    const stagedId =
-      newName === null
-        ? null
-        : (acc.find(
-            (row) =>
-              row.newName !== null &&
-              normalizeName(row.newName) === normalizeName(newName),
-          )?.ingredientId ?? generateUuid());
-    const unit = line.unit ?? match?.serving.unit ?? 'EACH';
+    const { row, match } = getRowFromRead(line, ingredients, acc);
     const { amount } = line;
-    const group = cleanGroupName(line.group);
     const existing = match
       ? acc.find(
-          (row) =>
-            row.ingredientId === match.id &&
-            getGroupKey(row.group) === getGroupKey(group) &&
-            row.unit === unit &&
-            row.amount.trim() !== '' &&
+          (other) =>
+            other.ingredientId === match.id &&
+            getGroupKey(other.group) === getGroupKey(row.group) &&
+            other.unit === row.unit &&
+            other.amount.trim() !== '' &&
             amount !== null,
         )
       : undefined;
     if (existing && amount !== null) {
-      return acc.map((row) =>
-        row === existing
+      return acc.map((other) =>
+        other === existing
           ? {
-              ...row,
+              ...other,
               amount: formatAmountText(
-                (parseAmountText(row.amount) ?? 0) + amount,
+                (parseAmountText(other.amount) ?? 0) + amount,
               ),
             }
-          : row,
+          : other,
       );
     }
 
-    return [
-      ...acc,
-      {
-        id: generateUuid(),
-        ingredientId: match?.id ?? stagedId ?? '',
-        freeText: null,
-        amount: amount === null ? '' : formatAmountText(amount),
-        unit,
-        isAmountless: amount === null,
-        amountText:
-          amount === null && line.amountText
-            ? clipAtWord(line.amountText, MAX_AMOUNT_TEXT_LENGTH)
-            : null,
-        note: clipNote(
-          addPrepToNote(line.note, leftover ? [...prep, leftover] : prep),
-        ),
-        proposedName:
-          resolution.kind === 'custom' && newName === null
-            ? resolution.label
-            : null,
-        newName,
-        group,
-        adaptedFrom: null,
-      },
-    ];
+    return [...acc, row];
   }, []);
 
   return {
