@@ -2,7 +2,6 @@ import { formatList } from '@/utils/formatUtils';
 import type { ExtractedRecipe } from '@apps/pinch/utils/normalizeRecipe';
 
 export interface ReadNoticeDetail {
-  /** An emoji that says at a glance what kind of change the line is. */
   icon: string;
   text: string;
 }
@@ -49,6 +48,9 @@ export const getReadNotice = (
     recipe.finished.length > 0 ||
     usedPicks.length > 0;
   const details = [
+    recipe.unread.length > 0
+      ? { icon: '⚠️', text: `We couldn’t read: ${recipe.unread.join(', ')}.` }
+      : null,
     recipe.guided.length > 0
       ? {
           icon: '📝',
@@ -87,9 +89,6 @@ export const getReadNotice = (
       icon: '👩‍🍳',
       text: toSentence(item),
     })),
-    recipe.unread.length > 0
-      ? { icon: '⚠️', text: `We couldn’t read: ${recipe.unread.join(', ')}.` }
-      : null,
   ].filter((detail) => detail !== null);
   const headline =
     recipe.guided.length > 0

@@ -203,7 +203,6 @@ export interface RecipeRead {
 
 const USAGE_READ_TIMEOUT_MS = 4000;
 
-/** The first of the pictures a source offers that loads; they are tried in order so a missing large one falls back to the next. */
 const ReadNoticeLine = ({ detail }: { detail: ReadNoticeDetail }) => (
   <li className='flex items-center gap-2.5'>
     <span className='w-5 shrink-0 text-center text-base' aria-hidden='true'>
@@ -213,6 +212,7 @@ const ReadNoticeLine = ({ detail }: { detail: ReadNoticeDetail }) => (
   </li>
 );
 
+/** The first of the pictures a source offers that loads; they are tried in order so a missing large one falls back to the next. */
 const findLoadablePhoto = (photos: WebPhoto[]) =>
   photos.reduce<Promise<WebPhoto | null>>(
     async (found, photo) =>
@@ -1731,7 +1731,7 @@ function RecipeForm({
               type='button'
               variant='secondary'
               size='sm'
-              className='mt-3 rounded-full'
+              className='bg-background! border-border mt-3 rounded-full border'
               onClick={() => setIsReadDetailOpen(true)}
             >
               {`See all ${readNotice.details.length} changes`}
@@ -1746,7 +1746,7 @@ function RecipeForm({
           <DetailSheet
             isOpen={isReadDetailOpen}
             onClose={() => setIsReadDetailOpen(false)}
-            title={readNotice.headline}
+            title='What we changed'
           >
             <ul className='space-y-3 text-sm'>
               {readNotice.details.map((detail) => (

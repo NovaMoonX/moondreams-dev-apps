@@ -6,7 +6,12 @@ import {
   type KeyboardEvent,
 } from 'react';
 
-import { Button, Input, Popover } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Input,
+  Popover,
+  Textarea,
+} from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ArrowDown,
@@ -36,6 +41,7 @@ import RearrangeGroupsSheet from '@/components/RearrangeGroupsSheet';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
 import ReorderList, { type ReorderGroup } from '@/components/ReorderList';
+import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
@@ -200,6 +206,42 @@ function FreeLineOffer({ onClick }: { onClick: () => void }) {
 }
 
 const MAX_SIDE_AMOUNT_TEXT = 10;
+
+interface AmountWordsFieldProps {
+  id: string;
+  value: string;
+  isFocused: boolean;
+  onChange: (text: string | null) => void;
+}
+
+function AmountWordsField({
+  id,
+  value,
+  isFocused,
+  onChange,
+}: AmountWordsFieldProps) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useGrowingTextarea(ref, value, 3);
+  return (
+    <Textarea
+      ref={ref}
+      id={id}
+      rows={1}
+      autoFocus={isFocused}
+      variant='outline'
+      placeholder='to taste'
+      maxLength={MAX_AMOUNT_TEXT_LENGTH}
+      value={value}
+      className='min-h-0 resize-none'
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.preventDefault();
+      }}
+      onChange={(event) =>
+        onChange(event.target.value.replace(/\s*\n\s*/g, ' ') || null)
+      }
+    />
+  );
+}
 
 const getAmountLabel = (row: IngredientRow) => {
   if (row.isAmountless) return row.amountText ?? '';
@@ -792,19 +834,11 @@ function IngredientEditor({
       {row.isAmountless && (
         <Field label='How much, in words (optional)'>
           {(id) => (
-            <Input
+            <AmountWordsField
               id={id}
-              autoFocus={isAmountTextJustAdded}
-              variant='outline'
-              placeholder='to taste'
-              maxLength={MAX_AMOUNT_TEXT_LENGTH}
+              isFocused={isAmountTextJustAdded}
               value={row.amountText ?? ''}
-              onChange={(event) =>
-                onUpdate({
-                  amountText:
-                    event.target.value === '' ? null : event.target.value,
-                })
-              }
+              onChange={(amountText) => onUpdate({ amountText })}
             />
           )}
         </Field>
@@ -1498,7 +1532,7 @@ function RecipeIngredients({
                         </span>
                       )}
                       {isLongAmount && (
-                        <span className='text-muted-foreground line-clamp-1 text-xs font-normal break-words'>
+                        <span className='text-foreground/80 line-clamp-1 text-xs font-medium break-words'>
                           {label}
                         </span>
                       )}
