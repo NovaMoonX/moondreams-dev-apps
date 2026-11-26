@@ -21,6 +21,8 @@ interface AssistantOrbProps {
   name?: string;
   /** What a tap does, in a sentence ("Tap to stop listening."); with `name` it completes the button's label. */
   actionHint?: string;
+  /** `header` is a pill that stands alone at the end of a title row: it is drawn while `off` too (resting, so a tap can wake it), its disc is the faced size with or without an avatar, and its word shows from `sm` up while a phone sees the disc alone. */
+  placement?: 'line' | 'header';
   /** When given the whole pill is one button. */
   onClick?: () => void;
   className?: string;
@@ -48,6 +50,7 @@ function AssistantOrb({
   avatar,
   getLevel,
   size = 'md',
+  placement = 'line',
   name,
   actionHint,
   onClick,
@@ -81,7 +84,7 @@ function AssistantOrb({
     };
   }, [isLive]);
 
-  if (state === 'off') return null;
+  if (state === 'off' && placement !== 'header') return null;
 
   const pill = (
     <div
@@ -89,6 +92,7 @@ function AssistantOrb({
       data-state={state}
       data-size={size}
       data-avatar={avatar ? 'true' : undefined}
+      data-placement={placement}
       className={join('assistant-orb', !onClick && className)}
     >
       <span aria-hidden='true' className='assistant-orb-disc'>
@@ -135,7 +139,11 @@ function AssistantOrb({
         onButtonClick={onClick}
         buttonProps={{
           'aria-label': label,
-          className: size === 'sm' ? '-inset-y-2!' : undefined,
+          className: join(
+            size === 'sm' && placement === 'line' && '-inset-y-2!',
+            placement === 'header' &&
+              '-inset-y-1! max-sm:-inset-x-1! sm:-inset-x-0.5!',
+          ),
         }}
       >
         {pill}

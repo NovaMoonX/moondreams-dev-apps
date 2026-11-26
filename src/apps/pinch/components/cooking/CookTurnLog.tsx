@@ -43,9 +43,11 @@ export function CookTurnLogView({
       <TurnLogView
         expected={{
           listening: 'the browser’s speech recognition (nothing heard yet)',
-          voice: voice.natural.isOn
-            ? 'natural on-device voice if it is ready, else the browser’s voice (nothing said yet)'
-            : 'the browser’s voice (nothing said yet)',
+          voice: isPepperOn
+            ? 'Pepper’s cloud voice (Google Zephyr), the device’s voice if it fails (nothing said yet)'
+            : voice.natural.isOn
+              ? 'natural on-device voice if it is ready, else the browser’s voice (nothing said yet)'
+              : 'the browser’s voice (nothing said yet)',
           answers: isPepperOn ? 'no answer from Pepper yet' : 'Pepper is off',
         }}
         facts={[

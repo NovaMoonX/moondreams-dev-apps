@@ -69,6 +69,13 @@ const SPEECH_START_TIMEOUT_MS = 1500;
 const MAX_NO_STARTS = 2;
 const REPEATED_FINAL_MS = 700;
 
+/** What a custom `speak` reports back about the line it says: it started sounding, it ended (also when cut or failed), or it never started. */
+export interface SpeakHandlers {
+  onStart: () => void;
+  onEnd: () => void;
+  onNoStart: () => void;
+}
+
 export type SpeechCommandsStatus =
   'off' | 'starting' | 'listening' | 'speaking';
 
@@ -101,6 +108,8 @@ interface ListenerOptions {
   onHalt?: (error: SpeechCommandsError) => void;
   /** Read with the natural voice (see `useNaturalVoice`) whenever it is ready; the browser's voice otherwise. */
   isNaturalVoice?: boolean;
+  /** Says each line in place of `readAloud` (a cloud voice, say), returning a function that stops it; the listening around it works as it does for any reading. Fire `onEnd` asynchronously, never before this returns. */
+  speak?: (text: string, handlers: SpeakHandlers) => () => void;
   /** Says which voice reads a line (a reading that falls back to the browser's voice reports twice), for a debug log. */
   onVoice?: (voice: 'natural' | 'system', text: string) => void;
   phrases?: string[] | null;
@@ -439,11 +448,7 @@ export const createSpeechListener = (
       const token = state.speechToken;
       state.isSpeaking = true;
       abortSession();
-      state.stopReading = readAloud(text, {
-        lang: state.options?.speechLang ?? '',
-        isNatural: state.options?.isNaturalVoice === true,
-        onVoice: (voice) => state.options?.onVoice?.(voice, text),
-        startTimeoutMs: SPEECH_START_TIMEOUT_MS,
+      const handlers: SpeakHandlers = {
         onNoStart: () => {
           state.noStarts += 1;
           if (state.noStarts >= MAX_NO_STARTS) state.canSpeak = false;
@@ -462,7 +467,17 @@ export const createSpeechListener = (
           setStatus(state.isHidden ? 'starting' : 'listening');
           beginSession();
         },
-      });
+      };
+      const speakLine = state.options?.speak;
+      state.stopReading = speakLine
+        ? speakLine(text, handlers)
+        : readAloud(text, {
+            lang: state.options?.speechLang ?? '',
+            isNatural: state.options?.isNaturalVoice === true,
+            onVoice: (voice) => state.options?.onVoice?.(voice, text),
+            startTimeoutMs: SPEECH_START_TIMEOUT_MS,
+            ...handlers,
+          });
     },
     mute,
     cue: (kind: ListeningCue) => {
@@ -534,6 +549,7 @@ export function useSpeechCommands({
   onHalt,
   isNaturalVoice,
   onVoice,
+  speak,
 }: ListenerOptions) {
   const [isSupported] = useState(canUseSpeechCommands);
   const [status, setStatus] = useState<SpeechCommandsStatus>('off');
@@ -550,6 +566,7 @@ export function useSpeechCommands({
       onHalt,
       isNaturalVoice,
       onVoice,
+      speak,
     });
   });
 

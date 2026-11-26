@@ -656,6 +656,29 @@ html[data-pressing] * {
 .assistant-orb[data-state="waiting"] {
   padding-right: 12px;
 }
+/* The pill that ends a title row: the faced disc size with or without an avatar, resting while off, the word from `sm` up and the disc alone on a phone. */
+.assistant-orb[data-size="sm"][data-placement="header"] {
+  --orb-disc: var(--orb-disc-faced);
+  padding: 1px 10px 1px 1px;
+  margin-block: 0;
+}
+.assistant-orb[data-size="sm"][data-placement="header"][data-state="waiting"],
+.assistant-orb[data-size="sm"][data-placement="header"][data-state="off"] {
+  padding-right: 8px;
+}
+.assistant-orb[data-placement="header"][data-state="off"] .assistant-orb-disc {
+  opacity: 0.75;
+}
+@media (max-width: 639.98px) {
+  .assistant-orb[data-size][data-placement="header"][data-state] {
+    gap: 0;
+    padding: 1px;
+  }
+  .assistant-orb[data-placement="header"] .assistant-orb-word,
+  .assistant-orb[data-placement="header"] .assistant-orb-wave {
+    display: none;
+  }
+}
 .assistant-orb-disc {
   position: relative;
   flex: none;

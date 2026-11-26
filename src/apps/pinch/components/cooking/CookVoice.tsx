@@ -616,10 +616,23 @@ function CookVoiceSheet({
         <div
           className={join(
             PINNED_FOOTER,
-            'flex justify-end',
+            'flex justify-end gap-2',
             isSayShown && 'border-border border-t',
           )}
         >
+          {voice.isOn && (
+            <Button
+              type='button'
+              variant='secondary'
+              rounded='full'
+              onClick={() => {
+                voice.stop();
+                close();
+              }}
+            >
+              Stop listening
+            </Button>
+          )}
           <Button ref={doneRef} type='button' rounded='full' onClick={close}>
             Done
           </Button>
@@ -710,8 +723,8 @@ function StatusChip({ voice }: { voice: CookVoice }) {
 }
 
 interface CookVoiceLineProps extends CookVoiceSheetProps {
-  /** Where Pepper is while it is on; the orb then takes the chip's place in the line. */
-  orbState?: AssistantOrbState;
+  /** Pepper is on: its pill in the header shows where it is, so the line carries no chip. */
+  isPepperOn?: boolean;
   className?: string;
 }
 
@@ -722,33 +735,38 @@ const ORB_WORDS: Record<Exclude<AssistantOrbState, 'off'>, string> = {
   speaking: 'Speaking',
 };
 
-/** Pepper's orb in the state chip's place: the same tap (the voice sheet), smaller than the chip's line is tall. */
-function PepperOrb({
+/** Pepper's pill at the end of the title row, in the mic's place: resting while the voice is off (a tap turns it on, with the first-time explainer), and where Pepper is once it is on (a tap opens the voice sheet). A phone sees the disc alone. */
+export function PepperHeaderOrb({
   voice,
   state,
 }: {
   voice: CookVoice;
-  state: Exclude<AssistantOrbState, 'off'>;
+  state: AssistantOrbState;
 }) {
+  const getWord = () => {
+    if (state === 'off') return 'Pepper';
+    return voice.status === 'starting' ? 'Starting…' : ORB_WORDS[state];
+  };
   return (
     <AssistantOrb
       state={state}
-      word={voice.status === 'starting' ? 'Starting…' : ORB_WORDS[state]}
+      placement='header'
+      word={getWord()}
       name='Pepper'
-      actionHint='Tap for voice options.'
+      actionHint={voice.isOn ? 'Tap for voice options.' : 'Tap to talk.'}
       avatar={
         voice.look === 'ORB' ? undefined : <PepperFace look={voice.look} />
       }
       size='sm'
       className='shrink-0'
-      onClick={voice.openSheet}
+      onClick={voice.isOn ? voice.openSheet : voice.toggle}
     />
   );
 }
 
 /** One line over the cooking footer's buttons: while the mic is on, its state as a chip (which opens the voice sheet) and what to say, or what it last heard or answered; after it stops by itself, why, for a few seconds. */
 export function CookVoiceLine({
-  orbState = 'off',
+  isPepperOn = false,
   className,
   ...props
 }: CookVoiceLineProps) {
@@ -784,22 +802,14 @@ export function CookVoiceLine({
   }
 
   const { message, status } = voice;
-  const isOrbShown = orbState !== 'off';
   const isHint = message === null && status === 'listening';
   const getText = () => {
     if (message !== null) return message.text;
     if (status === 'starting') return 'Allow the microphone if asked.';
     if (status === 'speaking') {
-      return isOrbShown
+      return isPepperOn
         ? 'Tap Next to skip'
         : 'Reading aloud… tap Next to skip';
-    }
-    if (voice.phase === 'WAITING' && isOrbShown) {
-      return (
-        <span className='max-sm:hidden'>
-          Then “next” or “how much {ingredientExample}”
-        </span>
-      );
     }
     if (voice.phase === 'WAITING') {
       return (
@@ -833,12 +843,8 @@ export function CookVoiceLine({
           className,
         )}
       >
-        {orbState === 'off' ? (
-          <StatusChip voice={voice} />
-        ) : (
-          <PepperOrb voice={voice} state={orbState} />
-        )}
-        {isOrbShown &&
+        {!isPepperOn && <StatusChip voice={voice} />}
+        {isPepperOn &&
           voice.phase === 'LOCKED' &&
           voice.lockEndsAt !== null && (
             <span className='text-muted-foreground flex shrink-0 items-center gap-1 text-xs'>

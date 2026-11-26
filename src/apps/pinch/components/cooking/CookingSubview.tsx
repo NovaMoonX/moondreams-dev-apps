@@ -67,6 +67,7 @@ import {
   CookVoiceButton,
   CookVoiceExplainer,
   CookVoiceLine,
+  PepperHeaderOrb,
 } from '@apps/pinch/components/cooking/CookVoice';
 import {
   COOK_CHOICE_MS,
@@ -3466,7 +3467,12 @@ function CookingSession({
           isFinishShown || isEditing ? null : (
             <div className='flex items-center gap-1'>
               <CookStopwatch startedAt={startedAt} />
-              {voice.isSupported && <CookVoiceButton voice={voice} />}
+              {voice.isSupported &&
+                (isPepperOn ? (
+                  <PepperHeaderOrb voice={voice} state={pepperOrbState} />
+                ) : (
+                  <CookVoiceButton voice={voice} />
+                ))}
             </div>
           )
         }
@@ -3713,7 +3719,7 @@ function CookingSession({
               {!isFinishShown && (
                 <CookVoiceLine
                   voice={voice}
-                  orbState={pepperOrbState}
+                  isPepperOn={isPepperOn}
                   ingredientExample={ingredientExample}
                   dishExample={dishExample}
                   className='[@media(max-height:500px)]:max-w-44 [@media(max-height:500px)]:shrink-0'

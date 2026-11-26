@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
 import { useNaturalVoice } from '@/hooks/useNaturalVoice';
@@ -9,10 +10,15 @@ import type { ListeningCue } from '@/lib/speech/listeningSound';
 import { readMicrophonePermission } from '@/lib/speech/microphonePermission';
 import { getNaturalVoiceState } from '@/lib/speech/naturalVoice/naturalVoiceEngine';
 import { recordTurn, type TurnLogData } from '@/lib/speech/turnLog';
+import type { SpeechPriority } from '@/lib/speech/voice/types';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import type { MeasureUnit } from '@/utils/measureUtils';
 import { COOK_WINDOW_MS } from '@apps/pinch/constants';
 import type { PepperLook } from '@apps/pinch/types';
+import {
+  createPepperSpeaker,
+  createPepperSpeechSource,
+} from '@apps/pinch/utils/pepperSpeech';
 import {
   getCookCommandKey,
   stepCookReading,
@@ -267,19 +273,25 @@ const isExplainedStop = (stop: VoiceStop | null) =>
 const routed = (text: string, data?: TurnLogData) =>
   recordTurn('routed', text, data ?? null);
 
-/** Why a line was read by the browser's voice: the cloud voice isn't used in cooking mode, and the natural voice was off or failed. */
-const getVoiceReason = (isNaturalWanted: boolean) => {
+const noStop = () => undefined;
+
+/** Why the natural voice didn't say a line: it was off, or on and not ready or too slow. */
+const getNaturalReason = (isNaturalWanted: boolean) => {
   const { status, problem } = getNaturalVoiceState();
-  return [
-    'cloud voice not wired into cooking mode yet',
-    isNaturalWanted
-      ? status === 'ready'
-        ? 'natural voice was on but too slow or failed on this line'
-        : `natural voice was on but not used (${status}${problem === null ? '' : `: ${problem}`})`
-      : 'natural voice is off',
+  return isNaturalWanted
+    ? status === 'ready'
+      ? 'natural voice was on but too slow or failed on this line'
+      : `natural voice was on but not used (${status}${problem === null ? '' : `: ${problem}`})`
+    : 'natural voice is off';
+};
+
+/** Why a line was read by the browser's voice while Pepper's cloud voice is not in use. */
+const getVoiceReason = (isNaturalWanted: boolean) =>
+  [
+    'the cloud voice is only used while Pepper is on',
+    getNaturalReason(isNaturalWanted),
     ...(navigator.onLine ? [] : ['offline']),
   ].join('; ');
-};
 
 const quote = (text: string) =>
   text.length > MAX_QUOTE_CHARS
@@ -364,6 +376,12 @@ export function useCookVoice({
     void saveSettings({ voice: { isWaiting: next } });
   };
   const natural = useNaturalVoice(`pinch:${uid}:voice:natural`);
+  const isPepperOn = useIsGateOpen('pinch', 'pepper');
+  const [speechSource] = useState(createPepperSpeechSource);
+  const linePriority = useRef<SpeechPriority>('ack');
+  const pepperSpeaker = useRef<ReturnType<typeof createPepperSpeaker> | null>(
+    null,
+  );
   const [machine, setMachine] = useState(() =>
     createVoiceState(isWaitingPreferred ? 'WAKE' : 'TAP'),
   );
@@ -662,11 +680,42 @@ export function useCookVoice({
           voice === 'natural' ? 'natural on-device voice' : 'browser voice',
         ...(voice === 'natural' ? {} : { why: getVoiceReason(natural.isOn) }),
       }),
+    speak: isPepperOn
+      ? (text, handlers) => pepperSpeaker.current?.(text, handlers) ?? noStop
+      : undefined,
     onHalt: (error) => {
       if (error !== 'idle') send({ type: 'ENGINE_STOPPED', reason: error });
     },
   });
   const { say, quiet, stop, start, cue } = speech;
+  useEffect(() => {
+    pepperSpeaker.current = createPepperSpeaker({
+      source: speechSource,
+      lang: langs.speak,
+      isNatural: () => natural.isOn,
+      getPriority: () => linePriority.current,
+      onSpoken: (text, { voice, cloudFailure }) =>
+        recordTurn('spoken', `“${text}”`, {
+          voice,
+          ...(cloudFailure === null
+            ? {}
+            : {
+                why: [
+                  `cloud voice failed (${cloudFailure.stage}: ${cloudFailure.detail})`,
+                  ...(voice === 'browser voice'
+                    ? [getNaturalReason(natural.isOn)]
+                    : []),
+                  ...(navigator.onLine ? [] : ['offline']),
+                ].join('; '),
+              }),
+        }),
+      onCut: (cause) =>
+        recordTurn(
+          'failed',
+          `cloud voice stopped partway (${cause.stage}: ${cause.detail})`,
+        ),
+    });
+  });
   const dictationKeyRef = useRef(dictationKey);
   const chime = useRef({
     isArmed: false,
@@ -704,6 +753,7 @@ export function useCookVoice({
     setExpiredStop(null);
     setMessage(null);
     onTurnOn?.();
+    if (isPepperOn) void speechSource.warm?.();
     start();
   };
 
@@ -731,7 +781,9 @@ export function useCookVoice({
       const next = state.items.shift();
       if (next === undefined) return;
       state.active = next;
+      linePriority.current = 'reply';
       controls.current.say(next.text);
+      linePriority.current = 'ack';
       state.timeoutId = window.setTimeout(
         () => {
           const now = lines.current;
@@ -970,7 +1022,10 @@ export function useCookVoice({
     send({ type: 'CHOOSE', choice, at: Date.now() });
   };
 
-  const stopVoice = useCallback(() => send({ type: 'STOP' }), [send]);
+  const stopVoice = useCallback(() => {
+    send({ type: 'STOP' });
+    setMessage(null);
+  }, [send, setMessage]);
 
   const setReadingAloud = (isOn: boolean) => {
     readStepKey.current = null;

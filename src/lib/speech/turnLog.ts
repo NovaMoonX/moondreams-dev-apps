@@ -224,7 +224,7 @@ const readText = (entry: TurnLogEntry, key: string) => {
   return typeof value === 'string' ? value : null;
 };
 
-/** What actually ran, in plain words, read from the events themselves: the `listener` of each `heard`, the `voice` (and `why` it was not the best one) of each `spoken`, the `model` of each `done`. The expected values stand in until an event has said. */
+/** What actually ran, in plain words, read from the events themselves: the `listener` of each `heard`, the `voice` of each `spoken` with `why` it was not the best one beside it, the `model` of each `done`. The expected values stand in until an event has said. */
 export const describeRunning = (
   entries: TurnLogEntry[],
   expected: TurnLogRunning,
@@ -232,10 +232,12 @@ export const describeRunning = (
   const heard = entries.filter((entry) => entry.kind === 'heard');
   const spoken = entries.filter((entry) => entry.kind === 'spoken');
   const answered = entries.filter((entry) => entry.kind === 'done');
-  const lastSpoken = spoken.at(-1);
-  const why = lastSpoken === undefined ? null : readText(lastSpoken, 'why');
   const voice = describeUse(
-    spoken.flatMap((entry) => readText(entry, 'voice') ?? []),
+    spoken.flatMap((entry) => {
+      const name = readText(entry, 'voice');
+      const why = readText(entry, 'why');
+      return name === null ? [] : `${name}${why === null ? '' : ` (${why})`}`;
+    }),
     expected.voice,
   );
   return [
@@ -243,7 +245,7 @@ export const describeRunning = (
       heard.flatMap((entry) => readText(entry, 'listener') ?? []),
       expected.listening,
     )}`,
-    `Voice: ${voice}${why === null ? '' : ` (${why})`}`,
+    `Voice: ${voice}`,
     `Answers: ${describeUse(
       answered.map((entry) =>
         entry.data?.isStandIn === true

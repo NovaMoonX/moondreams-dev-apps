@@ -4,6 +4,11 @@ import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 
 import {
+  describeRunning,
+  type TurnLogEntry,
+} from '../../src/lib/speech/turnLog.ts';
+
+import {
   createListeningState,
   getListeningCue,
   getListeningEffect,
@@ -4884,4 +4889,52 @@ console.log('speechShared: voice provider checks passed');
     'a joining line from an older turn is dropped',
   );
   console.log('speechShared: line progress and playback route checks passed');
+}
+
+{
+  const spoken = (voice: string, why?: string): TurnLogEntry => ({
+    at: 0,
+    kind: 'spoken',
+    text: '“Next.”',
+    data: why === undefined ? { voice } : { voice, why },
+  });
+  const expected = { listening: 'L', voice: 'V', answers: 'A' };
+  assert.equal(
+    describeRunning([], expected)[1],
+    'Voice: V',
+    'before a line is said the expected voice stands in',
+  );
+  assert.equal(
+    describeRunning([spoken('Google cloud voice (Zephyr)')], expected)[1],
+    'Voice: Google cloud voice (Zephyr)',
+    'a cloud-voiced line is named with no reason attached',
+  );
+  assert.equal(
+    describeRunning(
+      [
+        spoken(
+          'browser voice',
+          'cloud voice failed (speech request: HTTP 401)',
+        ),
+      ],
+      expected,
+    )[1],
+    'Voice: browser voice (cloud voice failed (speech request: HTTP 401))',
+    'a line that fell back names the voice and why the cloud voice was not heard',
+  );
+  assert.equal(
+    describeRunning(
+      [
+        spoken(
+          'browser voice',
+          'cloud voice failed (speech request: HTTP 401)',
+        ),
+        spoken('Google cloud voice (Zephyr)'),
+      ],
+      expected,
+    )[1],
+    'Voice: Google cloud voice (Zephyr) (latest), earlier browser voice (cloud voice failed (speech request: HTTP 401))',
+    'a cloud line after a fallback does not inherit the earlier reason',
+  );
+  console.log('speechShared: running-block checks passed');
 }
