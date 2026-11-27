@@ -436,6 +436,19 @@ assert.ok(
   'a known bank writing about a refund is not a store',
 );
 
+{
+  const late = parseAlertEmail({
+    from: 'no.reply.alerts@chase.com',
+    subject: 'Your transaction alert',
+    text: `${'Example Bank footer and links. '.repeat(160)}\nYou made a $24.50 transaction with CHIPOTLE 2041\nAccount ending in 1234`,
+    receivedAt: RECEIVED,
+  });
+  assert.ok(
+    late !== null && 'amountCents' in late && late.amountCents === 2450,
+    'an alert past the first 4,000 characters is still read by the patterns',
+  );
+}
+
 // Hand-forwards of a Chase-style alert, each client's own block wording.
 const ALERT_BODY =
   'Account ending in 1234\nMerchant: CHIPOTLE 2041\nAmount: $24.50\nDate: Nov 3, 2026';

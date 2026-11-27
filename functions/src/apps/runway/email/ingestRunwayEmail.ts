@@ -48,6 +48,7 @@ import {
   parseAlertEmail,
   readableBody,
   subjectTemplate,
+  withoutInvisible,
   type ParsedAlert,
   type SenderKind,
 } from './parseAlert.js';
@@ -313,6 +314,7 @@ async function handleMail(
   const template = subjectTemplate(mail.subject);
 
   const readMail = { ...mail, text: readableBody(mail.text) };
+  const patternMail = { ...mail, text: withoutInvisible(mail.text) };
 
   const decide = async (): Promise<Handled> => {
     if (isConfirmation) {
@@ -337,13 +339,13 @@ async function handleMail(
       };
     }
     const isStore = isStoreLike(readMail);
-    const firstPattern = isStore ? null : parseAlertEmail(readMail);
+    const firstPattern = isStore ? null : parseAlertEmail(patternMail);
     const byAi = firstPattern === null ? await readAlertWithAi(readMail) : null;
     // A bank the sender list doesn't know can still write "refund"; its alert falls back to the patterns.
     const byPattern =
       firstPattern ??
       (isStore && (byAi === null || byAi.storeEmail === null)
-        ? parseAlertEmail(readMail)
+        ? parseAlertEmail(patternMail)
         : null);
     const read: {
       alert: ParsedAlert | null;

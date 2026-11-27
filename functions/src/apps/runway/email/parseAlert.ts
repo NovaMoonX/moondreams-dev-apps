@@ -131,10 +131,12 @@ const BOILERPLATE_LINE =
 const INVISIBLE =
   /\u034F|\u115F|\u1160|\u17B4|\u17B5|\u180B|\u180C|\u180D|\u180E|\u180F|\u200C|\u200D|[\u00AD\u061C\u200B\u200E\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0]/g;
 
+/** The text with the characters a mail client hides removed, nothing else changed. */
+export const withoutInvisible = (text: string) => text.replace(INVISIBLE, '');
+
 /** The email's readable text: hidden filler removed, line breaks kept, runs of blank lines collapsed, every web link shortened to its host name, capped at 4,000 characters. */
 export function readableBody(text: string): string {
-  return text
-    .replace(INVISIBLE, '')
+  return withoutInvisible(text)
     .replace(
       /<?https?:\/\/([^\s/?#"'<>)\]]+)[^\s"'<>)\]]*>?/gi,
       (_whole, host: string) => host,
