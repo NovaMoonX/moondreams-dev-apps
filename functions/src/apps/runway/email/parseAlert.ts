@@ -127,9 +127,14 @@ const EXCERPT_MAX = 600;
 const BOILERPLATE_LINE =
   /^(?:\[[^\]]*\]|[\W_]+|(?:view|open|read)\b.{0,40}\b(?:browser|online)\b.*|.{0,60}\bunsubscribe\b.{0,60})$/i;
 
-/** The email's readable text: line breaks kept, runs of blank lines collapsed, every web link shortened to its host name, capped at 4,000 characters. */
+// Preheader filler a mail client hides (soft hyphens, joiners, combining grapheme joiners) fills the top of a forwarded text part.
+const INVISIBLE =
+  /\u034F|\u115F|\u1160|\u17B4|\u17B5|\u180B|\u180C|\u180D|\u180E|\u180F|\u200C|\u200D|[\u00AD\u061C\u200B\u200E\u200F\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0]/g;
+
+/** The email's readable text: hidden filler removed, line breaks kept, runs of blank lines collapsed, every web link shortened to its host name, capped at 4,000 characters. */
 export function readableBody(text: string): string {
   return text
+    .replace(INVISIBLE, '')
     .replace(
       /<?https?:\/\/([^\s/?#"'<>)\]]+)[^\s"'<>)\]]*>?/gi,
       (_whole, host: string) => host,
@@ -333,6 +338,19 @@ export const isKnownInstitution = (name: string) =>
 /** Whether the sender's address belongs to one of the known banks or card issuers. */
 export const isKnownInstitutionSender = (from: string) =>
   INSTITUTIONS.some(([pattern]) => pattern.test(from));
+
+// A store's order, refund or cancellation reads to the patterns like a bank alert or nothing, so the AI reads it instead.
+const STORE_SIGNAL =
+  /\b(order (?:#|no\.?|number|confirm\w*|cancel\w*)|your orders?|ordered(?: \d+ items?)?(?=:)|refund(?:ed)?|return (?:received|processed)|cancel(?:led|ed|lation))\b/i;
+
+/** A store writing about its own order, refund or cancellation, read from the cleaned text. */
+export const isStoreLike = (mail: {
+  from: string;
+  subject: string;
+  text: string;
+}) =>
+  !isKnownInstitutionSender(mail.from) &&
+  STORE_SIGNAL.test(`${mail.subject} ${mail.text.slice(0, 600)}`);
 
 const readInstitution = (
   from: string,

@@ -231,6 +231,42 @@ assert.deepEqual(
   ['b'],
 );
 assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('o', 'email', 10, {
+        accountId: null,
+        isOrder: true,
+        name: 'Amazon',
+      }),
+      twin('b', 'link', 12, {
+        accountId: null,
+        paidByCardId: 'virtual',
+        name: 'Amazon',
+      }),
+    ]),
+  ),
+  ['b'],
+  'a store order naming no card is the same store charge on any card',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('o', 'email', 10, {
+        accountId: null,
+        isOrder: true,
+        name: 'Amazon',
+      }),
+      twin('b', 'link', 12, {
+        accountId: null,
+        paidByCardId: 'virtual',
+        name: 'Target',
+      }),
+    ]),
+  ),
+  ['o', 'b'],
+  'a card-less order never matches another store',
+);
+assert.deepEqual(
   ids(withoutEmailTwins([twin('e', 'email', 10), twin('b', 'link', 18)])),
   ['e', 'b'],
   'a bank charge more than seven days after is not the twin',

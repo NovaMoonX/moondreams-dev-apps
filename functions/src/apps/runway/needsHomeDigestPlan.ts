@@ -111,9 +111,9 @@ export interface TwinRow {
 const isSameSide = (email: TwinRow, bank: TwinRow) =>
   email.paidByCardId !== null
     ? email.paidByCardId === bank.paidByCardId
-    : email.accountId !== null &&
-      email.accountId === bank.accountId &&
-      bank.paidByCardId === null;
+    : email.accountId !== null
+      ? email.accountId === bank.accountId && bank.paidByCardId === null
+      : email.isOrder && isSameStore(email.name, bank.name);
 
 const isWindowDay = (email: TwinRow, bank: TwinRow) =>
   bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
@@ -191,7 +191,7 @@ function findSplitChargeIds(
   );
 }
 
-/** Drops each waiting emailed purchase that is clearly a bank charge also waiting, so the pair counts once (the bank's side stays): the same amount on the same card (or the same account for money out of an account), the bank dated from two days before to seven days after the email, and the only candidate both ways, as `findEmailTwins` in the app decides. An ambiguous email stays counted. A store order that posted as several charges stays and its charges are dropped, as the screen hides them; skipped: the screen shows those charges again when one is link history or the merge's tries are spent, which the push cannot see, so it drops them anyway. */
+/** Drops each waiting emailed purchase that is clearly a bank charge also waiting, so the pair counts once (the bank's side stays): the same amount on the same card (or the same account for money out of an account, or any charge from the same store for a store order that names neither), the bank dated from two days before to seven days after the email, and the only candidate both ways, as `findEmailTwins` in the app decides. An ambiguous email stays counted. A store order that posted as several charges stays and its charges are dropped, as the screen hides them; skipped: the screen shows those charges again when one is link history or the merge's tries are spent, which the push cannot see, so it drops them anyway. */
 export function withoutEmailTwins<T extends TwinRow>(rows: readonly T[]) {
   const emails = rows.filter(
     (row) => row.source === 'email' && row.emailWaiting,

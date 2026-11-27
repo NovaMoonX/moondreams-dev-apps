@@ -108,6 +108,71 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
     'the held set does not depend on order',
   );
 
+  const order = {
+    kind: 'order' as const,
+    orderNumber: '114-0899359-3849845',
+    isWholeOrder: false,
+    merchant: 'Amazon',
+  };
+  const noSide = {
+    accountId: null,
+    paidByCardId: null,
+    storeEmail: order,
+    merchant: 'Amazon',
+  };
+  const virtual = findEmailTwins([
+    make('o', 'email', 4_570, 0, noSide),
+    make('b', 'link', 4_570, 3, {
+      accountId: null,
+      paidByCardId: 'virtual',
+      merchant: 'Amazon',
+    }),
+    make('x', 'link', 4_570, 3, {
+      accountId: null,
+      paidByCardId: 'virtual',
+      merchant: 'Target',
+    }),
+  ]);
+  assert.deepEqual(
+    [...virtual.clear],
+    [['o', 'b']],
+    'a store order naming no card matches the same store charge on any card',
+  );
+  assert.equal(
+    findEmailTwins([
+      make('e', 'email', 4_570, 0, {
+        accountId: null,
+        paidByCardId: null,
+        merchant: 'Amazon',
+      }),
+      make('b', 'link', 4_570, 3, {
+        accountId: null,
+        paidByCardId: 'virtual',
+        merchant: 'Amazon',
+      }),
+    ]).clear.size,
+    0,
+    'an email naming no card that is not a store order matches nothing',
+  );
+  const both = findEmailTwins([
+    make('o', 'email', 4_570, 0, noSide),
+    make('a', 'email', 4_570, 0, {
+      accountId: null,
+      paidByCardId: 'virtual',
+      merchant: 'Amazon',
+    }),
+    make('b', 'link', 4_570, 1, {
+      accountId: null,
+      paidByCardId: 'virtual',
+      merchant: 'Amazon',
+    }),
+  ]);
+  assert.deepEqual(
+    [...both.ambiguous].sort(),
+    ['a', 'o'],
+    'a store email and a bank alert for one charge both wait for the person',
+  );
+
   const placedLine = [
     { envelopeId: 'env', cents: 4_000, via: 'chosen' as const },
   ];

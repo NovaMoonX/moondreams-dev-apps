@@ -43,15 +43,18 @@ export const isWaitingEmail = (
   purchase: Pick<OpenPurchase, 'source' | 'emailWaiting'>,
 ) => purchase.source === 'email' && purchase.emailWaiting === true;
 
+const getName = (purchase: Pick<TwinPurchase, 'merchant' | 'label'>) =>
+  purchase.merchant?.trim() || purchase.label?.trim() || null;
+
+// A store's order often names no card (a virtual card, a gift balance), so its side is any card or account the same store charged.
 const isSameSide = (email: TwinPurchase, bank: TwinPurchase) =>
   (email.paidByCardId ?? null) !== null
     ? email.paidByCardId === (bank.paidByCardId ?? null)
-    : email.accountId !== null &&
-      email.accountId === bank.accountId &&
-      (bank.paidByCardId ?? null) === null;
-
-const getName = (purchase: Pick<TwinPurchase, 'merchant' | 'label'>) =>
-  purchase.merchant?.trim() || purchase.label?.trim() || null;
+    : email.accountId !== null
+      ? email.accountId === bank.accountId &&
+        (bank.paidByCardId ?? null) === null
+      : email.storeEmail?.kind === 'order' &&
+        isSameStore(getName(email), getName(bank));
 
 const isWindowDay = (email: TwinPurchase, bank: TwinPurchase) =>
   bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
@@ -93,7 +96,7 @@ function findSplitSets(
     .map((set) => set.map((bank) => bank.id).sort());
 }
 
-/** Pairs each emailed purchase still waiting with the bank charge it clearly is: the same amount on the same card (or the same account for money out of an account), dated from two days before to seven days after the emailed day, and the only one either way. A charge the person said is not it, or one paired as a move between accounts, is never a candidate. The result does not depend on the order of the input. */
+/** Pairs each emailed purchase still waiting with the bank charge it clearly is: the same amount on the same card (or the same account for money out of an account, or for a store order that names neither, any charge from the same store), dated from two days before to seven days after the emailed day, and the only one either way. A charge the person said is not it, or one paired as a move between accounts, is never a candidate. The result does not depend on the order of the input. */
 export function findEmailTwins(purchases: readonly TwinPurchase[]): EmailTwins {
   const emails = purchases.filter(isWaitingEmail);
   const banks = purchases.filter(
