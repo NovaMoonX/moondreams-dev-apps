@@ -1,5 +1,8 @@
 import { IS_INSTALLED_APP } from '@utils/pwaUtils';
 
+import { SITE_VERSION } from './app.constants';
+import { fetchLatestVersion, getVersionStatus } from './appVersionQueries';
+
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 const listeners = new Set<() => void>();
@@ -18,11 +21,80 @@ export function getIsUpdateReady() {
   return isUpdateReady;
 }
 
-/** Raises the top strip's "New version ready · Restart"; the page itself never reloads on its own. */
-export function markUpdateReady() {
+export type UpdateReason = 'worker' | 'stale-files';
+
+let readyReason: UpdateReason | null = null;
+let isCheckingPublished = false;
+
+const PUBLISH_RECHECK_MS = 60 * 1000;
+const PUBLISH_RECHECKS = 3;
+
+const raiseStrip = (reason: UpdateReason) => {
   if (isUpdateReady || isUpdatingOnRequest) return;
   isUpdateReady = true;
+  readyReason = reason;
   listeners.forEach((listener) => listener());
+};
+
+// The version is published a few seconds after Hosting deploys, so a worker can arrive before it: look again a few times before dropping it.
+const raiseOnceNewerIsPublished = async (
+  reason: UpdateReason,
+  isLastChance: boolean,
+) => {
+  const hasNewer = async () => {
+    const latest = await fetchLatestVersion().catch(() => null);
+    return (
+      getVersionStatus(SITE_VERSION, latest) === 'outdated' ||
+      SITE_VERSION === 'dev'
+    );
+  };
+  const checkFrom = async (attempt: number): Promise<void> => {
+    if (isUpdateReady || isUpdatingOnRequest) return;
+    if (await hasNewer()) {
+      raiseStrip(reason);
+      return;
+    }
+    if (attempt >= PUBLISH_RECHECKS) {
+      if (!isLastChance) checkAgainOnReturn(reason);
+      return;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, PUBLISH_RECHECK_MS));
+    await checkFrom(attempt + 1);
+  };
+  await checkFrom(1);
+};
+
+const startPublishedCheck = (reason: UpdateReason, isLastChance: boolean) => {
+  if (isUpdateReady || isUpdatingOnRequest || isCheckingPublished) return;
+  isCheckingPublished = true;
+  void raiseOnceNewerIsPublished(reason, isLastChance).finally(() => {
+    isCheckingPublished = false;
+  });
+};
+
+// A phone asleep or offline through the tries would otherwise never look again.
+let isWaitingForReturn = false;
+const checkAgainOnReturn = (reason: UpdateReason) => {
+  if (isWaitingForReturn) return;
+  isWaitingForReturn = true;
+  const again = () => {
+    if (document.visibilityState === 'hidden') return;
+    isWaitingForReturn = false;
+    document.removeEventListener('visibilitychange', again);
+    window.removeEventListener('online', again);
+    startPublishedCheck(reason, true);
+  };
+  document.addEventListener('visibilitychange', again);
+  window.addEventListener('online', again);
+};
+
+/** Raises the top strip's "New version ready · Restart": at once for a missing file, and for a new worker once a newer version is published; the page itself never reloads on its own. */
+export function markUpdateReady(reason: UpdateReason) {
+  if (reason === 'stale-files') {
+    raiseStrip(reason);
+    return;
+  }
+  startPublishedCheck(reason, false);
 }
 
 /**
@@ -40,7 +112,7 @@ export function watchForAppUpdates() {
       isClaimed = true;
       return;
     }
-    markUpdateReady();
+    markUpdateReady('worker');
   });
 
   void navigator.serviceWorker.ready.then((registration) => {
@@ -124,6 +196,15 @@ const readUpdateAttempt = () => {
   }
 };
 
+/** A reload after the person asked for an update that still runs an older build than the one asked for raises the strip at once, so the next tap clears the cached files. Never reloads. */
+export function raiseIfUpdateAttemptFailed() {
+  const attempt = readUpdateAttempt();
+  const isInWindow = attempt !== null && Date.now() - attempt.at < UPDATE_RETRY_WINDOW_MS;
+  if (isInWindow && getVersionStatus(SITE_VERSION, attempt.version) === 'outdated') {
+    raiseStrip('stale-files');
+  }
+}
+
 const writeUpdateAttempt = (version: string) => {
   try {
     window.sessionStorage.setItem(UPDATE_ATTEMPT_KEY, JSON.stringify({ version, at: Date.now() }));
@@ -139,10 +220,10 @@ const waitForNewWorker = async () => {
   const registration = await navigator.serviceWorker.getRegistration().catch(() => undefined);
   if (!registration) return false;
 
-  const took = { over: false };
+  const took = { over: false, timer: 0 };
   const controller = new AbortController();
   const tookOver = new Promise<boolean>((resolve) => {
-    const timer = window.setTimeout(() => {
+    took.timer = window.setTimeout(() => {
       controller.abort();
       resolve(took.over);
     }, NEW_WORKER_WAIT_MS);
@@ -150,7 +231,7 @@ const waitForNewWorker = async () => {
       'controllerchange',
       () => {
         took.over = true;
-        window.clearTimeout(timer);
+        window.clearTimeout(took.timer);
         controller.abort();
         resolve(true);
       },
@@ -159,6 +240,7 @@ const waitForNewWorker = async () => {
   });
   await registration.update().catch(() => undefined);
   if (!registration.installing && !registration.waiting) {
+    window.clearTimeout(took.timer);
     if (!took.over) controller.abort();
     return took.over;
   }
@@ -179,7 +261,7 @@ const clearPrecache = async () => {
  * otherwise (or on a second try for the same version) the old build's cached files are dropped so the
  * reload comes from the network. Never runs on its own. Resolves false when the device went offline first.
  */
-export async function updateToLatest(latestVersion: string) {
+export async function updateToLatest(latestVersion: string | null) {
   isUpdatingOnRequest = true;
   return reloadIntoLatest(latestVersion).catch((error: unknown) => {
     isUpdatingOnRequest = false;
@@ -187,16 +269,18 @@ export async function updateToLatest(latestVersion: string) {
   });
 }
 
-async function reloadIntoLatest(latestVersion: string) {
+async function reloadIntoLatest(latestVersion: string | null) {
+  const attemptKey = latestVersion ?? 'unknown';
   const previous = readUpdateAttempt();
   const isRetry =
-    previous?.version === latestVersion && Date.now() - previous.at < UPDATE_RETRY_WINDOW_MS;
+    previous?.version === attemptKey && Date.now() - previous.at < UPDATE_RETRY_WINDOW_MS;
 
+  // The worker that took over earlier may be one deploy behind, so a newer one is always waited for; a strip raised by a missing file has no worker behind it, so its files are dropped.
   const needsFreshFiles = async () => {
     if (isRetry) return true;
-    if (isUpdateReady) return false;
     const hasNewWorker = await waitForNewWorker();
-    return !hasNewWorker;
+    if (hasNewWorker) return false;
+    return readyReason !== 'worker';
   };
 
   const isFresh = await needsFreshFiles();
@@ -205,7 +289,7 @@ async function reloadIntoLatest(latestVersion: string) {
     isUpdatingOnRequest = false;
     return false;
   }
-  writeUpdateAttempt(latestVersion);
+  writeUpdateAttempt(attemptKey);
   if (isFresh) await clearPrecache().catch(() => undefined);
   window.location.reload();
   return true;

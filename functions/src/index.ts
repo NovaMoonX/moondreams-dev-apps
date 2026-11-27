@@ -110,3 +110,4 @@ export { sendDueBundledPushes } from './notifications/sendDueBundledPushes.js';
 export { completeMcpSignIn } from './mcp/callables.js';
 export { updateMcpClient } from './mcp/callables.js';
 export { disconnectMcpClient } from './mcp/callables.js';
+export { pruneWhatsNew } from './whatsNew/pruneWhatsNew.js';

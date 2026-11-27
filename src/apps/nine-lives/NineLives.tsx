@@ -5,6 +5,7 @@ import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
+import AppEnteredMark from '@/components/AppEnteredMark';
 import AppEntryFallback from '@/ui/AppEntryFallback';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
@@ -162,6 +163,7 @@ function NineLives() {
 
   return (
     <div className='page'>
+      <AppEnteredMark scope='nine-lives' />
       <div className='mx-auto max-w-6xl space-y-6 py-8 relative'>
         <HouseholdSwitcher
           households={households}

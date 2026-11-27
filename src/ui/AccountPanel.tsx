@@ -6,12 +6,15 @@ import {
   ChevronDown,
   LogOut,
   Plus,
+  Megaphone,
   ShieldCheck,
   UserRoundCog,
   X,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
+import { getScopeName } from '@/lib/whatsNew/whatsNew';
+import type { WhatsNewScope } from '@/lib/whatsNew/whatsNewTypes';
 import { VersionLabel } from '@components/VersionLabel';
 import IconTile from '@/ui/IconTile';
 import { CANVAS_CLASS, LIST_CARD_CLASS, SURFACE_CLASS } from '@/ui/siteSurface';
@@ -27,6 +30,9 @@ interface AccountPanelProps {
   isDebugListed: boolean;
   otherAccounts: RememberedAccount[];
   onSwitch: (account: RememberedAccount | null) => void;
+  /** What's new is offered inside an app and on Home; null elsewhere. */
+  whatsNewScope: WhatsNewScope | null;
+  onOpenWhatsNew: (scope: WhatsNewScope) => void;
   onManageAccount: () => void;
   onOpenAdmin: () => void;
   onSignOut: () => void;
@@ -80,7 +86,7 @@ function PanelRow({
 
 /**
  * The account card: the signed-in account, then the other accounts on this device with Add another
- * account and Sign out as one card of rows, then Manage your account (and the admin link) as another.
+ * account and Sign out as one card of rows, then Manage your account, What's new and the admin link as another.
  */
 function AccountPanel({
   user,
@@ -88,6 +94,8 @@ function AccountPanel({
   isDebugListed,
   otherAccounts,
   onSwitch,
+  whatsNewScope,
+  onOpenWhatsNew,
   onManageAccount,
   onOpenAdmin,
   onSignOut,
@@ -206,6 +214,22 @@ function AccountPanel({
           title='Manage your account'
           onClick={onManageAccount}
         />
+        {whatsNewScope ? (
+          <PanelRow
+            icon={
+              <IconTile>
+                <Megaphone className='size-5' />
+              </IconTile>
+            }
+            title="What's new"
+            subtitle={
+              whatsNewScope === 'site'
+                ? 'What changed across the site lately'
+                : `What changed in ${getScopeName(whatsNewScope)} lately`
+            }
+            onClick={() => onOpenWhatsNew(whatsNewScope)}
+          />
+        ) : null}
         {isAdmin ? (
           <PanelRow
             icon={

@@ -10,6 +10,8 @@ import { useIsGateOpen, useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import GatesClosedNote from '@/components/GatesClosedNote';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
+import AppAskingMark from '@/components/AppAskingMark';
+import AppEnteredMark from '@/components/AppEnteredMark';
 import AppToggle from '@/components/AppToggle';
 import LockedButton from '@/components/LockedButton';
 import AuthRequiredState from '@/ui/AuthRequiredState';
@@ -261,18 +263,22 @@ function Waypoint() {
 
   if (selectedTrip) {
     return (
-      <TripDetailPage
-        key={selectedTrip.id}
-        trip={selectedTrip}
-        events={timelineEvents}
-        currentUserId={user.uid}
-        onBack={() => setSelectedTripId(null)}
-      />
+      <>
+        <AppEnteredMark scope='waypoint' />
+        <TripDetailPage
+          key={selectedTrip.id}
+          trip={selectedTrip}
+          events={timelineEvents}
+          currentUserId={user.uid}
+          onBack={() => setSelectedTripId(null)}
+        />
+      </>
     );
   }
 
   return (
     <div className='page'>
+      <AppEnteredMark scope='waypoint' />
       <div className='mx-auto max-w-4xl space-y-6 py-8'>
         <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
@@ -378,6 +384,7 @@ function Waypoint() {
         onSubmit={handleSubmitJoinCode}
         onClose={() => setIsJoinCodeModalOpen(false)}
       />
+      {inviteCode && <AppAskingMark scope='waypoint' />}
       {inviteCode && (
         <JoinTripModal
           key={inviteCode}

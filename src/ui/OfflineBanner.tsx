@@ -14,9 +14,9 @@ import {
   useNetworkStatus,
   type NetworkBannerState,
 } from '@hooks/useNetworkStatus';
-import { useRestartApp } from '@hooks/useRestartApp';
 import { getLastSiteNotice, useSiteNotice } from '@hooks/useSiteNotice';
 import { useUpdateReady } from '@hooks/useUpdateReady';
+import { useUpdateToLatest } from '@hooks/useUpdateToLatest';
 
 type Variant = Exclude<NetworkBannerState, null> | 'notice' | 'update';
 
@@ -62,7 +62,7 @@ const VARIANTS: Record<
 function OfflineBanner() {
   const networkStatus = useNetworkStatus();
   const isUpdateReady = useUpdateReady();
-  const restart = useRestartApp();
+  const { update, isUpdating } = useUpdateToLatest();
   const notice = useSiteNotice();
   const getStatus = (): Variant | null => {
     if (networkStatus) return networkStatus;
@@ -101,7 +101,8 @@ function OfflineBanner() {
           size='sm'
           variant='base'
           className='bg-primary-foreground! text-primary! hover:bg-primary-foreground/85! focus-visible:outline-primary-foreground! pointer-events-auto relative h-7 shrink-0 px-3 whitespace-nowrap after:absolute after:-inset-1.5 focus-visible:outline-2 focus-visible:outline-offset-2'
-          onClick={restart}
+          loading={isUpdating}
+          onClick={update}
         >
           Restart
         </Button>

@@ -19,7 +19,7 @@ interface DetailSheetProps {
   footer?: ReactNode;
   /** Icon buttons on the title's line (40×40, each with an `aria-label`), for what opens in place inside the sheet. */
   actions?: ReactNode;
-  /** Names the view the content shows: a new view starts at the top and never shrinks the sheet, and coming back to one returns to where it was left at the height it had. */
+  /** Names the view the content shows: a new view slides in from the right, starts at the top and never shrinks the sheet; going back to a view it came through slides that view in from the left, where it was left and at the height it had. */
   viewKey?: string;
 }
 
@@ -52,6 +52,7 @@ function DetailSheet({
   const contentNode = useRef<HTMLDivElement | null>(null);
   const scrollTops = useRef(new Map<string, number>());
   const shownKey = useRef(viewKey);
+  const visitedKeys = useRef(viewKey === undefined ? [] : [viewKey]);
   const heldTotal = useRef(0);
   const heldByView = useRef(new Map<string, number>());
   const holdHeight = useRef<(() => void) | null>(null);
@@ -112,6 +113,25 @@ function DetailSheet({
     const node = contentNode.current;
     const scroller = node && (isDrawer ? node.parentElement : node);
     if (scroller) scroller.scrollTop = scrollTops.current.get(viewKey) ?? 0;
+    const visitedAt = visitedKeys.current.indexOf(viewKey);
+    const isBack = visitedAt !== -1;
+    visitedKeys.current = isBack
+      ? visitedKeys.current.slice(0, visitedAt + 1)
+      : [...visitedKeys.current, viewKey];
+    if (
+      typeof node?.animate !== 'function' ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      return;
+    }
+    const from = isBack ? '-24px' : '24px';
+    node.animate(
+      [
+        { transform: `translateX(${from})`, opacity: 0 },
+        { transform: 'none', opacity: 1 },
+      ],
+      { duration: 200, easing: 'ease-out' },
+    );
   });
 
   const isCompact = isDrawer && isShort;

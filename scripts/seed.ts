@@ -15,6 +15,7 @@ import { seedPinch } from './seeds/pinch.ts';
 import { seedPinchScale } from './seeds/pinchScale.ts';
 import { seedRunway } from './seeds/runway.ts';
 import { seedRunwayScale } from './seeds/runwayScale.ts';
+import { seedWhatsNew } from './seeds/whatsNew.ts';
 import { seedWorthTheWait } from './seeds/worthTheWait.ts';
 import { seedWaypoint } from './seeds/waypoint.ts';
 
@@ -75,6 +76,7 @@ async function main() {
     scope === 'helm-scale'
   ) {
     results.push(await seedCore(context));
+    results.push(await seedWhatsNew(context));
   }
 
   if (scope === 'all' || scope === 'worth-the-wait') {

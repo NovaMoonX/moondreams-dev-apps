@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import AppAskingMark from '@/components/AppAskingMark';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
@@ -91,14 +92,17 @@ function PurchaseReturnHost({ isSuppressed }: PurchaseReturnHostProps) {
     );
 
   return (
-    <PurchaseReturnPrompt
-      key={current.id}
-      viewing={current}
-      isSaving={isSaving}
-      onLater={() => setLaterIds((ids) => [...ids, current.id])}
-      onDidNotBuy={() => void handleDidNotBuy()}
-      onSave={(ticket) => void handleSave(ticket)}
-    />
+    <>
+      <AppAskingMark scope='a-list' />
+      <PurchaseReturnPrompt
+        key={current.id}
+        viewing={current}
+        isSaving={isSaving}
+        onLater={() => setLaterIds((ids) => [...ids, current.id])}
+        onDidNotBuy={() => void handleDidNotBuy()}
+        onSave={(ticket) => void handleSave(ticket)}
+      />
+    </>
   );
 }
 

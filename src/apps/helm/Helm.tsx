@@ -9,6 +9,7 @@ import {
   useKeyboardShortcuts,
 } from '@/hooks/useKeyboardShortcuts';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import AppEnteredMark from '@/components/AppEnteredMark';
 import Loading from '@/ui/Loading';
 import ImportanceView from '@apps/helm/components/importance/ImportanceView';
 import HowNomosSeesYou from '@apps/helm/components/howNomosSeesYou/HowNomosSeesYou';
@@ -150,6 +151,7 @@ function HelmApp() {
           )
         }
       >
+        {keyStatus === 'ready' && <AppEnteredMark scope='helm' />}
         {isHome && (
           <HomeSurface
             composerRef={composerRef}

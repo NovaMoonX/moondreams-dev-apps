@@ -280,6 +280,13 @@ The project's consent screen (Google Cloud console, Google Auth Platform, Audien
 - **Fix:** the error screen recognises a screen file that failed to load (`isStaleChunkError`) and reloads once into the new version on the address that was asked for, showing Loading meanwhile. A second failure within half a minute is a real fault, so it shows the error screen with Restart rather than reloading again.
 - **Telling it apart:** the error message names a dynamically imported module (Chrome: "Failed to fetch dynamically imported module"; Safari: "Importing a module script failed"), and `sessionStorage.staleChunkReloadAt` holds the time of the reload it made. Offline, nothing reloads.
 
+### The top strip's Restart needs a second tap, or comes straight back
+
+- **Symptom:** "New version ready · Restart" reloads into the same version (the account menu still says a newer one is out), or the strip returns minutes after a restart while several PRs merge in a row. The menu's "Update to the latest" works on the first tap.
+- **Cause:** the strip's Restart did a plain reload. When the strip was raised by a screen file failing to load (no new service worker), the reload was served from the old build's cache; when a worker for one deploy had taken over while a later deploy was already out, the reload landed on the in-between version. The menu's button went its own, more careful way.
+- **Fix:** both controls call one action (`useUpdateToLatest`): it reads the published version at the tap, asks the worker for anything newer and waits for it, and drops the old cached files when no newer worker arrives or on a second try. The strip shows only when a newer version is published (it re-checks for a minute while the version publishes after Hosting), and a reload that still runs an older version than it asked for raises the strip again so the next tap clears the cache. `check:restart-latest` covers a tap after two deploys in a row.
+- **Telling it apart:** `sessionStorage.updateToLatestAttempt` holds the version the last tap asked for; the console logs the version the page runs (`MoonDreams Dev Apps v…`).
+
 ### A door in a drawer leaves the app for the site's home after an update's Restart
 
 - **Symptom:** on the owner's Android phone (the site installed as an app), Runway's "Things to fix" → the bills-with-no-due-date row opened the site's home page instead of Bills. It started right after tapping Restart for 1.223 and stopped once the app was closed and reopened, then came back after the next Restart.

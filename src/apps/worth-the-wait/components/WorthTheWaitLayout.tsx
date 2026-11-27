@@ -1,4 +1,5 @@
 import { useAuth } from '@hooks/useAuth';
+import AppAskingMark from '@/components/AppAskingMark';
 import {
   Button,
   CopyButton,
@@ -245,6 +246,7 @@ function WorthTheWaitLayout() {
         }}
       />
 
+      {isWelcomeModalOpen && <AppAskingMark scope='worth-the-wait' />}
       <SpaceWelcomeModal
         key={`space-welcome-modal-${isWelcomeModalOpen}`}
         isOpen={isWelcomeModalOpen}

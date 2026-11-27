@@ -1,0 +1,26 @@
+{
+  "notes": [
+    {
+      "app": "site",
+      "kind": "new",
+      "text": "After an update, each app now shows what changed for you, with fixes rolled up.",
+      "path": null,
+      "gate": null,
+      "audience": "everyone",
+      "isTold": true,
+      "emoji": "🗞️",
+      "replaces": []
+    },
+    {
+      "app": "site",
+      "kind": "fixed",
+      "text": "Restart in the top strip now loads the newest version on the first tap.",
+      "path": null,
+      "gate": null,
+      "audience": "everyone",
+      "isTold": false,
+      "emoji": null,
+      "replaces": []
+    }
+  ]
+}

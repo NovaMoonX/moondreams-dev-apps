@@ -80,6 +80,13 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS }}
           SITE_VERSION: ${{ steps.version.outputs.version }}
+      - name: Publish What's new
+        continue-on-error: true
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/gcp-sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp-sa.json" npm run fb:whats-new
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS }}
       # Compared with the last commit whose worker deploy succeeded, not the previous push, so a run that failed earlier never strands a worker change.
       - name: Check for Cloudflare Worker changes
         id: worker_changes

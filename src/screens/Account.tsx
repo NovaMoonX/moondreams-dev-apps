@@ -1,15 +1,18 @@
 import { Button, Input, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Camera, Pencil, RefreshCw } from 'lucide-react';
+import { Camera, Megaphone, Pencil, RefreshCw } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
+import AppToggle from '@/components/AppToggle';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
 import { SubviewHeader } from '@/components/Subview';
 import { useAccountSwitch } from '@/hooks/useAccountSwitch';
 import { useAuth } from '@/hooks/useAuth';
+import { useWhatsNewSeen, writeShowFixOnly } from '@/hooks/useWhatsNewSeen';
+import { useCanSeeDebugDetails } from '@/lib/debugProfiles/useCanSeeDebugDetails';
 import { resetFirestoreLocalData } from '@/lib/firebase/localData';
 import ChangePhotoModal from '@/ui/ChangePhotoModal';
 import DeviceAccountList from '@/ui/DeviceAccountList';
@@ -39,6 +42,41 @@ function RowIconButton({
     >
       {children}
     </Button>
+  );
+}
+
+/** Debug viewers' choice about updates that only fixed things; on unless turned off. */
+function UpdatesGroup({ uid }: { uid: string }) {
+  const seen = useWhatsNewSeen(uid);
+  const { addToast } = useToast();
+  const canSee = useCanSeeDebugDetails();
+  if (!canSee) return null;
+
+  const handleChange = (isChecked: boolean) => {
+    writeShowFixOnly(uid, isChecked).catch(() =>
+      addToast({
+        title: "Couldn't save that",
+        description: 'Check your connection and try again.',
+        type: 'error',
+      }),
+    );
+  };
+
+  return (
+    <SettingsGroup isCard title='Updates'>
+      <SettingsRow
+        icon={<Megaphone className='size-5' />}
+        title='Show fix-only updates'
+        description='When an update only fixed things, still show what changed.'
+        control={
+          <AppToggle
+            aria-label='Show fix-only updates'
+            checked={seen.showFixOnly !== false}
+            onCheckedChange={handleChange}
+          />
+        }
+      />
+    </SettingsGroup>
   );
 }
 
@@ -166,6 +204,8 @@ function Account() {
           onSwitch={switchToAccount}
           onForget={forgetAccount}
         />
+
+        <UpdatesGroup uid={user.uid} />
 
         <SettingsGroup isCard title='This device'>
           <SettingsRow

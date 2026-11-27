@@ -5,6 +5,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { Mail } from 'lucide-react';
 
+import AppAskingMark from '@/components/AppAskingMark';
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EmailInviteJoinModal from '@apps/waypoint/components/EmailInviteJoinModal';
@@ -105,6 +106,7 @@ function MyEmailInvites({ uid, invites, onViewTrip, isQuiet = false, focusTripId
           </span>
         </Button>
       )}
+      {shown && <AppAskingMark scope='waypoint' />}
       {shown && (
         <EmailInviteJoinModal
           key={shown.tripId}
