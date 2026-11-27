@@ -16,7 +16,10 @@ How you answer
 - Speak, don't write: plain sentences only, never lists, headings, markdown, emoji or symbols. Amounts like "1/2 tsp" or "350°F" are fine as written; they are read out properly for you.
 - Be brief. Lead with the answer in one or two short sentences; use up to four only when the question truly needs it.
 - Your first sentence is spoken while the rest is still being written, so make it stand on its own.
-- Answer from the recipe in <recipe> and what is on screen in <screen> first, then from ordinary cooking know-how. Amounts in <screen> are already scaled to the servings being made; use them.
+- What you say also stays on the cook's screen as text until they dismiss it, so a swap or a how-to carries its amounts in the sentences themselves ("Use 1 cup of mayonnaise in place of the Miracle Whip, plus a teaspoon of sugar."); it's still spoken, so still no lists.
+- Answer from this conversation, the recipe in <recipe> and what is on screen in <screen> first, then from ordinary cooking know-how. A short follow-up ("how much sugar again?", "what temperature was that?") usually points back at something you said earlier in this conversation, such as a swap or a how-to: answer from that, even when the recipe itself doesn't have it. Amounts in <screen> are already scaled to the servings being made; use them.
+- When <screen> has "Just looked up for this question", the app has already found the exact answer and shows it: say it back as a short, warm sentence ("You need 6 eggs for this."), never a different number or amount.
+- Asked what equipment or tools they need, name the measuring tools in <screen> and any equipment the steps in <recipe> call for (an air fryer, a slow cooker, a sheet pan, a blender, a thermometer), in a sentence or two.
 
 When a question could mean two things
 - If the answer would differ (the recipe has butter in two parts, two sauces, two timers), ask one short question that names the choices, like "The sauce or the marinade?", and stop there. The person answers without saying "Hey Pepper" again.
@@ -31,6 +34,7 @@ Doing things for the person
 - Use the tools for anything a tap in cooking mode could do: move between steps, timers, servings, showing a list, ticking off ingredients, scrolling, notes and the shopping list. Never do more than they asked. Finishing the cook is always their own tap on Finish; if they ask, tell them so.
 - After a tool, confirm in a few words ("Timer set for 10 minutes." "Added to your shopping list."). Moving to a step, say the step briefly.
 - Never say you did something you didn't call a tool for. If no tool can do it, say so.
+- On the gather screen, when they say they have or got something ("I've got the eggs", "I have everything for the cornbread"), tick it at once: tick_group for a whole part or dish, tick_ingredients for single ingredients. Then confirm in a few words; never read the list back instead.
 - On a step, when they say they put an ingredient in ("I've put the flour in", "the butter's in"), call mark_added for the lines of "This step uses" they mean; it ticks them off in the step's amounts. When it fits naturally, for example as you read a step with several ingredients, you may offer "Tell me what you add and I'll tick it off" only when <screen> doesn't say it was already offered; never repeat it.
 - Their notes, tips and changes for next time are listed in <screen> with ids. "Next time use less salt" is a change for next time; a reminder about this cook is a note; advice for anyone making it is a tip.
 - To change an entry, use its id. To remove one, call remove_entry as soon as they ask; the screen asks them to confirm, so never ask first yourself.
@@ -94,11 +98,28 @@ export const PEPPER_TOOLS: DeviceTool[] = [
     }),
   },
   {
+    name: 'gather_layout',
+    description:
+      'On the gather screen, lists the ingredients grouped by part (or by dish on a plate of several) or all together in one list, when the person asks to see them another way. What is ticked off stays ticked. <screen> says which way they are listed now.',
+    inputSchema: object({
+      layout: { type: 'string', enum: ['by_part', 'together'] },
+    }),
+  },
+  {
     name: 'tick_ingredients',
     description:
-      'Marks ingredients as got out (or not) while gathering, by their names in <recipe>.',
+      'Marks ingredients as got out (or not) on the gather screen, by their names in <screen> or <recipe>. Name every one they said in one call.',
     inputSchema: object({
       names: { type: 'array', items: { type: 'string' }, minItems: 1 },
+      got: { type: 'boolean' },
+    }),
+  },
+  {
+    name: 'tick_group',
+    description:
+      'Marks every ingredient of one part (an ingredient group, such as "For the cornbread") or one dish as got out (or not) on the gather screen, by the part or dish name in <screen>.',
+    inputSchema: object({
+      group: { type: 'string' },
       got: { type: 'boolean' },
     }),
   },
@@ -114,7 +135,7 @@ export const PEPPER_TOOLS: DeviceTool[] = [
   {
     name: 'scroll',
     description:
-      'Scrolls the open list of what this step uses, or the screen, a page up or down, or all the way to the top or bottom.',
+      'Scrolls whatever the person is reading (an open sheet or list, or the screen itself) a page up or down, or all the way to the top or bottom, so they can read on without touching it.',
     inputSchema: object({
       direction: { type: 'string', enum: ['up', 'down', 'top', 'bottom'] },
     }),

@@ -58,10 +58,15 @@ const HISS_LEVEL = 0.0003;
 // A hold that is never released (a suspended page whose sound never ends) lapses, so the hiss always stops.
 const HOLD_MAX_MS = 120_000;
 
+// Releasing the microphone moves a phone's audio from its call route to its media route, and a sound that starts
+// during the move loses its first syllable, so a line said straight after listening waits this long.
+export const MICROPHONE_SETTLE_MS = 350;
+
 const output = {
   holds: new Map<object, number>(),
   hiss: null as AudioBufferSourceNode | null,
   wokenAt: 0,
+  microphoneReleasedAt: 0,
   stopId: 0 as ReturnType<typeof setTimeout> | 0,
 };
 
@@ -104,6 +109,15 @@ const stopHissLater = () => {
   (output.stopId as { unref?: () => void }).unref?.();
 };
 
+/** Notes that speech recognition just let go of the microphone, so the next first sound waits for the audio to settle. */
+export const noteMicrophoneReleased = () => {
+  output.microphoneReleasedAt = Date.now();
+};
+
+/** How long a line starting now should wait for the audio to settle after the microphone was released; 0 once it has. */
+export const getMicrophoneSettleMs = () =>
+  Math.max(0, output.microphoneReleasedAt + MICROPHONE_SETTLE_MS - Date.now());
+
 /** Keeps the speakers awake for one spoken line: its first sound starts no earlier than `readyAt`, and `release` ends the hold. */
 export const wakeAudioOutput = (context: AudioContext) => {
   const now = Date.now();
@@ -132,7 +146,10 @@ export const wakeAudioOutput = (context: AudioContext) => {
   const hold = {};
   output.holds.set(hold, now + HOLD_MAX_MS);
   return {
-    readyAt: output.wokenAt + WAKE_SECONDS,
+    readyAt: Math.max(
+      output.wokenAt + WAKE_SECONDS,
+      context.currentTime + getMicrophoneSettleMs() / 1000,
+    ),
     release: () => {
       if (output.holds.delete(hold)) stopHissLater();
     },

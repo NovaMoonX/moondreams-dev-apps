@@ -79,7 +79,9 @@ export type HeardPlan =
   | { kind: 'WAKE'; heard: HeardCommand | null }
   /** Words that are no command, for Pepper: the guesses best first, none of them empty. */
   | { kind: 'ASK'; guesses: string[] }
-  | { kind: 'MISSED' };
+  | { kind: 'MISSED' }
+  /** "Never mind", "stop talking", "shut up": stop talking and listening, with nothing said back. */
+  | { kind: 'DISMISS' };
 
 type HeardCommand = NonNullable<ReturnType<typeof readCookCommand>>;
 
@@ -103,6 +105,36 @@ export const readAddressedGuesses = (
   return phase === 'WAITING' || phase === 'OFF' ? [] : toGuesses(alternatives);
 };
 
+// Cooking's own stop words: no timer verb ("cancel", "quiet", "stop" silence a ringing timer), and nothing an answer could be ("nothing", "enough").
+const COOK_DISMISSALS = new Set([
+  'never mind',
+  'nevermind',
+  'forget it',
+  'forget about it',
+  'shut up',
+  'stop talking',
+  'be quiet',
+  'hush',
+  "that's enough",
+  'stop it',
+  'leave it',
+]);
+const LEAD_FILLERS =
+  /^(?:(?:okay|ok|oh|um|uh|well|just|alright|no|please)\s+)+/;
+
+/** A whole phrase that tells the voice to stop, best guess only. */
+const isDismissal = (text: string | null | undefined) => {
+  const plain = (text ?? '')
+    .toLowerCase()
+    .replace(/[’]/g, "'")
+    .replace(/[.!?,;:…]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(LEAD_FILLERS, '')
+    .replace(/\s+please$/, '');
+  return COOK_DISMISSALS.has(plain);
+};
+
 /** What a finished phrase means in each phase: waiting hears only the wake phrase (and a command after it), a window runs commands and quotes back anything else, kept open runs commands and ignores the rest. With Pepper on, words that are no command go to it: after the wake phrase in any phase, and anything said in a window. */
 export const planHeard = (
   phase: VoicePhase,
@@ -112,6 +144,11 @@ export const planHeard = (
 ): HeardPlan => {
   if (phase === 'OFF') return { kind: 'IGNORE' };
   const woke = readWakeWord(alternatives);
+  if (isDismissal(woke === null ? alternatives[0] : woke.rests[0])) {
+    // Waiting and kept open both ignore room talk, so there it takes the wake phrase.
+    if (woke !== null || phase === 'WINDOW') return { kind: 'DISMISS' };
+    return phase === 'WAITING' ? { kind: 'IGNORE' } : { kind: 'CLEAR' };
+  }
   if (phase === 'WAITING') {
     if (woke === null) return { kind: 'IGNORE' };
     const rests = woke.rests.map((guess) => guess ?? '');

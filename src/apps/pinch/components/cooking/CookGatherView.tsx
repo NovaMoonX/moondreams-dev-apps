@@ -6,8 +6,10 @@ import Stepper from '@/components/Stepper';
 import { useAppSelector } from '@/store';
 import CookIngredientsView, {
   CookIngredientRow,
+  TickAllRow,
   type CookRow,
 } from '@apps/pinch/components/cooking/CookIngredientsView';
+import { sinkDone, useSettledTicks } from '@apps/pinch/hooks/useSettledTicks';
 import CookToolsStrip from '@apps/pinch/components/cooking/CookToolsStrip';
 import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
 import { selectPinchSettings } from '@apps/pinch/store/selectors';
@@ -132,6 +134,10 @@ function AllTogetherList({
   const isLineOut = (line: (typeof lines)[number]) =>
     isGatherLineOut(line, dishes);
   const outCount = lines.filter(isLineOut).length;
+  const settledOut = useSettledTicks(
+    lines.filter(isLineOut).map((line) => line.key),
+  );
+  const shownLines = sinkDone(lines, (line) => settledOut.has(line.key));
   const byKey = new Map(lines.map((line) => [line.key, line]));
   const toggle = (key: string, isOut: boolean) =>
     byKey
@@ -142,28 +148,36 @@ function AllTogetherList({
 
   return (
     <div>
-      <div className='flex h-10 items-center justify-between gap-3'>
-        <p className='text-muted-foreground text-sm'>
-          {outCount === 0
+      <TickAllRow
+        label='everything'
+        doneCount={outCount}
+        total={lines.length}
+        onToggleAll={(isOut) =>
+          lines.forEach((line) => toggle(line.key, isOut))
+        }
+        text={
+          outCount === 0
             ? "Tick what you've got out · tap an amount for other units"
-            : `${outCount} of ${lines.length} got out`}
-        </p>
-        {outCount > 0 && (
-          <ActionChips
-            actions={[
-              {
-                key: 'reset',
-                icon: <RotateCcw className='h-4 w-4' />,
-                label: 'Reset',
-                onClick: () =>
-                  dishes.forEach((dish) => onReset(dish.recipe.id)),
-              },
-            ]}
-          />
-        )}
-      </div>
+            : `${outCount} of ${lines.length} got out`
+        }
+        trailing={
+          outCount > 0 && (
+            <ActionChips
+              actions={[
+                {
+                  key: 'reset',
+                  icon: <RotateCcw className='h-4 w-4' />,
+                  label: 'Reset',
+                  onClick: () =>
+                    dishes.forEach((dish) => onReset(dish.recipe.id)),
+                },
+              ]}
+            />
+          )
+        }
+      />
       <ul className='divide-border divide-y'>
-        {lines.map((line) => {
+        {shownLines.map((line) => {
           const conversion =
             line.measure === null ? null : getConversionLine(line.measure);
           return (
@@ -202,6 +216,18 @@ function CookGatherView({
   const allRows = dishes.flatMap((dish) => dish.rows);
   const canCombine = canCombineGather(dishes);
   const layout = getGatherLayout(storedLayout, dishes);
+  const settledOut = useSettledTicks(
+    dishes.flatMap((dish) =>
+      dish.rows
+        .filter((row) => dish.gotOut[row.id] === true)
+        .map((row) => `${dish.recipe.id}:${row.id}`),
+    ),
+  );
+  const shownDishes = isPlate
+    ? sinkDone(dishes, (dish) =>
+        dish.rows.every((row) => settledOut.has(`${dish.recipe.id}:${row.id}`)),
+      )
+    : dishes;
 
   return (
     <div className='mx-auto w-full max-w-2xl space-y-5 lg:grid lg:max-w-5xl lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-start lg:gap-10 lg:space-y-0 [@media(max-height:500px)_and_(min-width:640px)]:grid [@media(max-height:500px)_and_(min-width:640px)]:max-w-4xl [@media(max-height:500px)_and_(min-width:640px)]:grid-cols-2 [@media(max-height:500px)_and_(min-width:640px)]:items-start [@media(max-height:500px)_and_(min-width:640px)]:gap-6 [@media(max-height:500px)_and_(min-width:640px)]:space-y-0'>
@@ -237,7 +263,7 @@ function CookGatherView({
             onReset={onReset}
           />
         ) : (
-          dishes.map((dish, index) => (
+          shownDishes.map((dish) => (
             <section
               key={dish.recipe.id}
               aria-label={isPlate ? dish.recipe.title : undefined}
@@ -262,8 +288,9 @@ function CookGatherView({
                 onToggle={(id, isOut) => onToggle(dish.recipe.id, id, isOut)}
                 onReset={() => onReset(dish.recipe.id)}
                 isServingsShown={false}
-                isHintShown={index === 0}
+                isHintShown={dish === dishes[0]}
                 isToolsShown={false}
+                isTickAllShown
               />
             </section>
           ))

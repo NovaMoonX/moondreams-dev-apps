@@ -22,8 +22,10 @@ const valid: Record<string, unknown> = {
   set_servings: { servings: 6 },
   show: { what: 'tips' },
   tick_ingredients: { names: ['butter'], got: true },
+  tick_group: { group: 'cornbread', got: true },
   mark_added: { names: ['flour'], added: true },
   scroll: { direction: 'down' },
+  gather_layout: { layout: 'together' },
   add_entry: { kind: 'tip', text: "Don't crowd the pan", step: null },
   edit_entry: { id: 'n1', text: 'Use less salt' },
   remove_entry: { id: 'n1' },
@@ -151,6 +153,17 @@ assert.deepEqual(read('show', { what: 'tips' }), {
 assert.ok(isInvalid('show', { what: 'finish' }));
 assert.ok(isInvalid('show', { what: 'constructor' }));
 
+// The gather screen's layout.
+assert.deepEqual(read('gather_layout', { layout: 'by_part' }), {
+  kind: 'cook',
+  command: { kind: 'SET_GATHER_LAYOUT', layout: 'PARTS' },
+});
+assert.deepEqual(read('gather_layout', { layout: 'together' }), {
+  kind: 'cook',
+  command: { kind: 'SET_GATHER_LAYOUT', layout: 'ALL' },
+});
+assert.ok(isInvalid('gather_layout', { layout: 'sideways' }));
+
 // Ticks.
 assert.deepEqual(
   read('tick_ingredients', { names: [' butter ', '', 'garlic'], got: false }),
@@ -163,6 +176,15 @@ assert.deepEqual(
     },
   },
 );
+assert.deepEqual(
+  read('tick_group', { group: ' For the cornbread ', got: true }),
+  {
+    kind: 'cook',
+    command: { kind: 'GOT_GROUP', group: 'For the cornbread', isOut: true },
+  },
+);
+assert.ok(isInvalid('tick_group', { group: '  ', got: true }));
+assert.ok(isInvalid('tick_group', { group: 'cornbread', got: 'yes' }));
 assert.ok(isInvalid('tick_ingredients', { names: [], got: true }));
 assert.ok(isInvalid('tick_ingredients', { names: ['  '], got: true }));
 assert.ok(isInvalid('tick_ingredients', { names: ['butter'], got: 'yes' }));

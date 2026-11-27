@@ -1,3 +1,4 @@
+import { MICROPHONE_SETTLE_MS } from '../../src/lib/speech/audioContext.ts';
 import assert from 'node:assert/strict';
 
 import {
@@ -333,6 +334,7 @@ const entries = (name: string) =>
   advance(10);
   assert.equal(seen.status, 'speaking', 'listening stops while it reads aloud');
   assert.equal(hear('next'), false, 'nothing is heard while it reads aloud');
+  advance(MICROPHONE_SETTLE_MS);
   advance(290);
   advance(40);
   assert.deepEqual(
@@ -419,7 +421,7 @@ const entries = (name: string) =>
   advance(30);
   env.speech = 'never-ends';
   listener.say('Short.');
-  advance(4000 + 'Short.'.length * 90 - 1);
+  advance(MICROPHONE_SETTLE_MS + 4000 + 'Short.'.length * 90 - 1);
   assert.equal(
     seen.status,
     'speaking',
@@ -440,7 +442,7 @@ const entries = (name: string) =>
   advance(30);
   env.speech = 'silent';
   listener.say('Garlic, 6.');
-  advance(1500);
+  advance(MICROPHONE_SETTLE_MS + 1500);
   advance(40);
   assert.deepEqual(
     [
@@ -459,6 +461,7 @@ const entries = (name: string) =>
   );
   env.log = [];
   listener.say('Soy sauce, a quarter cup.');
+  advance(MICROPHONE_SETTLE_MS);
   assert.equal(
     env.log.filter((entry) => entry.includes('speak:')).length,
     1,
@@ -468,6 +471,7 @@ const entries = (name: string) =>
   advance(40);
   env.log = [];
   listener.say('Peppers.');
+  advance(MICROPHONE_SETTLE_MS);
   assert.deepEqual(
     env.log.filter((entry) => entry.includes('speak:')),
     [],

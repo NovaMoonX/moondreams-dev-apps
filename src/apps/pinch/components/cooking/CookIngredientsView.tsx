@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -16,6 +16,7 @@ import CookToolsStrip from '@apps/pinch/components/cooking/CookToolsStrip';
 import type { Recipe } from '@apps/pinch/types';
 import type { CookMeasure } from '@apps/pinch/utils/cookConversions';
 import { stepCookServings } from '@apps/pinch/utils/cooks';
+import { sinkDone, useSettledTicks } from '@apps/pinch/hooks/useSettledTicks';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
@@ -102,6 +103,47 @@ export const CookIngredientRow = memo(function CookIngredientRow({
   );
 });
 
+interface TickAllRowProps {
+  /** What the box ticks, for a screen reader ("all of the sauce"). */
+  label: string;
+  doneCount: number;
+  total: number;
+  onToggleAll: (isOut: boolean) => void;
+  /** Words beside the box in place of the count, such as the first hint. */
+  text?: string;
+  trailing?: ReactNode;
+}
+
+/** One box over a list of ingredients that ticks or unticks them all, partly ticked while some are, lined up with the rows' own boxes. */
+export function TickAllRow({
+  label,
+  doneCount,
+  total,
+  onToggleAll,
+  text,
+  trailing,
+}: TickAllRowProps) {
+  return (
+    <div className='flex min-h-10 items-center justify-between gap-3'>
+      <label className='flex min-w-0 cursor-pointer items-center gap-3'>
+        <span className='inline-flex shrink-0'>
+          <AppCheckbox
+            aria-label={`Got out ${label}`}
+            isMark
+            checked={total > 0 && doneCount === total}
+            indeterminate={doneCount > 0 && doneCount < total}
+            onCheckedChange={onToggleAll}
+          />
+        </span>
+        <span className='text-muted-foreground text-sm'>
+          {text ?? `${doneCount} of ${total} got out`}
+        </span>
+      </label>
+      {trailing}
+    </div>
+  );
+}
+
 interface CookIngredientsViewProps {
   recipe: Recipe;
   rows: CookRow[];
@@ -121,6 +163,8 @@ interface CookIngredientsViewProps {
   isHintShown?: boolean;
   /** Off where the screen draws one strip for every dish. */
   isToolsShown?: boolean;
+  /** A box over the whole list, and over each part when there are several, that ticks them all at once. */
+  isTickAllShown?: boolean;
 }
 
 function CookIngredientsView({
@@ -137,8 +181,47 @@ function CookIngredientsView({
   isServingsShown = true,
   isHintShown = true,
   isToolsShown = true,
+  isTickAllShown = false,
 }: CookIngredientsViewProps) {
   const outCount = rows.filter((row) => gotOut[row.id]).length;
+  const settledOut = useSettledTicks(
+    rows.filter((row) => gotOut[row.id] === true).map((row) => row.id),
+  );
+  const groups = isTickAllShown
+    ? sinkDone(
+        groupIngredientLines(rows).map((group) => ({
+          ...group,
+          lines: sinkDone(group.lines, (row) => settledOut.has(row.id)),
+        })),
+        (group) =>
+          group.name !== null &&
+          group.lines.every((row) => settledOut.has(row.id)),
+      )
+    : groupIngredientLines(rows);
+  const toggleAll = (lines: CookRow[], isOut: boolean) =>
+    lines.forEach((row) => onToggle(row.id, isOut));
+  const hintText = `${
+    outCount === 0
+      ? "Tick what you've got out"
+      : `${outCount} of ${rows.length} got out`
+  }${
+    isHintShown && rows.some((row) => row.conversion !== null)
+      ? ' · tap an amount for other units'
+      : ''
+  }`;
+  const resetChip =
+    outCount > 0 ? (
+      <ActionChips
+        actions={[
+          {
+            key: 'reset',
+            icon: <RotateCcw className='h-4 w-4' />,
+            label: 'Reset',
+            onClick: onReset,
+          },
+        ]}
+      />
+    ) : null;
   const isScaled = recipe.servings > 0 && servings !== recipe.servings;
 
   return (
@@ -184,34 +267,37 @@ function CookIngredientsView({
         </p>
       ) : (
         <div>
-          {(isHintShown || outCount > 0) && (
-            <div className='flex h-10 items-center justify-between gap-3'>
-              <p className='text-muted-foreground text-sm'>
-                {outCount === 0
-                  ? "Tick what you've got out"
-                  : `${outCount} of ${rows.length} got out`}
-                {isHintShown &&
-                  rows.some((row) => row.conversion !== null) &&
-                  ' · tap an amount for other units'}
-              </p>
-              {outCount > 0 && (
-                <ActionChips
-                  actions={[
-                    {
-                      key: 'reset',
-                      icon: <RotateCcw className='h-4 w-4' />,
-                      label: 'Reset',
-                      onClick: onReset,
-                    },
-                  ]}
-                />
-              )}
-            </div>
+          {isTickAllShown ? (
+            <TickAllRow
+              label={`all of ${recipe.title}`}
+              doneCount={outCount}
+              total={rows.length}
+              onToggleAll={(isOut) => toggleAll(rows, isOut)}
+              text={hintText}
+              trailing={resetChip}
+            />
+          ) : (
+            (isHintShown || outCount > 0) && (
+              <div className='flex h-10 items-center justify-between gap-3'>
+                <p className='text-muted-foreground text-sm'>{hintText}</p>
+                {resetChip}
+              </div>
+            )
           )}
-          {groupIngredientLines(rows).map((group) => (
+          {groups.map((group) => (
             <div key={group.key}>
               {group.name !== null && (
                 <SectionDivider label={group.name} className='pt-3 pb-1' />
+              )}
+              {isTickAllShown && group.name !== null && groups.length > 1 && (
+                <TickAllRow
+                  label={`all of ${group.name}`}
+                  doneCount={
+                    group.lines.filter((row) => gotOut[row.id] === true).length
+                  }
+                  total={group.lines.length}
+                  onToggleAll={(isOut) => toggleAll(group.lines, isOut)}
+                />
               )}
               <ul className='divide-border divide-y'>
                 {group.lines.map((row) => (

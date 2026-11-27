@@ -183,6 +183,8 @@ export type CookCommand =
   | { kind: 'UNDO_ENTRY' }
   | { kind: 'START_COOKING' }
   | { kind: 'GOT_INGREDIENT'; queries: string[]; isOut: boolean }
+  /** "I've got everything for the cornbread": every line of one part or dish on the gather screen. */
+  | { kind: 'GOT_GROUP'; group: string; isOut: boolean }
   /** "I added the flour": ticks what the shown step uses as put in, apart from the gather screen's got-out ticks. */
   | { kind: 'MARK_ADDED'; queries: string[]; isAdded: boolean }
   | { kind: 'MARK_ALL_ADDED' }
@@ -567,6 +569,11 @@ const PHRASES: Record<PlainKind, string[]> = {
     'measuring tools',
     'the measuring tools',
     'show the measuring tools',
+    'what equipment do i need',
+    'what equipment',
+    'which equipment do i need',
+    'what equipment does this need',
+    'what tools does this need',
   ],
   FINISH: [
     'finish',

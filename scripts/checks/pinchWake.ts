@@ -323,6 +323,17 @@ const planCases: PlanCase[] = [
   ['LOCKED', ['hey pepper'], 'CLEAR', null],
   ['LOCKED', ['the kids are loud'], 'CLEAR', null],
   ['LOCKED', ['a pinch of salt'], 'CLEAR', null],
+  ['WINDOW', ['never mind'], 'DISMISS', null],
+  ['WINDOW', ['Shut up.'], 'DISMISS', null],
+  ['WINDOW', ['okay stop talking'], 'DISMISS', null],
+  ['WINDOW', ['stop'], 'COMMAND', 'STOP_TIMER'],
+  ['WAITING', ['be quiet'], 'IGNORE', null],
+  ['WAITING', ['hey pepper never mind'], 'DISMISS', null],
+  ['LOCKED', ['be quiet'], 'CLEAR', null],
+  ['LOCKED', ['hey pepper stop talking'], 'DISMISS', null],
+  ['WINDOW', ['cancel'], 'MISSED', null],
+  ['WINDOW', ['quiet'], 'MISSED', null],
+  ['WINDOW', ['nothing'], 'MISSED', null],
 ];
 planCases.forEach(([phase, heard, kind, command]) => {
   const plan = planHeard(phase, heard, context);

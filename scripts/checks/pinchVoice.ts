@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 
+import { toSpokenStep } from '../../src/apps/pinch/utils/spokenStep.ts';
+
 import {
   readSpokenAnswer,
   type SpokenQuestion,
@@ -49,6 +51,7 @@ import {
   describeGatherLeft,
   describeGatherTools,
   planGatherTick,
+  planGroupTick,
   type GatherDish,
   type GatherItem,
 } from '../../src/apps/pinch/utils/cookGather.ts';
@@ -2656,6 +2659,55 @@ assert.equal(
   'Garlic is already ticked.',
   'already ticked',
 );
+
+const groupRow = (id: string, group: string | null) => ({
+  id,
+  name: id,
+  note: null,
+  amountText: '1 cup',
+  isMeasured: true,
+  group,
+  measure: null,
+  ingredientKey: id,
+  isLiquid: false,
+});
+const chiliDish = {
+  recipe: { id: 'chili', title: 'Chili and cornbread' },
+  rows: [
+    groupRow('beans', 'For the chili'),
+    groupRow('cornmeal', 'For the cornbread'),
+    groupRow('milk', 'For the cornbread'),
+  ],
+  gotOut: { milk: true } as Record<string, boolean>,
+};
+const groupTick = planGroupTick(
+  'everything for the cornbread',
+  [chiliDish],
+  true,
+);
+assert.deepEqual(
+  [groupTick.ok, groupTick.speak, groupTick.sources],
+  [
+    true,
+    'Ticked everything for cornbread. 1 left.',
+    [{ recipeId: 'chili', lineId: 'cornmeal' }],
+  ],
+  'a part ticks only its own untick lines',
+);
+assert.equal(
+  planGroupTick(
+    'the cornbread',
+    [{ ...chiliDish, gotOut: { cornmeal: true, milk: true } }],
+    true,
+  ).speak,
+  'Everything for cornbread is already ticked.',
+  'a ticked part says so',
+);
+assert.equal(
+  planGroupTick('dessert', [chiliDish], true).ok,
+  false,
+  'an unknown part is refused',
+);
 assert.equal(
   planGatherTick(['garlic'], items, false, false).speak,
   'Unticked garlic.',
@@ -3038,6 +3090,58 @@ const dillView: CookVoiceContext = {
     false,
     `not an added tick beside dill: "${phrase}"`,
   ),
+);
+
+// A step read aloud the way a person walks someone through a recipe.
+const spoken = (
+  number: number,
+  count: number,
+  text: string,
+  section: { name: string; isStart: boolean } | null = null,
+  dishTitle: string | null = null,
+) => toSpokenStep({ number, count, text, section, dishTitle });
+(
+  [
+    [
+      spoken(1, 5, 'Preheat the oven to 350°F.', {
+        name: 'Make the cornbread',
+        isStart: true,
+      }),
+      "Let's start with the cornbread. Preheat the oven to 350°F.",
+    ],
+    [
+      spoken(1, 5, 'Preheat the oven to 350°F.'),
+      'To start, preheat the oven to 350°F.',
+    ],
+    [spoken(2, 5, 'Whisk the eggs.'), 'Next, whisk the eggs.'],
+    [
+      spoken(3, 5, 'Melt the butter.', {
+        name: 'For the sauce',
+        isStart: true,
+      }),
+      'Now for the sauce. Melt the butter.',
+    ],
+    [
+      spoken(4, 5, 'Stir in the flour.', {
+        name: 'For the sauce',
+        isStart: false,
+      }),
+      'Next, stir in the flour.',
+    ],
+    [spoken(5, 5, 'Serve warm.'), 'And finally, serve warm.'],
+    [
+      spoken(3, 5, 'Bake for 20 minutes.', { name: 'Topping', isStart: true }),
+      'Next up: Topping. Bake for 20 minutes.',
+    ],
+    [spoken(2, 5, 'Then add the milk.'), 'Then add the milk.'],
+    [spoken(1, 1, 'Mix everything.'), 'Mix everything.'],
+    [spoken(2, 4, 'Stir.', null, 'Cornbread'), 'Cornbread. Next, stir.'],
+    [spoken(2, 4, 'IPA batter goes in.'), 'Next, IPA batter goes in.'],
+  ] as const
+).forEach(([actual, expected]) => assert.equal(actual, expected, expected));
+assert.ok(
+  !spoken(1, 5, 'Preheat.').includes('Step'),
+  'a step read aloud never says its number out of the count',
 );
 
 console.log('pinchVoice: all checks passed');
