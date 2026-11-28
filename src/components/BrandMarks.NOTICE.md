@@ -17,3 +17,4 @@ Fetched with `npm run icon:get` from the Iconify API (https://api.iconify.design
 | `ICloudMark`         | `thesvg-color:icloud`            | theSVG Color   | [MIT](https://github.com/glincker/thesvg/blob/main/LICENSE)                      | [thesvg.org](https://github.com/glincker/thesvg)        |
 | `YahooMark`          | `selfhst:yahoo`                  | selfh.st/icons | [CC-BY-4.0](https://github.com/selfhst/icons/blob/main/LICENSE)                  | [selfh.st](https://github.com/selfhst/icons)            |
 | `ProtonMark`         | `thesvg-color:proton`            | theSVG Color   | [MIT](https://github.com/glincker/thesvg/blob/main/LICENSE)                      | [thesvg.org](https://github.com/glincker/thesvg)        |
+| `FacebookMark`       | `logos:facebook`                 | SVG Logos      | [CC0-1.0](https://raw.githubusercontent.com/gilbarbara/logos/master/LICENSE.txt) | [Gil Barbara](https://github.com/gilbarbara/logos)      |

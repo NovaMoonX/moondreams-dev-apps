@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, FolderDown, Plus, X } from 'lucide-react';
 
+import { FacebookMark } from '@/components/BrandMarks';
 import EmptyCard from '@/components/EmptyCard';
 import LazyMount from '@/components/LazyMount';
 import { PillGroup } from '@/components/PillGroup';
@@ -11,6 +12,7 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SelectionBar from '@/components/SelectionBar';
 import SortControl from '@/components/SortControl';
+import WorkingRing from '@/components/WorkingRing';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useSelection } from '@/hooks/useSelection';
 import { commitDeferred, useHiddenDeferredKeys } from '@/lib/undo/deferredUndo';
@@ -18,7 +20,9 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import BundleFormSheet from '@apps/going-once/components/bundles/BundleFormSheet';
 import BundleRow from '@apps/going-once/components/bundles/BundleRow';
 import BundleSheet from '@apps/going-once/components/bundles/BundleSheet';
+import MarketplaceCsvSheet from '@apps/going-once/components/relist/MarketplaceCsvSheet';
 import SaveAllPhotosSheet from '@apps/going-once/components/relist/SaveAllPhotosSheet';
+import { useIsBuildingPhotos } from '@apps/going-once/hooks/usePhotoArchive';
 import NewThingFlow from '@apps/going-once/components/things/NewThingFlow';
 import OpenThing from '@apps/going-once/components/things/OpenThing';
 import ThingRow from '@apps/going-once/components/things/ThingRow';
@@ -44,6 +48,7 @@ import {
 } from '@apps/going-once/store/selectors';
 import type { Bundle, BundleStatus, Item } from '@apps/going-once/types';
 import { toUnbundleKey } from '@apps/going-once/utils/bundles';
+import { getMarketplaceThings } from '@apps/going-once/utils/marketplaceCsv';
 import { isSaleSeller } from '@apps/going-once/utils/roles';
 import {
   isListable,
@@ -149,6 +154,8 @@ function ItemsSection({
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
   const [isSavingPhotos, setIsSavingPhotos] = useState(false);
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
+  const isBuildingPhotos = useIsBuildingPhotos(saleId);
   const openItem = items.find((item) => item.id === openId) ?? null;
   const openBundle =
     bundles.find((bundle) => bundle.id === openBundleId) ?? null;
@@ -307,20 +314,29 @@ function ItemsSection({
       item.photos.length > 0,
   );
 
+  const hasMarketplaceThings =
+    !isFinished && getMarketplaceThings(items, bundles).length > 0;
+
   const headerActions = (
     <div className='flex items-center gap-2'>
-      {hasSavablePhotos && (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          rounded='full'
-          aria-label='Save all photos'
-          className="relative size-7 min-w-7 p-0 before:absolute before:-inset-1.5 before:-inset-x-1.5! before:content-['']"
-          onClick={() => setIsSavingPhotos(true)}
-        >
-          <FolderDown className='size-4' aria-hidden='true' />
-        </Button>
+      {(hasSavablePhotos || isBuildingPhotos) && (
+        <WorkingRing isWorking={isBuildingPhotos} className='text-primary'>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            rounded='full'
+            aria-label={
+              isBuildingPhotos
+                ? 'Save all photos, building your zip'
+                : 'Save all photos'
+            }
+            className="relative size-7 min-w-7 p-0 before:absolute before:-inset-1.5 before:-inset-x-1.5! before:content-['']"
+            onClick={() => setIsSavingPhotos(true)}
+          >
+            <FolderDown className='size-4' aria-hidden='true' />
+          </Button>
+        </WorkingRing>
       )}
       {!isFinished && addButton}
     </div>
@@ -412,6 +428,23 @@ function ItemsSection({
             <ChevronRight className='size-4' aria-hidden='true' />
           </Button>
         ))}
+      {hasMarketplaceThings &&
+        statusView === 'AVAILABLE' &&
+        !isSearching &&
+        !isPicking && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='border-border text-foreground! h-10 w-full justify-between gap-2 rounded-full border px-4 text-sm'
+            onClick={() => setIsExportingCsv(true)}
+          >
+            <FacebookMark className='size-4 shrink-0' />
+            <span className='flex-1 text-left'>
+              List these on Facebook Marketplace
+            </span>
+            <ChevronRight className='size-4' aria-hidden='true' />
+          </Button>
+        )}
       {searched.length === 0 && items.length > 0 && (
         <p className='text-muted-foreground text-center text-sm'>
           Nothing matches that. Try another word.
@@ -552,6 +585,20 @@ function ItemsSection({
             setIsMakingBundle(false);
             selection.exit();
           }}
+        />
+      )}
+      {isExportingCsv && (
+        <MarketplaceCsvSheet
+          saleId={saleId}
+          onClose={() => setIsExportingCsv(false)}
+          onSavePhotos={
+            hasSavablePhotos
+              ? () => {
+                  setIsExportingCsv(false);
+                  setIsSavingPhotos(true);
+                }
+              : null
+          }
         />
       )}
       {isSavingPhotos && (

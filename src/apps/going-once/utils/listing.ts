@@ -53,33 +53,48 @@ export function formatAskingPrice(
   return askingPriceCents === 0 ? 'Free' : formatCentsShort(askingPriceCents);
 }
 
+type ListingFields = Pick<
+  Item,
+  | 'title'
+  | 'condition'
+  | 'askingPriceCents'
+  | 'description'
+  | 'brandModel'
+  | 'size'
+  | 'originalPriceCents'
+  | 'showOriginalPrice'
+>;
+
+/** "Was $400" when the seller shows the original price, otherwise `null`. */
+export function formatShownOriginalPrice(
+  item: Pick<Item, 'originalPriceCents' | 'showOriginalPrice'>,
+): string | null {
+  return item.showOriginalPrice && item.originalPriceCents !== null
+    ? `Was ${formatCentsShort(item.originalPriceCents)}`
+    : null;
+}
+
+/** "Brand or model: …" and "Size: …", for whichever the thing has. */
+export function getListingDetailLines(
+  item: Pick<Item, 'brandModel' | 'size'>,
+): string[] {
+  return [
+    item.brandModel === null ? '' : `Brand or model: ${item.brandModel}`,
+    item.size === null ? '' : `Size: ${item.size}`,
+  ].filter((line) => line !== '');
+}
+
 /** The text a seller pastes into another listing: only what buyers already see on the public page. Never the floor price, notes, where it was bought, the store's link or a hidden original price. */
-export function listingText(
-  item: Pick<
-    Item,
-    | 'title'
-    | 'condition'
-    | 'askingPriceCents'
-    | 'description'
-    | 'brandModel'
-    | 'size'
-    | 'originalPriceCents'
-    | 'showOriginalPrice'
-  >,
-): string {
+export function listingText(item: ListingFields): string {
   const price = formatAskingPrice(item.askingPriceCents);
-  const was =
-    item.showOriginalPrice && item.originalPriceCents !== null
-      ? `Was ${formatCentsShort(item.originalPriceCents)}`
-      : null;
+  const was = formatShownOriginalPrice(item);
   const lines = [
     getItemName(item),
     [price, was].filter((part) => part !== null).join(' · '),
     item.condition === null
       ? ''
       : `Condition: ${CONDITION_LABELS[item.condition]}`,
-    item.brandModel === null ? '' : `Brand or model: ${item.brandModel}`,
-    item.size === null ? '' : `Size: ${item.size}`,
+    ...getListingDetailLines(item),
   ].filter((line) => line !== '');
   return [lines.join('\n'), item.description?.trim() ?? '']
     .filter((block) => block !== '')

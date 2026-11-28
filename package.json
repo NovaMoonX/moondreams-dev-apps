@@ -39,6 +39,7 @@
     "preemulators:seed:reset": "npm --prefix functions run build && tsx scripts/appKeys/pinDevKeyrings.ts",
     "emulators:seed:reset": "firebase emulators:exec --project moondreams-dev-apps --only auth,firestore,database,functions,storage \"npm run seed:reset\"",
     "check:apps": "tsx scripts/checkAppWiring.ts",
+    "check:pr-screenshots": "NODE_USE_ENV_PROXY=1 NODE_NO_WARNINGS=1 tsx scripts/checks/prScreenshots.ts",
     "make:banner": "tsx scripts/makeAppBanner.ts",
     "prebuild": "npm run check:apps",
     "build": "tsc -b && vite build",
