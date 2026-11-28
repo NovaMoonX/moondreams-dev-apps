@@ -6,6 +6,7 @@ import {
   getItemName,
   getListingDetailLines,
   isListable,
+  sortItems,
 } from '@apps/going-once/utils/listing';
 
 /** Facebook takes this many listings per bulk upload file. */
@@ -38,7 +39,7 @@ const TEMPLATE_HEAD: CsvCell[][] = [
   ['TITLE', 'PRICE', 'CONDITION', 'DESCRIPTION', 'CATEGORY'],
 ];
 
-/** The things a Marketplace upload holds: Available, listable and sellable on their own (never one held for its bundle). */
+/** The things a Marketplace upload holds, by name so each file holds the same things on every save: Available, listable and sellable on their own (never one held for its bundle). */
 export function getMarketplaceThings(items: Item[], bundles: Bundle[]): Item[] {
   const itemsById = Object.fromEntries(items.map((item) => [item.id, item]));
   const isBundleLocked = (item: Item) => {
@@ -48,10 +49,27 @@ export function getMarketplaceThings(items: Item[], bundles: Bundle[]): Item[] {
       isSoloLocked(item, bundle, getBundleParts(bundle, itemsById).deal.length)
     );
   };
-  return items.filter(
-    (item) =>
-      item.status === 'AVAILABLE' && isListable(item) && !isBundleLocked(item),
+  return sortItems(
+    items.filter(
+      (item) =>
+        item.status === 'AVAILABLE' &&
+        isListable(item) &&
+        !isBundleLocked(item),
+    ),
+    'name',
   );
+}
+
+/** What Facebook's columns can't hold as the thing has it, counted for the sheet: no condition, a Well used condition (listed as Fair) and a price with cents (rounded to the dollar). */
+export function getMarketplaceCaveats(things: Item[]) {
+  return {
+    noCondition: things.filter((item) => item.condition === null).length,
+    wellUsed: things.filter((item) => item.condition === 'WELL_USED').length,
+    withCents: things.filter(
+      (item) =>
+        item.askingPriceCents !== null && item.askingPriceCents % 100 !== 0,
+    ).length,
+  };
 }
 
 /** The listing's description: brand or model, size and a shown original price, then the thing's own description. Only what buyers already see. */

@@ -13,11 +13,15 @@ import {
   selectSaleById,
 } from '@apps/going-once/store/selectors';
 import {
+  getMarketplaceCaveats,
   getMarketplaceFileName,
   getMarketplaceThings,
   MARKETPLACE_ROWS_PER_FILE,
   toMarketplaceSheets,
 } from '@apps/going-once/utils/marketplaceCsv';
+
+const countThings = (count: number, verb?: string) =>
+  `${count} ${count === 1 ? 'thing' : 'things'} ${verb ?? (count === 1 ? 'has' : 'have')}`;
 
 const describeThings = (count: number) =>
   `${count} available ${count === 1 ? 'thing' : 'things'}`;
@@ -37,7 +41,15 @@ function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
   const [outcome, setOutcome] = useState<string | null>(null);
   const things = getMarketplaceThings(items, bundles);
   const sheets = toMarketplaceSheets(things);
-  const noCondition = things.filter((item) => item.condition === null).length;
+  const { noCondition, wellUsed, withCents } = getMarketplaceCaveats(things);
+  const caveats = [
+    noCondition > 0 &&
+      `${countThings(noCondition)} no condition yet. Facebook asks for one, so pick it there.`,
+    wellUsed > 0 &&
+      `${countThings(wellUsed, 'marked')} Well used. Facebook's closest is Used - Fair, so ${wellUsed === 1 ? 'it goes' : 'they go'} in as that.`,
+    withCents > 0 &&
+      `${countThings(withCents)} a price with cents. Facebook takes whole dollars, so ${withCents === 1 ? 'it is' : 'they are'} rounded to the nearest dollar.`,
+  ].filter((line) => line !== false);
 
   const save = async () => {
     const files = sheets.map((rows, index) =>
@@ -50,7 +62,7 @@ function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
       if (done === 'cancelled') return;
       setOutcome(
         done === 'downloaded'
-          ? `Saved to your downloads.`
+          ? `Saved ${files.length === 1 ? 'the file' : `${files.length} files`} to your downloads.`
           : 'Saved. Upload it on Marketplace to make the listings.',
       );
     } catch {
@@ -75,21 +87,19 @@ function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
           {getSummary()}
         </p>
         <p className='text-muted-foreground text-sm'>
-          A CSV in Facebook’s bulk upload layout, with each thing’s name,
-          price, condition and description: only what buyers already see. Add
-          the photos to each listing on Facebook after uploading.
+          A CSV in Facebook’s bulk upload layout, with each thing’s name, price,
+          condition and description: only what buyers already see. Add the
+          photos to each listing on Facebook after uploading.
         </p>
         <p className='text-muted-foreground text-sm'>
           Drafts, Pending and Sold things, and things sold only in a bundle, are
           left out.
         </p>
-        {noCondition > 0 && (
-          <p className='text-muted-foreground text-sm'>
-            {noCondition === 1
-              ? '1 thing has no condition yet. Facebook asks for one, so pick it there.'
-              : `${noCondition} things have no condition yet. Facebook asks for one, so pick it there.`}
+        {caveats.map((line) => (
+          <p key={line} className='text-muted-foreground text-sm'>
+            {line}
           </p>
-        )}
+        ))}
         {outcome !== null && (
           <p className='text-foreground text-sm' role='status'>
             {outcome}
