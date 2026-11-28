@@ -118,6 +118,7 @@ export const EMAIL_WORDS = {
   keepWaitingFor: (days: number) =>
     days === 7 ? '1 more week' : days === 14 ? '2 more weeks' : '1 more month',
   keepWaitingUntil: (day: string) => `Until ${day}`,
+  chosenWait: 'Your current choice',
   waitingUntil: (day: string) => `Waiting for your bank until ${day}`,
   drawerWaitingUntil: (day: string, isStore: boolean) =>
     `Read from ${isStore ? 'the store’s' : 'your bank’s alert'} email. You gave your bank until ${day} to send the charge; it merges on its own when it does.`,

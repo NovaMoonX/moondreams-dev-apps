@@ -1531,10 +1531,12 @@ export type DoneForYouKind =
 
 /** Exactly what the Undo of each automatic action needs, kept in the entry's sealed payload. */
 export type DoneForYouUndo =
-  | { kind: 'merge'; merged: MergedPurchase }
+  /**
+   * `isEmailJoin`: a store's order email and its bank's alert email joined (`bank` kept, `typed` removed).
+   * Kept under `merge` so an older build reads it as a match instead of failing on an unknown kind.
+   */
+  | { kind: 'merge'; merged: MergedPurchase; isEmailJoin: boolean }
   | { kind: 'mergeSplit'; merged: MergedSplit }
-  /** A store's order email and its bank's alert email joined: `bank` is the one kept, `typed` the one removed. */
-  | { kind: 'emailJoin'; merged: MergedPurchase }
   | {
       kind: 'deposit';
       deposit: OpenPurchase;

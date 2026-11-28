@@ -114,7 +114,6 @@ const getExpected = (
 ): { id: string; updatedAt: number; date: DateOnly }[] => {
   switch (undo.kind) {
     case 'merge':
-    case 'emailJoin':
       return [
         {
           id: undo.merged.bank.id,
@@ -235,7 +234,6 @@ const getUndoLabel = (undo: DoneForYouUndo, sorting: SortingState | null) => {
   switch (undo.kind) {
     case 'merge':
     case 'mergeSplit':
-    case 'emailJoin':
       return DONE_FOR_YOU_WORDS.undoMerge;
     case 'deposit':
       return DONE_FOR_YOU_WORDS.undoDeposit;
@@ -256,10 +254,11 @@ const getUndoneWords = (undo: DoneForYouUndo, sorting: SortingState | null) => {
   if (isLeftInFreeToSpend(undo, sorting)) return DONE_FOR_YOU_WORDS.undoneQuiet;
   switch (undo.kind) {
     case 'merge':
+      return undo.isEmailJoin === true
+        ? DONE_FOR_YOU_WORDS.joinUndone
+        : NEEDS_HOME_WORDS.matchUndone;
     case 'mergeSplit':
       return NEEDS_HOME_WORDS.matchUndone;
-    case 'emailJoin':
-      return DONE_FOR_YOU_WORDS.joinUndone;
     case 'deposit':
       return DEPOSIT_WORDS.undone;
     case 'pair':
@@ -286,6 +285,15 @@ async function runUndo(uid: string, undo: DoneForYouUndo) {
     looks.get(envelopeId)?.name ?? 'An envelope';
   switch (undo.kind) {
     case 'merge':
+      if (undo.isEmailJoin === true) {
+        await splitEmailJoin(
+          uid,
+          encryption,
+          undo.merged,
+          describeEmailJoin(undo.merged.bank, undo.merged.typed, nameOf, true),
+        );
+        return;
+      }
       await splitBankPurchase(
         uid,
         encryption,
@@ -296,14 +304,6 @@ async function runUndo(uid: string, undo: DoneForYouUndo) {
           nameOf,
           true,
         ),
-      );
-      return;
-    case 'emailJoin':
-      await splitEmailJoin(
-        uid,
-        encryption,
-        undo.merged,
-        describeEmailJoin(undo.merged.bank, undo.merged.typed, nameOf, true),
       );
       return;
     case 'mergeSplit':

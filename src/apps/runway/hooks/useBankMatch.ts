@@ -170,7 +170,11 @@ function useJoinEmails() {
             title: EMAIL_MATCH_WORDS.joined,
             detail: getPurchaseTitle(entry.bank, nameOf),
             why: EMAIL_MATCH_WORDS.joinedWhy,
-            undo: { kind: 'emailJoin' as const, merged: entry },
+            undo: {
+              kind: 'merge' as const,
+              merged: entry,
+              isEmailJoin: true,
+            },
             subject: toPurchaseSubject(entry.bank, {
               merchant: entry.bank.merchant ?? entry.typed.merchant ?? null,
               itemId: envelopeId,
@@ -308,7 +312,7 @@ export function useMergeWithUndo() {
               ? getPurchaseTitle(entry.typed, nameOf)
               : NEEDS_HOME_WORDS.matchedOneSub,
           why: null,
-          undo: { kind: 'merge' as const, merged: entry },
+          undo: { kind: 'merge' as const, merged: entry, isEmailJoin: false },
           subject: toPurchaseSubject(entry.bank, {
             merchant: entry.bank.merchant ?? entry.typed.label ?? null,
             itemId: getDestinationId(entry.typed),

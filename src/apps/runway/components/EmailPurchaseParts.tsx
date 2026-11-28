@@ -1,7 +1,14 @@
 import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { CalendarClock, Filter, Hourglass, Mail } from 'lucide-react';
+import {
+  CalendarClock,
+  Check,
+  Filter,
+  Hourglass,
+  Mail,
+  RotateCcw,
+} from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -227,6 +234,14 @@ export function EmailPurchaseRows({
               subtitle={EMAIL_WORDS.keepWaitingUntil(
                 formatDateOrdinalUTC(today + days * DAY_MS),
               )}
+              trailing={
+                today + days * DAY_MS === waitUntil ? (
+                  <Check
+                    className='text-primary h-4 w-4'
+                    aria-label={EMAIL_WORDS.chosenWait}
+                  />
+                ) : null
+              }
               onClick={() => void keepWaiting(today + days * DAY_MS)}
             />
           ))}
@@ -234,7 +249,7 @@ export function EmailPurchaseRows({
             <ActionRow
               isGrouped
               isRoomy
-              icon={<Hourglass />}
+              icon={<RotateCcw />}
               label={EMAIL_WORDS.usualWait}
               subtitle={EMAIL_WORDS.usualWaitSub}
               onClick={() => void keepWaiting(null)}
