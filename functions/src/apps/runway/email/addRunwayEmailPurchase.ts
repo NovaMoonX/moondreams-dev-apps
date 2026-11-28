@@ -78,6 +78,12 @@ export const addRunwayEmailPurchase = onCall(
       receivedAt: stored.receivedAt as number,
       isKnownPurchase: true,
     });
+    if (alert !== null && !alert.isPurchase) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This email reads as a refund or a cancelled order, so it stays out of your purchases.',
+      );
+    }
     if (alert === null || alert.amountCents === null) {
       throw new HttpsError(
         'failed-precondition',

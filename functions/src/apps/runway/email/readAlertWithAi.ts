@@ -132,7 +132,7 @@ export async function readAlertWithAi({
   // A bank's alert names the shop it was spent at; anyone else writing about a purchase is the shop.
   const senderCompany = senderKind === 'bank' ? null : companyFromAddress(from);
   const storeEmail = readStoreEmail(answer, senderKind);
-  if (storeEmail !== null && storeEmail.kind !== 'order' && !isKnownPurchase) {
+  if (storeEmail !== null && storeEmail.kind !== 'order') {
     const cents = asCents(answer.amountCents);
     const merchant = asText(answer.merchant, 80);
     if (merchant === null) return null;
@@ -166,10 +166,7 @@ export async function readAlertWithAi({
   const lastFour = asText(answer.lastFour, 4);
   return {
     senderKind,
-    storeEmail:
-      storeEmail === null || storeEmail.kind === 'order'
-        ? storeEmail
-        : { ...storeEmail, kind: 'order', isWholeOrder: false },
+    storeEmail,
     isPurchase: true,
     amountCents,
     merchant,
