@@ -1,7 +1,8 @@
 #!/bin/bash
 # usage: publish-screenshots.sh <pr-number> <folder-with-pngs>
 # Commits the PNGs to the `pr-screenshots` branch under pr-<n>/ (creating the branch the first time),
-# pushes it, and prints Markdown image links pinned to that commit so they never go stale.
+# pushes it, and prints <img> tags pinned to that commit so they never go stale (Markdown images
+# beyond the first on a line came back unlinked and backticked through the PR-edit tool).
 # The PR's own branch is never touched, so its diff stays free of images.
 set -euo pipefail
 PR="$1"; SRC="$2"
@@ -36,5 +37,5 @@ done
 SHA="$(git -C "$WT" rev-parse HEAD)"
 for file in "${files[@]}"; do
   name="$(basename "$file")"
-  echo "![${name%.png}](https://github.com/$SLUG/blob/$SHA/pr-$PR/$name?raw=true)"
+  echo "<img alt=\"${name%.png}\" src=\"https://github.com/$SLUG/blob/$SHA/pr-$PR/$name?raw=true\" width=\"300\">"
 done

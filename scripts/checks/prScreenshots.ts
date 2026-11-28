@@ -1,13 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const USAGE = `Checks a PR body's Screenshots section: every cell and line there shows a real image.
+const USAGE = `Checks a PR body's Screenshots section: every table cell there shows an image that loads.
 
   npm run check:pr-screenshots -- 1298            reads the PR's body with gh
   npm run check:pr-screenshots -- --body-file body.md
   PR_BODY="..." npm run check:pr-screenshots      (the workflow's form)`;
 
-const IMAGE_MARKDOWN = /!\[[^\]]*\]\(\s*<?(https?:\/\/[^\s)>]+)>?\s*\)/g;
+const IMAGE_MARKDOWN =
+  /!\[[^\]]*\]\(\s*<?(https?:\/\/[^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g;
 const IMAGE_TAG = /<img\b[^>]*\bsrc=["'](https?:\/\/[^"']+)["'][^>]*>/gi;
 
 function readBody(argv: string[]): string {
@@ -21,17 +22,7 @@ function readBody(argv: string[]): string {
   }
   return execFileSync(
     'gh',
-    [
-      'pr',
-      'view',
-      pr,
-      '--repo',
-      'NovaMoonX/moondreams-dev-apps',
-      '--json',
-      'body',
-      '--jq',
-      '.body',
-    ],
+    ['api', `repos/NovaMoonX/moondreams-dev-apps/pulls/${pr}`, '--jq', '.body'],
     { encoding: 'utf8' },
   );
 }
@@ -84,6 +75,7 @@ function findProblems(section: string[]): string[] {
   const linkProblems = Array.from(
     section
       .join('\n')
+      .replace(IMAGE_MARKDOWN, '')
       .matchAll(/(?<!!)\[[^\]]*\]\([^)]*\.(?:png|jpe?g|webp|gif)[^)]*\)/gi),
     (match) =>
       `An image is written as a link, not an image (missing "!"): "${match[0].slice(0, 160)}"`,
@@ -100,9 +92,10 @@ async function findDeadImages(urls: string[]): Promise<string[]> {
     urls.map(async (url) => {
       try {
         const response = await fetch(url, {
-          method: 'HEAD',
           redirect: 'follow',
+          signal: AbortSignal.timeout(15_000),
         });
+        await response.body?.cancel();
         const type = response.headers.get('content-type') ?? '';
         if (!response.ok)
           return `An image does not load (${response.status}): ${url}`;

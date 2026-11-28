@@ -43,9 +43,12 @@ function MarketplaceCsvSheet({
     (state) => selectSaleById(state, saleId)?.name ?? '',
   );
   const [outcome, setOutcome] = useState<string | null>(null);
-  const [isSaved, setIsSaved] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
   const things = getMarketplaceThings(items, bundles);
   const sheets = toMarketplaceSheets(things);
+  const sheetsKey = JSON.stringify(sheets);
+  const isSaved = savedKey === sheetsKey;
   const { noCondition, wellUsed, withCents } = getMarketplaceCaveats(things);
   const caveats = [
     noCondition > 0 &&
@@ -65,14 +68,15 @@ function MarketplaceCsvSheet({
         title: `${saleName} for Marketplace`,
       });
       if (done === 'cancelled') return;
-      setIsSaved(true);
+      setSavedKey(sheetsKey);
+      setFailure(null);
       setOutcome(
         done === 'downloaded'
           ? `Saved ${files.length === 1 ? 'the file' : `${files.length} files`} to your downloads.`
           : 'Saved. Upload it on Marketplace to make the listings.',
       );
     } catch {
-      setOutcome("Couldn't open the share sheet. Tap Save to try again.");
+      setFailure("Couldn't open the share sheet. Tap Save to try again.");
     }
   };
 
@@ -103,7 +107,12 @@ function MarketplaceCsvSheet({
             ...caveats,
           ].join(' ')}
         </p>
-        {outcome !== null && (
+        {failure !== null && (
+          <p className='text-destructive text-sm' role='alert'>
+            {failure}
+          </p>
+        )}
+        {isSaved && outcome !== null && (
           <p className='text-foreground text-sm' role='status'>
             {outcome}
           </p>
@@ -111,9 +120,19 @@ function MarketplaceCsvSheet({
       </div>
       <ModalFooterActions
         cancelAction={
-          <Button type='button' variant='tertiary' onClick={onClose}>
-            Close
-          </Button>
+          isSaved && onSavePhotos !== null ? (
+            <Button
+              type='button'
+              variant='tertiary'
+              onClick={() => void save()}
+            >
+              Save again
+            </Button>
+          ) : (
+            <Button type='button' variant='tertiary' onClick={onClose}>
+              Close
+            </Button>
+          )
         }
         rightActions={
           isSaved && onSavePhotos !== null ? (
