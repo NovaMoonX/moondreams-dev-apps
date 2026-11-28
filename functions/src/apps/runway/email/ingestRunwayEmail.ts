@@ -1,10 +1,5 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import {
-  Timestamp,
-  type DocumentReference,
-  type Firestore,
-} from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions';
+import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 
 import {
@@ -18,7 +13,6 @@ import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
 import { findInstitutionLogo, toSafeLogo } from '../institutionLogos.js';
 import { SEALED_SCHEMA_VERSION } from '../link/linkShared.js';
-import { markClosedMonths } from '../link/syncRunwayLink.js';
 import { findMerchant } from '../merchantNames.js';
 import {
   openWithKey,
@@ -52,7 +46,18 @@ import {
   type ParsedAlert,
   type SenderKind,
 } from './parseAlert.js';
-import { readAlertWithAi, type StoreEmail } from './readAlertWithAi.js';
+import { AI_HELD, ANTHROPIC_API_KEY } from './askClaude.js';
+import {
+  AI_UNAVAILABLE,
+  readAlertWithAi,
+  type StoreEmail,
+} from './readAlertWithAi.js';
+import {
+  buildEmailPurchase,
+  isInsideTracking,
+  markWithRetry,
+  type PurchaseWrite,
+} from './emailPurchase.js';
 import { unwrapForwarded } from '../../../email/unwrapForwarded.js';
 
 if (getApps().length === 0) {
@@ -78,11 +83,6 @@ interface Filter {
   bodyContains: string[];
 }
 
-interface PurchaseWrite {
-  ref: DocumentReference;
-  data: Record<string, unknown>;
-}
-
 interface Handled {
   outcome: Outcome;
   purchase: PurchaseWrite | null;
@@ -95,26 +95,6 @@ interface Handled {
 
 const readPlanKey = (firestore: Firestore, uid: string) =>
   unwrapPlanKey(firestore, loadKeyring(), uid);
-
-async function markWithRetry(
-  firestore: Firestore,
-  uid: string,
-  date: number,
-  now: number,
-) {
-  const attempt = async () => {
-    try {
-      await markClosedMonths(firestore, uid, [date], now);
-      return null;
-    } catch (error) {
-      return (error as Error)?.name ?? 'Error';
-    }
-  };
-  const failed = (await attempt()) !== null ? await attempt() : null;
-  if (failed !== null) {
-    logger.error('runway.email.closingMarkFailed', { name: failed });
-  }
-}
 
 const lower = (value: string) => value.toLowerCase();
 
@@ -168,83 +148,6 @@ async function loadFilters(
   });
 }
 
-interface Targets {
-  paidByCardId: string | null;
-  accountId: string | null;
-  isLinked: boolean;
-  /** Any live card or account comes from a bank link, so a store order naming no card can wait for its charge. */
-  hasAnyLink: boolean;
-}
-
-// A store order that names no card waits for a same-store charge on any card or account.
-const isWaitingForBank = (targets: Targets, storeEmail: StoreEmail | null) =>
-  targets.isLinked ||
-  (storeEmail?.kind === 'order' &&
-    targets.paidByCardId === null &&
-    targets.accountId === null &&
-    targets.hasAnyLink);
-
-async function findTargets(
-  firestore: Firestore,
-  uid: string,
-  key: Buffer,
-  lastFour: string | null,
-): Promise<Targets> {
-  const read = async (collection: 'cards' | 'accounts') => {
-    const found = await firestore
-      .collection(`${planPath(uid)}/${collection}`)
-      .get();
-    return found.docs.flatMap((entry) => {
-      const data = entry.data();
-      if (data.archivedAt != null) return [];
-      const isLinked = typeof data.linkId === 'string';
-      if (lastFour === null)
-        return [{ id: entry.id, isLinked, isMatch: false }];
-      try {
-        const sealed = openWithKey(key, data.sealed as SealedPayload);
-        return [
-          { id: entry.id, isLinked, isMatch: sealed.lastFour === lastFour },
-        ];
-      } catch {
-        return [{ id: entry.id, isLinked, isMatch: false }];
-      }
-    });
-  };
-  const [allCards, allAccounts] = await Promise.all([
-    read('cards'),
-    read('accounts'),
-  ]);
-  const hasAnyLink = [...allCards, ...allAccounts].some(
-    (entry) => entry.isLinked,
-  );
-  const cards = allCards.filter((entry) => entry.isMatch);
-  const accounts = allAccounts.filter((entry) => entry.isMatch);
-  if (cards.length === 1) {
-    return {
-      paidByCardId: cards[0].id,
-      accountId: null,
-      isLinked: cards[0].isLinked,
-      hasAnyLink,
-    };
-  }
-  if (cards.length === 0 && accounts.length === 1) {
-    return {
-      paidByCardId: null,
-      accountId: accounts[0].id,
-      isLinked: accounts[0].isLinked,
-      hasAnyLink,
-    };
-  }
-  return { paidByCardId: null, accountId: null, isLinked: false, hasAnyLink };
-}
-
-const isInsideTracking = (
-  periods: { from: number; to: number | null }[] | undefined,
-  date: number,
-) => {
-  const open = periods?.at(-1);
-  return open !== undefined && open.to === null && date >= open.from;
-};
 
 // The patterns are written for bank alerts, so what they read is a bank's.
 const senderKindOf = (
@@ -340,7 +243,17 @@ async function handleMail(
     }
     const isStore = isStoreLike(readMail);
     const firstPattern = isStore ? null : parseAlertEmail(patternMail);
-    const byAi = firstPattern === null ? await readAlertWithAi(readMail) : null;
+    const aiAnswer =
+      firstPattern === null
+        ? await readAlertWithAi({
+            ...readMail,
+            firestore,
+            uid,
+            from: toAddress(mail.from),
+          })
+        : null;
+    const byAi =
+      aiAnswer === AI_UNAVAILABLE || aiAnswer === AI_HELD ? null : aiAnswer;
     // A bank the sender list doesn't know can still write "refund"; its alert falls back to the patterns.
     const byPattern =
       firstPattern ??
@@ -391,7 +304,7 @@ async function handleMail(
     }
     const plan = (await firestore.doc(planPath(uid)).get()).data();
     const date = alert.date as number;
-    const returnOutcome: Outcome | null = isStoreReturn
+    const returnOutcome: 'refund' | 'cancel' | null = isStoreReturn
       ? (storeEmail.kind as 'refund' | 'cancel')
       : null;
     if (
@@ -421,72 +334,19 @@ async function handleMail(
         storeEmail,
       };
     }
-    const targets = await findTargets(
+    const purchase = await buildEmailPurchase({
       firestore,
       uid,
-      planKey.key,
-      alert.lastFour,
-    );
-    const purchaseRef = firestore
-      .collection(`${planPath(uid)}/purchases`)
-      .doc();
-    const cents =
-      returnOutcome === null
-        ? (alert.amountCents as number)
-        : -(alert.amountCents as number);
-    const known = await findMerchant(firestore, alert.merchant);
-    const data = {
-      id: purchaseRef.id,
-      date,
-      source: 'email',
-      status: null,
-      needsHome: true,
-      accountId: targets.accountId,
-      dedupeKey: null,
-      expenseId: null,
-      emailEventId: eventRef.id,
-      emailWaiting:
-        returnOutcome === null && isWaitingForBank(targets, storeEmail),
-      emailWaitUntil: null,
-      createdAt: now,
-      updatedAt: now,
-      sealed: sealWithKey(
-        planKey,
-        {
-          amountCents: cents,
-          merchant: known?.name ?? alert.merchant,
-          merchantLogo: known?.logo ?? null,
-          bankName: alert.institution,
-          category: known?.category ?? null,
-          ruleId: null,
-          label: null,
-          note: null,
-          lines:
-            returnOutcome === null
-              ? [{ envelopeId: null, cents, via: 'free' }]
-              : [],
-          storeEmail,
-          orderLog: null,
-          refundOfId: null,
-          paidByCardId: targets.paidByCardId,
-          link: null,
-          receiptText: null,
-          costRef: null,
-          billRef: null,
-          notSameAs: null,
-          incomeDayId: null,
-          assignedBy: null,
-          pairedWithId: null,
-          pairKind: null,
-          cardPaymentMoveId: null,
-          tickedDayKey: null,
-        },
-        SEALED_SCHEMA_VERSION,
-      ),
-    };
+      planKey,
+      alert,
+      storeEmail,
+      returnOutcome,
+      eventId: eventRef.id,
+      now,
+    });
     return {
       outcome: returnOutcome ?? 'purchase',
-      purchase: { ref: purchaseRef, data },
+      purchase,
       date,
       readBy: read.readBy,
       found: alert,
@@ -506,6 +366,7 @@ async function handleMail(
   const isBankEmail =
     result.outcome === 'purchase' ||
     result.outcome === 'notPurchase' ||
+    result.outcome === 'unread' ||
     result.outcome === 'notTracking' ||
     result.outcome === 'refund' ||
     result.outcome === 'cancel';
@@ -528,6 +389,7 @@ async function handleMail(
     senderKind: result.senderKind,
     purchaseId: result.purchase?.ref.id ?? null,
     savedAt: Date.now(),
+    addedByPersonAt: null,
     expiresAt: Timestamp.fromMillis(now + EMAIL_EVENT_KEEP_DAYS * DAY_MS),
     sealed: sealWithKey(
       planKey,
@@ -561,7 +423,7 @@ export const ingestRunwayEmail = onRequest(
     region: 'us-central1',
     maxInstances: 5,
     timeoutSeconds: 60,
-    secrets: [RUNWAY_MASTER_KEYS],
+    secrets: [RUNWAY_MASTER_KEYS, ANTHROPIC_API_KEY],
   },
   createEmailIngest({
     app: 'runway',

@@ -31,6 +31,11 @@ const suggestCallable = httpsCallable<
   { suggestions: EmailFilterSuggestion[] }
 >(functions, 'suggestRunwayEmailFilter');
 
+const addPurchaseCallable = httpsCallable<
+  { eventId: string },
+  { purchaseId: string }
+>(functions, 'addRunwayEmailPurchase');
+
 const planRef = (uid: string, collectionName: string, id: string) =>
   doc(db, 'apps', 'runway', 'plans', uid, collectionName, id);
 
@@ -46,6 +51,12 @@ export async function suggestEmailFilters(
 ): Promise<EmailFilterSuggestion[]> {
   const response = await suggestCallable({ eventId });
   return response.data.suggestions;
+}
+
+/** Makes a purchase from an email Runway didn't take as one, at the person's word. Resolves with the new purchase's id. */
+export async function addEmailPurchase(eventId: string): Promise<string> {
+  const response = await addPurchaseCallable({ eventId });
+  return response.data.purchaseId;
 }
 
 /** Saves a filter: a later email matching every condition it sets is dropped before anything reads it. Resolves with its id. */

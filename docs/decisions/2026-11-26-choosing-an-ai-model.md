@@ -42,8 +42,9 @@ Prices per million tokens, on the paid tier:
 - Gemini 3.8 Flash doubles in price on January 1, 2027; Flash-Lite's price may change too.
 - The Anthropic credit runs out in a month, or a single feature takes more than a fifth of it.
 - A Claude model gains audio input, or a photo reader misses often enough to test on Haiku.
-- Existing text-only Gemini calls (Runway's email reading, Nine Lives' pasted-text extraction, Pinch's step splitting) are candidates to move to Haiku when next touched; none is moved by this record.
+- Existing text-only Gemini calls (Nine Lives' pasted-text extraction, Pinch's step splitting) are candidates to move to Haiku when next touched; none is moved by this record.
 
 ## Changes
 
 - 2026-11-26: written while moving Pinch's "Change with Pepper" from Gemini to Haiku.
+- 2026-11-28: Runway's email reading and filter suggestions moved from Gemini to Haiku (`functions/src/apps/runway/email/askClaude.ts`, role `readEmail`) on the shared spend reserve, after an Amazon order email was missed (owner: "Claude would be an appropriate use here").

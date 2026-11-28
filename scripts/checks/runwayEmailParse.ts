@@ -14,6 +14,7 @@ import {
   isForwardingConfirmation,
 } from '../../functions/src/email/forwardingConfirmation.ts';
 import {
+  companyFromAddress,
   excerptOf,
   htmlToText,
   isInstitutionHost,
@@ -248,6 +249,20 @@ const samples: Sample[] = [
     expect: null,
   },
   {
+    name: 'A store order with a split price and an unsubscribe footer is left to the AI',
+    from: 'auto-confirm@amazon.com',
+    subject: 'Ordered 1 item: Headphones',
+    text: 'Stephon, you scored some great Black Friday Deals!\nOrdered\nShipped\nArriving Tuesday\n1 item: Headphones\nOrder # 114-7142702-6577047\nGrand Total:\n$\n142.01\nView or edit order\nBlack Friday Week is here! Shop the best deals of the year on electronics, home, toys and more, while they last.\nUnsubscribe from these emails or transfer your account settings.',
+    expect: null,
+  },
+  {
+    name: 'A number but no dollar sign is left to the AI',
+    from: 'orders@shop.example.com',
+    subject: 'Thanks for your order',
+    text: 'Order 4471. Total 142.01 USD.',
+    expect: null,
+  },
+  {
     name: 'HTML-only alert',
     from: 'no.reply.alerts@chase.com',
     subject: 'You made a $9.99 transaction with NETFLIX.COM',
@@ -263,6 +278,10 @@ const samples: Sample[] = [
     },
   },
 ];
+
+assert.equal(companyFromAddress('auto-confirm@amazon.com'), 'Amazon');
+assert.equal(companyFromAddress('someone@gmail.com'), null);
+assert.equal(companyFromAddress('orders@shop.xyz'), null);
 
 samples.forEach((sample) => {
   const read = parseAlertEmail({ ...sample, receivedAt: RECEIVED });
@@ -979,6 +998,7 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
     from,
     receivedAt,
     savedAt: null,
+    addedByPersonAt: null,
     outcome,
     senderKind,
     purchaseId: null,

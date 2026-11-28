@@ -799,6 +799,7 @@ const EMAIL_EVENT_DOC_FIELDS = {
   senderKind: 'notUseful',
   purchaseId: 'notUseful',
   savedAt: 'notUseful',
+  addedByPersonAt: 'notUseful',
   expiresAt: 'notUseful',
   sealed: 'never',
 } satisfies Record<keyof EmailEventDoc, ShareDecision>;

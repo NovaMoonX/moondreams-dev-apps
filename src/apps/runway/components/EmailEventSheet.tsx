@@ -1,11 +1,15 @@
 import { useState } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
 import {
   CircleSlash,
   FileText,
   Filter,
   Info,
+  LoaderCircle,
   MailCheck,
+  PlusCircle,
   Receipt,
   ShoppingBag,
   PackageX,
@@ -15,9 +19,12 @@ import {
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import DebugDetails from '@/components/DebugDetails';
 import FormSheet from '@/components/FormSheet';
+import InlineNotice from '@/components/InlineNotice';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useSteadyBusy } from '@/hooks/useSteadyBusy';
 import { useCanSeeDebugDetails } from '@/lib/debugProfiles/useCanSeeDebugDetails';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinal } from '@/utils/formatUtils';
@@ -29,9 +36,41 @@ import {
 } from '@apps/runway/components/emailWords';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { selectPurchaseIds } from '@apps/runway/store/selectors/emailSelectors';
-import type { EmailEventRead } from '@apps/runway/hooks/useEmailPurchases';
+import {
+  useEmailActions,
+  type EmailEventRead,
+} from '@apps/runway/hooks/useEmailPurchases';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { EmailOutcome } from '@apps/runway/types';
+
+const ADDABLE_OUTCOMES: EmailOutcome[] = ['notPurchase', 'unread'];
+
+// These carry a sentence written for the person; anything else is a crash and gets the plain retry line.
+const PLAIN_FAILURE_CODES = [
+  'functions/failed-precondition',
+  'functions/not-found',
+  'functions/unavailable',
+  'functions/permission-denied',
+  'functions/resource-exhausted',
+];
+
+interface AddFailure {
+  line: string;
+  raw: string;
+  code: string | null;
+}
+
+const readAddFailure = (error: unknown): AddFailure => {
+  const code = (error as { code?: string })?.code ?? null;
+  const raw = error instanceof Error ? error.message : String(error);
+  return {
+    line: PLAIN_FAILURE_CODES.includes(code ?? '')
+      ? raw
+      : EMAIL_WORDS.addAsPurchaseFailed,
+    raw,
+    code,
+  };
+};
 
 const OUTCOME_ICONS: Record<EmailOutcome, LucideIcon> = {
   purchase: ShoppingBag,
@@ -85,8 +124,13 @@ interface EmailEventSheetProps {
 function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
   const [isFiltering, setIsFiltering] = useState(false);
   const [isWholeShown, setIsWholeShown] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addFailure, setAddFailure] = useState<AddFailure | null>(null);
+  const actions = useEmailActions();
   const { closeMoreEntry, showTab, openPurchase } = useRunwayUrlState();
   const purchaseIds = useAppSelector(selectPurchaseIds);
+  const { addToast } = useToast();
+  const isAddShown = useSteadyBusy(isAdding) || isAdding;
 
   if (isFiltering) {
     return (
@@ -119,6 +163,21 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
       event.snippet.length > 280);
   const hasPurchase =
     event.purchaseId !== null && purchaseIds.has(event.purchaseId);
+  const canAdd =
+    ADDABLE_OUTCOMES.includes(event.outcome) && event.purchaseId === null;
+
+  const addAsPurchase = () => {
+    if (isAdding) return;
+    setIsAdding(true);
+    setAddFailure(null);
+    actions
+      .addAsPurchase(event.id)
+      .then(() =>
+        addToast({ title: EMAIL_WORDS.addedAsPurchase, type: 'success' }),
+      )
+      .catch((error: unknown) => setAddFailure(readAddFailure(error)))
+      .finally(() => setIsAdding(false));
+  };
 
   return (
     <FormSheet
@@ -155,8 +214,42 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
             </p>
           </blockquote>
         )}
+        {addFailure !== null && canAdd && (
+          <div role='alert'>
+            <InlineNotice tone='warning'>{addFailure.line}</InlineNotice>
+            <DebugDetails
+              className='mt-2'
+              message={addFailure.raw}
+              facts={[
+                `Code: ${addFailure.code ?? 'none'}`,
+                `Outcome: ${event.outcome}`,
+              ]}
+            />
+          </div>
+        )}
         {(hasPurchase || hasWholeEmail || event.outcome !== 'filtered') && (
           <ActionGroup isRoomy>
+            {canAdd && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={
+                  isAddShown ? (
+                    <LoaderCircle className='animate-spin motion-reduce:[animation-duration:2.5s]' />
+                  ) : (
+                    <PlusCircle />
+                  )
+                }
+                label={EMAIL_WORDS.addAsPurchase}
+                subtitle={
+                  isAddShown
+                    ? EMAIL_WORDS.addingAsPurchase
+                    : EMAIL_WORDS.addAsPurchaseSub
+                }
+                isDisabled={isAddShown}
+                onClick={addAsPurchase}
+              />
+            )}
             {hasWholeEmail && (
               <ActionRow
                 isGrouped

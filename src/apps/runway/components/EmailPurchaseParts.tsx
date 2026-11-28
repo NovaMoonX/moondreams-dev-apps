@@ -38,20 +38,34 @@ interface EmailPurchaseProps {
   purchase: OpenPurchase;
 }
 
+const useIsAddedByPerson = (purchase: OpenPurchase) => {
+  const events = useEmailEvents();
+  return events.some(
+    (entry) =>
+      entry.id === purchase.emailEventId && entry.addedByPersonAt !== null,
+  );
+};
+
 /** The one quiet line on an emailed purchase's sheet: where it came from and, while it waits, that it merges on its own. */
 export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
   const today = todayAsUtcDate();
   const twinned = useAppSelector(selectTwinnedEmailIds);
   const postedOnly = useAppSelector(selectPostedOnlySides);
   const bank = useWaitingBank(purchase);
+  const isAddedByPerson = useIsAddedByPerson(purchase);
   if (purchase.source !== 'email') return null;
   if (isOverdueEmail(purchase, twinned, postedOnly, today)) {
     const days = Math.floor((today - purchase.date) / DAY_MS);
     return (
       <InlineNotice tone='warning'>
-        {purchase.storeEmail?.kind === 'order'
-          ? EMAIL_WORDS.overdueOrderNotice(days)
-          : EMAIL_WORDS.overdueNotice(days)}
+        <p>
+          {purchase.storeEmail?.kind === 'order'
+            ? EMAIL_WORDS.overdueOrderNotice(days)
+            : EMAIL_WORDS.overdueNotice(days)}
+        </p>
+        {isAddedByPerson && (
+          <p className='mt-1 text-xs'>{EMAIL_WORDS.drawerAddedByYou}</p>
+        )}
       </InlineNotice>
     );
   }
@@ -86,6 +100,9 @@ export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
   return (
     <InlineNotice tone='info' icon={Mail}>
       <p>{getText()}</p>
+      {isAddedByPerson && (
+        <p className='mt-1 text-xs'>{EMAIL_WORDS.drawerAddedByYou}</p>
+      )}
     </InlineNotice>
   );
 }
@@ -181,7 +198,7 @@ export function EmailPurchaseRows({
 
   return (
     <>
-      {event !== null && (
+      {event !== null && event.addedByPersonAt === null && (
         <ActionRow
           isGrouped
           isRoomy

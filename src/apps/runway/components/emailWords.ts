@@ -59,8 +59,12 @@ export const EMAIL_WORDS = {
   filterOut: 'Filter out emails like this',
   filterOutSub: 'Future ones are skipped before anything is read.',
   filterOutRowSub: 'Emails like this won’t become purchases',
-  unreadLine:
-    'Runway couldn’t find an amount and a place in this email. If it was a purchase, add it from Add a purchase.',
+  unreadLine: 'Runway couldn’t find an amount and a place in this email.',
+  addAsPurchase: 'Add it as a purchase',
+  addAsPurchaseSub: 'Runway finds the amount and the shop in the email',
+  addedAsPurchase: 'Added to your purchases',
+  addingAsPurchase: 'Reading it again…',
+  addAsPurchaseFailed: 'That didn’t go through. Try again in a moment.',
   notPurchaseLine: 'Runway didn’t find a purchase in it.',
   noSubject: 'No subject',
   from: 'From',
@@ -102,6 +106,7 @@ export const EMAIL_WORDS = {
   emailActionsCaption: 'The email',
   drawerFromEmail: 'Read from your bank’s alert email.',
   drawerFromStore: 'Read from the store’s email.',
+  drawerAddedByYou: 'You added this one from the email yourself.',
   drawerStoreWaiting:
     'Read from the store’s email. It merges on its own when your bank sends the same charge.',
   stopWaiting: 'Stop waiting for your bank',

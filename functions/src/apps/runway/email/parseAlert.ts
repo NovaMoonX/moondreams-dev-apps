@@ -333,6 +333,14 @@ export const isMerchantHost = (address: string, merchant: string) => {
   );
 };
 
+/** The company an address's own host names ("auto-confirm@amazon.com" is "Amazon"); null for a mailbox provider's or an unusual ending. */
+export const companyFromAddress = (address: string): string | null => {
+  const label = readHostLabel(address);
+  return label.length >= 3
+    ? label.charAt(0).toUpperCase() + label.slice(1)
+    : null;
+};
+
 /** Whether a name is one of the known banks or card issuers the patterns read, as against a name guessed from a sender's host. */
 export const isKnownInstitution = (name: string) =>
   INSTITUTIONS.some(([, known]) => known === name);
@@ -371,7 +379,7 @@ const readInstitution = (
   return named(from) ?? named(subject) ?? fromHost ?? named(text.slice(0, 600));
 };
 
-/** Reads a bank's purchase alert by pattern. `null` when it cannot be sure (the caller may ask the AI); `isPurchase: false` when it is plainly something else. */
+/** Reads a bank's purchase alert by pattern. `null` when it cannot be sure (the caller asks the AI); `isPurchase: false` only when it has no number at all or its subject or opening plainly says it is something else. */
 export function parseAlertEmail({
   from,
   subject,
@@ -383,9 +391,13 @@ export function parseAlertEmail({
   text: string;
   receivedAt: number;
 }): ParsedAlert | null {
-  const body = text.replace(/\s*\n\s*/g, ' | ').replace(/[ \t]+/g, ' ');
+  const body = text
+    .replace(/\s*\n\s*/g, ' | ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\$ \| (?=\d)/g, '$');
   const all = `${subject} | ${body}`;
-  if (!/\$\s?\d/.test(all)) return NOT_A_PURCHASE;
+  if (!/\d/.test(all)) return NOT_A_PURCHASE;
+  if (!/\$\s?\d/.test(all)) return null;
   if (NOT_PURCHASE_SIGNAL.test(subject) && !PURCHASE_SIGNAL.test(subject)) {
     return NOT_A_PURCHASE;
   }
@@ -401,10 +413,9 @@ export function parseAlertEmail({
   }
   const amountCents = readAmount(all);
   const merchant = readMerchant(all);
+  // A footer's "unsubscribe from" or "transfer" proves nothing, so an email with an amount the patterns can't place goes to the AI.
   if (amountCents === null || merchant === null || !PURCHASE_SIGNAL.test(all)) {
-    return NOT_PURCHASE_SIGNAL.test(all) && !PURCHASE_SIGNAL.test(all)
-      ? NOT_A_PURCHASE
-      : null;
+    return null;
   }
   return {
     isPurchase: true,
