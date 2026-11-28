@@ -257,8 +257,9 @@ const getUndoneWords = (undo: DoneForYouUndo, sorting: SortingState | null) => {
   switch (undo.kind) {
     case 'merge':
     case 'mergeSplit':
-    case 'emailJoin':
       return NEEDS_HOME_WORDS.matchUndone;
+    case 'emailJoin':
+      return DONE_FOR_YOU_WORDS.joinUndone;
     case 'deposit':
       return DEPOSIT_WORDS.undone;
     case 'pair':

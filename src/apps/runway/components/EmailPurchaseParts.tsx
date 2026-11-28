@@ -25,7 +25,7 @@ import {
   useEmailEvents,
   useWaitingBank,
 } from '@apps/runway/hooks/useEmailPurchases';
-import type { OpenPurchase } from '@apps/runway/types';
+import type { DateOnly, OpenPurchase } from '@apps/runway/types';
 
 interface EmailPurchaseProps {
   purchase: OpenPurchase;
@@ -50,6 +50,16 @@ export function EmailPurchaseNotice({ purchase }: EmailPurchaseProps) {
   }
   const isStore = purchase.storeEmail != null;
   const getText = () => {
+    if (
+      purchase.emailWaiting === true &&
+      purchase.emailWaitUntil !== null &&
+      purchase.emailWaitUntil >= today
+    ) {
+      return EMAIL_WORDS.drawerWaitingUntil(
+        formatDateOrdinalUTC(purchase.emailWaitUntil),
+        isStore,
+      );
+    }
     if (purchase.emailWaiting !== true) {
       return isStore
         ? EMAIL_WORDS.drawerFromStore
@@ -99,6 +109,12 @@ export function EmailPurchaseRows({
       : (events.find((entry) => entry.id === purchase.emailEventId) ?? null);
 
   if (purchase.source !== 'email') return null;
+  const waitUntil =
+    purchase.emailWaiting === true &&
+    purchase.emailWaitUntil !== null &&
+    purchase.emailWaitUntil >= today
+      ? purchase.emailWaitUntil
+      : null;
 
   const stopWaiting = async () => {
     setIsBusy(true);
@@ -126,25 +142,29 @@ export function EmailPurchaseRows({
     }
   };
 
-  const keepWaiting = async (days: number) => {
+  const keepWaiting = async (until: DateOnly | null) => {
     const before = purchase.emailWaitUntil;
-    const until = today + days * DAY_MS;
     setIsPickingWait(false);
     try {
       await actions.setWaitUntil(purchase.id, until);
       addToast({
-        title: EMAIL_WORDS.waitingUntil(formatDateOrdinalUTC(until)),
+        title:
+          until === null
+            ? EMAIL_WORDS.usualWaitDone
+            : EMAIL_WORDS.waitingUntil(formatDateOrdinalUTC(until)),
         type: 'success',
         duration: UNDO_WINDOW_MS,
         action: {
           label: EMAIL_WORDS.undo,
           onClick: () =>
-            void actions.setWaitUntil(purchase.id, before).catch((error) =>
-              addToast({
-                title: getErrorMessage(error, EMAIL_WORDS.keepWaitingFailed),
-                type: 'error',
-              }),
-            ),
+            void actions
+              .setWaitUntil(purchase.id, before, until)
+              .catch((error) =>
+                addToast({
+                  title: getErrorMessage(error, EMAIL_WORDS.keepWaitingFailed),
+                  type: 'error',
+                }),
+              ),
         },
       });
     } catch (error) {
@@ -165,14 +185,18 @@ export function EmailPurchaseRows({
           onClick={() => setIsFiltering(true)}
         />
       )}
-      {isOverdue && (
+      {(isOverdue || waitUntil !== null) && (
         <ActionRow
           isGrouped
           isRoomy
           hasChevron
           icon={<CalendarClock />}
           label={EMAIL_WORDS.keepWaiting}
-          subtitle={EMAIL_WORDS.keepWaitingSub}
+          subtitle={
+            waitUntil === null
+              ? EMAIL_WORDS.keepWaitingSub
+              : EMAIL_WORDS.keepWaitingSetSub(formatDateOrdinalUTC(waitUntil))
+          }
           onClick={() => setIsPickingWait(true)}
         />
       )}
@@ -203,9 +227,19 @@ export function EmailPurchaseRows({
               subtitle={EMAIL_WORDS.keepWaitingUntil(
                 formatDateOrdinalUTC(today + days * DAY_MS),
               )}
-              onClick={() => void keepWaiting(days)}
+              onClick={() => void keepWaiting(today + days * DAY_MS)}
             />
           ))}
+          {waitUntil !== null && (
+            <ActionRow
+              isGrouped
+              isRoomy
+              icon={<Hourglass />}
+              label={EMAIL_WORDS.usualWait}
+              subtitle={EMAIL_WORDS.usualWaitSub}
+              onClick={() => void keepWaiting(null)}
+            />
+          )}
         </ActionGroup>
       </DetailSheet>
       {isFiltering && event !== null && (

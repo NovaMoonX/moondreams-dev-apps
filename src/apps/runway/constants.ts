@@ -5684,6 +5684,7 @@ export const DONE_FOR_YOU_WORDS = {
   cardPaid: 'The card shows it as paid.',
   cannotUndoRow: "Can't be undone now",
   undoMerge: 'Undo and keep them apart',
+  joinUndone: 'Kept the two emails apart',
   undoDeposit: 'Undo and unlink it',
   undoPair: 'Undo and send both to Needs a home',
   undoRule: 'Undo and send it to Needs a home',

@@ -77,7 +77,11 @@ export interface EmailActions {
   stopWaiting(purchaseId: string): Promise<void>;
   resumeWaiting(purchaseId: string): Promise<void>;
   /** Waits for the bank's charge until the day given, or the usual wait when null. */
-  setWaitUntil(purchaseId: string, until: DateOnly | null): Promise<void>;
+  setWaitUntil(
+    purchaseId: string,
+    until: DateOnly | null,
+    expected?: DateOnly | null,
+  ): Promise<void>;
 }
 
 const NO_UID = () => Promise.reject(new Error('Sign in to change this.'));
@@ -198,8 +202,10 @@ export function useEmailActions(): EmailActions {
         uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, false),
       resumeWaiting: (purchaseId) =>
         uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, true),
-      setWaitUntil: (purchaseId, until) =>
-        uid === null ? NO_UID() : setEmailWaitUntil(uid, purchaseId, until),
+      setWaitUntil: (purchaseId, until, expected) =>
+        uid === null
+          ? NO_UID()
+          : setEmailWaitUntil(uid, purchaseId, until, expected),
     }),
     [uid],
   );

@@ -346,10 +346,10 @@ export function describeEmailJoin(
   isSplit: boolean,
 ): string {
   const keptPart = `${getPurchaseTitle(kept, nameOf)}, ${formatSentenceMoney(kept.amountCents)} on ${formatDateOrdinalUTC(kept.date)}`;
-  const droppedPart = `${getPurchaseTitle(dropped, nameOf)}, ${formatSentenceMoney(dropped.amountCents)} on ${formatDateOrdinalUTC(dropped.date)}`;
+  const droppedName = getPurchaseTitle(dropped, nameOf);
   return isSplit
-    ? `Emails kept apart: ${droppedPart} is its own purchase again, apart from ${keptPart}.`
-    : `Two emails about one purchase: ${droppedPart} joined ${keptPart}.`;
+    ? `Emails kept apart: ${droppedName} is its own purchase again, apart from ${keptPart}.`
+    : `Two emails about one purchase: ${droppedName} joined ${keptPart}.`;
 }
 
 /** The change-log sentence for an order from a store's email matched to the several charges it posted as, or for an Undo that splits them again. */

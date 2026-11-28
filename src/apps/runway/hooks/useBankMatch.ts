@@ -15,6 +15,7 @@ import {
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   findEmailJoins,
+  isAnsweredEmail,
   findEmailTwins,
   getSplitKey,
 } from '@apps/runway/engine/emailTwins';
@@ -106,6 +107,8 @@ interface SplitPair {
 
 const EMAIL_MATCH_WORDS = {
   joined: 'Joined two emails about one purchase',
+  joinedWhy:
+    'The store’s email named no card, and your bank’s email was the only one with the same amount from the same store.',
   one: 'Matched a purchase from your email with your bank',
   split: (count: number) =>
     `Matched an order from your email with its ${count} charges from your bank`,
@@ -141,7 +144,9 @@ function useJoinEmails() {
               encryption,
               order,
               alert,
-              describeEmailJoin(order, alert, nameOf, false),
+              isAnsweredEmail(alert) && !isAnsweredEmail(order)
+                ? describeEmailJoin(alert, order, nameOf, false)
+                : describeEmailJoin(order, alert, nameOf, false),
             );
             return [...list, entry];
           } catch (error) {
@@ -164,7 +169,7 @@ function useJoinEmails() {
             kind: 'merge' as const,
             title: EMAIL_MATCH_WORDS.joined,
             detail: getPurchaseTitle(entry.bank, nameOf),
-            why: null,
+            why: EMAIL_MATCH_WORDS.joinedWhy,
             undo: { kind: 'emailJoin' as const, merged: entry },
             subject: toPurchaseSubject(entry.bank, {
               merchant: entry.bank.merchant ?? entry.typed.merchant ?? null,
