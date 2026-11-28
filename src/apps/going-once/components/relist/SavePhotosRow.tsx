@@ -103,8 +103,9 @@ function SavePhotosRow({ item }: SavePhotosRowProps) {
     try {
       const done = await shareOrDownloadFiles(files, { title: base });
       setOutcome(done === 'downloaded' ? `Downloaded ${plural(count)}` : null);
-    } catch {
-      setOutcome("Couldn't open the share sheet. Tap to try again.");
+    } catch (error) {
+      console.error('Photos were not saved', error);
+      setOutcome("Couldn't save the photos on this device.");
     } finally {
       setIsSaving(false);
     }

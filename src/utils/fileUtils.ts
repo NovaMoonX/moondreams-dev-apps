@@ -1,3 +1,7 @@
+import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+
+const SHARE_FALLBACK_KEY = 'file-share';
+
 /** A file's size in units a person reads: whole KB below a megabyte (never "0 KB" for a file with something in it), MB with one decimal from there. */
 export function formatFileSize(bytes: number) {
   const kilobytes = Math.round(bytes / 1024);
@@ -29,31 +33,21 @@ export function isReadableFile({ name, type }: { name: string; type: string }) {
   return result;
 }
 
-/** Whether this browser can hand these files to its share sheet (false on most desktops). */
+/** Whether these files go to a share sheet: a touch device whose browser can share them. A computer downloads instead, since the person needs the file on disk. */
 export function canShareFiles(files: File[]) {
   return (
     typeof navigator !== 'undefined' &&
     typeof navigator.canShare === 'function' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches &&
     navigator.canShare({ files })
   );
 }
 
-/** Hands files to the share sheet where the browser has one, otherwise downloads each. Call it inside the tap with files already in hand: a share started after a slow `await` is refused on iOS. A cancelled share is not a failure. */
-export async function shareOrDownloadFiles(
-  files: File[],
-  { title }: { title: string },
-): Promise<'shared' | 'downloaded' | 'cancelled'> {
-  if (canShareFiles(files)) {
-    try {
-      await navigator.share({ files, title });
-      return 'shared';
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError')
-        return 'cancelled';
-      throw error;
-    }
-  }
+const describeError = (error: unknown) =>
+  error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 
+function downloadFiles(files: File[]) {
   files.forEach((file) => {
     const url = URL.createObjectURL(file);
     const link = document.createElement('a');
@@ -64,6 +58,38 @@ export async function shareOrDownloadFiles(
     document.body.removeChild(link);
     window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
   });
+}
+
+/** Hands files to the share sheet on a touch device that has one, otherwise downloads each; a refused share downloads too and is reported as a fallback. Call it inside the tap with files already in hand: a share started after a slow `await` is refused on iOS. A cancelled share is not a failure. */
+export async function shareOrDownloadFiles(
+  files: File[],
+  { title }: { title: string },
+): Promise<'shared' | 'downloaded' | 'cancelled'> {
+  if (canShareFiles(files)) {
+    try {
+      await navigator.share({ files, title });
+      clearFallback(SHARE_FALLBACK_KEY);
+      return 'shared';
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError')
+        return 'cancelled';
+      reportFallback({
+        key: SHARE_FALLBACK_KEY,
+        feature: 'Saving files',
+        wanted: 'the share sheet',
+        used: 'a download',
+        reason: 'The browser refused to share these files.',
+        cause: { stage: 'navigator.share', detail: describeError(error) },
+        facts: [
+          `Files: ${files.map((file) => `${file.name} (${file.type || 'no type'}, ${file.size} bytes)`).join('; ')}`,
+          `User agent: ${navigator.userAgent}`,
+        ],
+        trace: error instanceof Error ? (error.stack ?? null) : null,
+      });
+    }
+  }
+
+  downloadFiles(files);
   return 'downloaded';
 }
 
