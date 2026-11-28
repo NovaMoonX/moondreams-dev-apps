@@ -170,7 +170,7 @@ Everything below has its rule in "Screens" but no board and no spec board.
 |---|---|---|
 | `PhotoSetPicker` | `src/components/forms` | Several photos for one record: a camera loop, a library multi-pick, cover first, hold-and-drag (drag with a mouse) to reorder with a hint line saying so, and a tapped photo's sheet (the photo large) with Make cover / Move earlier / Move later / Remove with undo, a count cap. Each photo is shrunk to the listing size on the device and saved on its own; `usePhotoSetUploads` holds those uploads in the screen that owns the record, so they outlive the picker's question. |
 | `PhotoStrip` | `src/components` | A sideways snap row of full-width 4:3 photos, one per view (no peek), with "1 / 5" over the photo's corner, has prev/next arrows from `sm`, holds its box while loading, shows a camera tile for a failed image (hidden when all fail), and opens `ImageViewer`. |
-| `shareOrDownloadFiles` | `src/utils/fileUtils.ts` (technical's name) | Hands prefetched files to the share sheet, otherwise downloads them, and reports which it did. |
+| `shareOrDownloadFiles` | `src/utils/fileUtils.ts` (technical's name) | Hands prefetched files to a touch device's share sheet, otherwise downloads them (a refused share downloads too and shows debug viewers why), and reports which it did. |
 | `PermissionCapsule` | `src/components` | The quiet "Turn on" capsule plus its explainer modal, from `product.md` "An opt-in is offered where the need starts". Pinch's timer capsule moves onto it when touched. |
 
 **New, in the app:**
