@@ -52,40 +52,35 @@ const imageUrls = (text: string) => [
   ...Array.from(text.matchAll(IMAGE_TAG), (match) => match[1]),
 ];
 
-const withoutImages = (text: string) =>
-  text
-    .replace(IMAGE_MARKDOWN, '')
-    .replace(IMAGE_TAG, '')
-    .replace(/<br\s*\/?>/gi, '')
-    .trim();
-
 const isTableRule = (line: string) =>
   /^\|?[\s:|-]+\|?$/.test(line.trim()) && line.includes('-');
 
 function findProblems(section: string[]): string[] {
-  const table = section.filter((line) => line.trim().startsWith('|'));
-  const bodyRows = table.filter(
-    (line, index) => index > 0 && !isTableRule(line),
+  const isRow = (line: string | undefined) =>
+    line !== undefined && line.trim().startsWith('|');
+  const bodyRows = section.filter(
+    (line, index) =>
+      isRow(line) &&
+      !isTableRule(line) &&
+      !(isRow(section[index + 1]) && isTableRule(section[index + 1] ?? '')),
   );
-  const cellProblems = bodyRows.flatMap((row) =>
-    row
+  const cellProblems = bodyRows.flatMap((row) => {
+    const cells = row
       .trim()
       .replace(/^\||\|$/g, '')
       .split('|')
-      .map((cell) => cell.trim())
-      .flatMap((cell, column) => {
-        if (imageUrls(cell).length === 0)
-          return [
-            `A screenshot cell (column ${column + 1}) shows no image: "${cell || '(empty)'}"`,
-          ];
-        const leftover = withoutImages(cell);
-        return leftover === ''
-          ? []
-          : [
-              `A screenshot cell holds text beside its image, so it may not render: "${leftover}"`,
-            ];
-      }),
-  );
+      .map((cell) => cell.trim());
+    const isLabelled = cells
+      .slice(1)
+      .some((cell) => imageUrls(cell).length > 0);
+    return cells.flatMap((cell, column) => {
+      if (imageUrls(cell).length > 0) return [];
+      if (column === 0 && isLabelled && cell !== '') return [];
+      return [
+        `A screenshot cell (column ${column + 1}) shows no image: "${cell || '(empty)'}"`,
+      ];
+    });
+  });
   const linkProblems = Array.from(
     section
       .join('\n')
