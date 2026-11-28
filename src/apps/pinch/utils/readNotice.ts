@@ -1,0 +1,109 @@
+import { formatList } from '@/utils/formatUtils';
+import type { ExtractedRecipe } from '@apps/pinch/utils/normalizeRecipe';
+
+export interface ReadNoticeDetail {
+  icon: string;
+  text: string;
+}
+
+export interface ReadNotice {
+  headline: string;
+  details: ReadNoticeDetail[];
+  /** A quiet closing line under the details, only when finishing added something. */
+  footer: string | null;
+}
+
+const toSentence = (text: string) =>
+  `${text.charAt(0).toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}`;
+
+export const FINISHING_OFF_LINE =
+  'Want only what you gave it? Turn off finishing in Settings.';
+
+/** Details shown directly under the headline up to this many; more fold behind a tap. */
+export const MAX_DIRECT_NOTICE_DETAILS = 2;
+
+/** The notice on a form a reading filled in: a headline that says how it went and one line per thing it did, none of which the headline repeats. */
+export const getReadNotice = (
+  recipe: Pick<
+    ExtractedRecipe,
+    | 'servings'
+    | 'isServingsEstimate'
+    | 'estimated'
+    | 'guided'
+    | 'finished'
+    | 'unread'
+  >,
+  usedPicks: { name: string; ingredientName: string }[],
+): ReadNotice => {
+  const isTimeEstimated = recipe.estimated.some(
+    (field) => field === 'PREP' || field === 'COOK',
+  );
+  const isCareEstimated = recipe.estimated.some(
+    (field) => field !== 'PREP' && field !== 'COOK',
+  );
+  const isFinishedForThem =
+    (recipe.isServingsEstimate && recipe.servings !== null) ||
+    isTimeEstimated ||
+    isCareEstimated ||
+    recipe.finished.length > 0 ||
+    usedPicks.length > 0;
+  const details = [
+    recipe.unread.length > 0
+      ? {
+          icon: '⚠️',
+          text: `We couldn’t read: ${recipe.unread.join(', ')}. Check it against your recipe.`,
+        }
+      : null,
+    recipe.guided.length > 0
+      ? {
+          icon: '📝',
+          text: `Shaped to match your notes: ${formatList(recipe.guided)}.`,
+        }
+      : null,
+    usedPicks.length > 0
+      ? {
+          icon: '📌',
+          text: `Used your usual picks: ${formatList(
+            usedPicks.map(
+              (pick) => `${pick.ingredientName} for ${pick.name.toLowerCase()}`,
+            ),
+          )}.`,
+        }
+      : null,
+    ...recipe.finished.map((item) => ({
+      icon: '👩‍🍳',
+      text: toSentence(item),
+    })),
+    recipe.isServingsEstimate && recipe.servings !== null
+      ? {
+          icon: '🍽️',
+          text: `We guessed ${recipe.servings} servings from the amounts, since the recipe didn’t say.`,
+        }
+      : null,
+    isTimeEstimated
+      ? {
+          icon: '⏱️',
+          text: 'We estimated a time the recipe didn’t give, from its steps.',
+        }
+      : null,
+    isCareEstimated
+      ? {
+          icon: '🧊',
+          text: 'We estimated how long it keeps and how to reheat it.',
+        }
+      : null,
+  ].filter((detail) => detail !== null);
+  const headline =
+    recipe.guided.length > 0
+      ? 'We followed your notes'
+      : recipe.finished.length > 0
+        ? 'Finished like a cookbook'
+        : isFinishedForThem
+          ? 'Filled in and finished for you'
+          : 'Filled in from your recipe';
+  return {
+    headline,
+    details,
+    footer: recipe.finished.length > 0 ? FINISHING_OFF_LINE : null,
+  };
+};

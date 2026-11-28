@@ -21,6 +21,16 @@ import {
   type ReadFailure,
 } from '../../src/apps/pinch/utils/readFailures.ts';
 import { resolveIngredients } from '../../src/apps/pinch/utils/resolveIngredient.ts';
+import {
+  findPickedIngredient,
+  getPickKey,
+  getRememberPatch,
+  MAX_INGREDIENT_PICKS,
+} from '../../src/apps/pinch/utils/ingredientPicks.ts';
+import type {
+  IngredientPick,
+  ResolvedIngredient,
+} from '../../src/apps/pinch/types.ts';
 
 const custom = (id: string, name: string): IngredientRecord => ({
   id,
@@ -393,6 +403,8 @@ assert.deepEqual(Object.keys(hostile).sort(), [
   'categories',
   'cookMinutes',
   'description',
+  'estimated',
+  'finished',
   'guided',
   'ingredients',
   'isServingsEstimate',
@@ -1106,3 +1118,269 @@ assert.deepEqual(
 );
 
 console.log('pinchIngest: all checks passed');
+
+// A description in amountText ("whatever meat you are cooking") moves to the note; real how-much words stay.
+const meat = normalizeExtractedRecipe({
+  ingredients: [
+    {
+      name: 'Meat',
+      amount: null,
+      unit: null,
+      note: 'your choice',
+      amountText: 'whatever meat that you are cooking',
+    },
+    {
+      name: 'Butter',
+      amount: null,
+      unit: null,
+      note: null,
+      amountText: 'a stick',
+    },
+    {
+      name: 'Parsley',
+      amount: null,
+      unit: null,
+      note: null,
+      amountText: 'a big handful or so',
+    },
+    ...[
+      'to coat the pan',
+      'for dusting the board',
+      'as much as you like',
+      'for greasing the dish',
+    ].map((amountText) => ({
+      name: 'Flour',
+      amount: null,
+      unit: null,
+      note: null,
+      amountText,
+    })),
+    ...[
+      "whatever meat you're cooking",
+      'your favorite cheese',
+      'depending on the pasta you are using',
+    ].map((amountText) => ({
+      name: 'Other',
+      amount: null,
+      unit: null,
+      note: null,
+      amountText,
+    })),
+  ],
+  steps: [],
+  unread: [],
+});
+assert.deepEqual(
+  meat.ingredients.map((line) => [line.name, line.note, line.amountText]),
+  [
+    ['Meat', 'your choice, whatever meat that you are cooking', null],
+    ['Butter', null, 'a stick'],
+    ['Parsley', null, 'a big handful or so'],
+    ['Flour', null, 'to coat the pan'],
+    ['Flour', null, 'for dusting the board'],
+    ['Flour', null, 'as much as you like'],
+    ['Flour', null, 'for greasing the dish'],
+    ['Other', "whatever meat you're cooking", null],
+    ['Other', 'your favorite cheese', null],
+    ['Other', 'depending on the pasta you are using', null],
+  ],
+  'words that describe which meat are a note; how-much words stay the amount in words',
+);
+
+// estimated lists only fields that exist and were listed
+assert.deepEqual(normalizeExtractedRecipe({ prepMinutes: 10 }).estimated, []);
+assert.deepEqual(
+  normalizeExtractedRecipe({ estimated: ['PREP'] }).estimated,
+  [],
+  'a listed field with no value is not estimated',
+);
+assert.deepEqual(
+  normalizeExtractedRecipe({ estimated: ['COOK', 'nonsense'], cookMinutes: 45 })
+    .estimated,
+  ['COOK'],
+);
+assert.deepEqual(
+  normalizeExtractedRecipe({ estimated: ['FRIDGE'], fridgeDays: 3.9 })
+    .estimated,
+  ['FRIDGE'],
+);
+
+// A stated prep with an estimated cook: finishing off nulls only the cook
+const statedPrep = {
+  prepMinutes: 15,
+  cookMinutes: 40,
+  estimated: ['COOK'],
+  fridgeDays: 4,
+  freezerDays: 90,
+  reheat: 'Warm gently.',
+};
+const statedPrepOff = normalizeExtractedRecipe(statedPrep, false);
+assert.equal(statedPrepOff.prepMinutes, 15, 'the source’s prep is kept');
+assert.equal(statedPrepOff.cookMinutes, null, 'the estimated cook goes');
+assert.equal(statedPrepOff.care?.fridgeDays, 4, 'stated keeping is kept');
+assert.deepEqual(statedPrepOff.estimated, []);
+const statedPrepOn = normalizeExtractedRecipe(statedPrep);
+assert.equal(statedPrepOn.cookMinutes, 40);
+assert.deepEqual(statedPrepOn.estimated, ['COOK']);
+
+const statedFridge = normalizeExtractedRecipe(
+  {
+    estimated: ['FREEZER', 'REHEAT'],
+    fridgeDays: 4,
+    freezerDays: 90,
+    reheat: 'Warm gently.',
+  },
+  false,
+);
+assert.equal(statedFridge.care?.fridgeDays, 4, 'a stated fridge time stays');
+assert.equal(statedFridge.care?.freezerDays, null);
+assert.equal(statedFridge.care?.reheat, null);
+
+// Finishing like a cookbook: what the model added is kept, trimmed, deduped and capped
+assert.deepEqual(normalizeExtractedRecipe({}).finished, []);
+assert.deepEqual(
+  normalizeExtractedRecipe({
+    finished: [
+      '  added a step to melt the butter ',
+      'added a step to melt the butter',
+      '',
+      7,
+      'x'.repeat(200),
+    ],
+  }).finished.map((item) => item.length),
+  [31, 80],
+  'finished items are trimmed, deduped, blank and non-text ones dropped, and long ones cut',
+);
+assert.equal(
+  normalizeExtractedRecipe({
+    finished: Array.from({ length: 20 }, (_, index) => `added step ${index}`),
+  }).finished.length,
+  8,
+  'finished is capped',
+);
+
+const cornbreadReading = {
+  title: 'Cornbread dressing',
+  estimated: ['PREP', 'COOK', 'FRIDGE', 'FREEZER', 'REHEAT'],
+  prepMinutes: 25,
+  cookMinutes: 40,
+  fridgeDays: 3,
+  freezerDays: 90,
+  reheat: 'Reheat covered at 350°F with a splash of broth.',
+  tip: 'Keep the broth apart.',
+  ingredients: [
+    { name: 'Cornbread', amount: 1, unit: 'EACH' },
+    { name: 'Butter', amount: 0.5, unit: 'CUP', note: 'melted' },
+  ],
+  steps: [
+    { text: 'Melt the butter.', section: 'Prep' },
+    { text: 'Crumble the cornbread into a large bowl.', section: 'Prep' },
+    { text: 'Stir in the butter.', section: 'Mix' },
+    {
+      text: 'Bake uncovered at 350°F until the top is light brown.',
+      section: 'Bake',
+    },
+  ],
+  finished: [
+    'added a step to melt the butter',
+    'added a step to crumble the cornbread',
+    'estimated how long it keeps',
+  ],
+};
+const cornbread = normalizeExtractedRecipe(cornbreadReading);
+assert.deepEqual(cornbread.finished, [
+  'added a step to melt the butter',
+  'added a step to crumble the cornbread',
+  'estimated how long it keeps',
+]);
+assert.deepEqual(cornbread.estimated, [
+  'PREP',
+  'COOK',
+  'FRIDGE',
+  'FREEZER',
+  'REHEAT',
+]);
+assert.equal(cornbread.care?.fridgeDays, 3);
+assert.equal(cornbread.steps.length, 4);
+
+// Strict mode is the safety net when the model ignores it: no estimates or finishing notes survive
+const strictCornbread = normalizeExtractedRecipe(cornbreadReading, false);
+assert.deepEqual(strictCornbread.finished, []);
+assert.equal(strictCornbread.prepMinutes, null);
+assert.equal(strictCornbread.cookMinutes, null);
+assert.deepEqual(strictCornbread.estimated, []);
+assert.equal(strictCornbread.care?.fridgeDays, null);
+assert.equal(strictCornbread.care?.freezerDays, null);
+assert.equal(strictCornbread.care?.reheat, null);
+assert.equal(
+  strictCornbread.care?.tip,
+  'Keep the broth apart.',
+  'the recipe’s own tip is not an estimate',
+);
+assert.equal(
+  normalizeExtractedRecipe(
+    { prepMinutes: 10, cookMinutes: 30, fridgeDays: 4, finished: ['x'] },
+    false,
+  ).prepMinutes,
+  10,
+  'a time the source gave stays when finishing is off',
+);
+assert.equal(
+  normalizeExtractedRecipe({ fridgeDays: 4 }, false).care?.fridgeDays,
+  4,
+  'keeping the source states stays when finishing is off',
+);
+
+const pickIngredients = [
+  { id: 'cat-bread-flour', name: 'Bread flour', isArchived: false },
+  { id: 'cat-cake-flour', name: 'Cake flour', isArchived: true },
+] as unknown as ResolvedIngredient[];
+const flourPick: Record<string, IngredientPick> = {
+  [getPickKey('Flour')]: {
+    name: 'Flour',
+    ingredientId: 'cat-bread-flour',
+    pickedAt: 1,
+  },
+};
+assert.equal(
+  findPickedIngredient('flour', flourPick, pickIngredients)?.id,
+  'cat-bread-flour',
+  'a pick made for "Flour" applies to a later "flour"',
+);
+assert.equal(
+  findPickedIngredient(
+    'Flour',
+    { flour: { name: 'Flour', ingredientId: 'cat-cake-flour', pickedAt: 1 } },
+    pickIngredients,
+  ),
+  null,
+  'a pick whose ingredient is archived is ignored',
+);
+const fullPicks: Record<string, IngredientPick> = Object.fromEntries(
+  Array.from({ length: MAX_INGREDIENT_PICKS }, (_, index) => [
+    `name ${index}`,
+    {
+      name: `Name ${index}`,
+      ingredientId: index === 150 ? 'gone' : 'cat-bread-flour',
+      pickedAt: index,
+    },
+  ]),
+);
+const fullPatch = getRememberPatch(
+  'Sugar',
+  'cat-bread-flour',
+  fullPicks,
+  pickIngredients,
+);
+assert.equal(
+  fullPatch?.['name 150'],
+  null,
+  'a full list forgets a pick whose ingredient is gone before the oldest',
+);
+assert.equal(fullPatch?.['name 0'], undefined, 'the oldest live pick stays');
+assert.equal(
+  normalizeExtractedRecipe({ prepMinutes: 20, estimated: ['PREP'] }, false)
+    .prepMinutes,
+  null,
+  'a time the model estimated anyway is dropped when finishing is off',
+);

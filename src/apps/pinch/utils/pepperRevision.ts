@@ -15,6 +15,7 @@ import type {
 } from '@apps/pinch/lib/reviseRecipe';
 import type {
   Collection,
+  IngredientPick,
   RecipeLink,
   ResolvedIngredient,
   Source,
@@ -37,6 +38,7 @@ import { cleanStepSection } from '@apps/pinch/utils/stepSections';
 export interface RevisionContext {
   sources: readonly Source[];
   collections: readonly Collection[];
+  picks: Record<string, IngredientPick>;
 }
 
 export interface RevisionMarks {
@@ -244,7 +246,8 @@ export function applyRevision(
       return [
         ...acc,
         {
-          row: getRowFromRead(toRead(line), ingredients, rows).row,
+          row: getRowFromRead(toRead(line), ingredients, rows, context.picks)
+            .row,
           previous: null,
         },
       ];
@@ -252,7 +255,12 @@ export function applyRevision(
     if (
       normalizeName(line.name) !== normalizeName(oldNames.get(previous.id)!)
     ) {
-      const { row } = getRowFromRead(toRead(line), ingredients, rows);
+      const { row } = getRowFromRead(
+        toRead(line),
+        ingredients,
+        rows,
+        context.picks,
+      );
       return [
         ...acc,
         {

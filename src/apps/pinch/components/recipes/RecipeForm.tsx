@@ -20,6 +20,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUp, Sparkles, X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
+import DetailSheet from '@/components/DetailSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSection from '@/components/FormSection';
@@ -40,7 +41,6 @@ import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
 import { store, useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatList } from '@/utils/formatUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import { canLoadImage } from '@/utils/imageUtils';
 import Stepper from '@/components/Stepper';
@@ -63,6 +63,7 @@ import RecipeSourceField from '@apps/pinch/components/recipes/RecipeSourceField'
 import {
   adaptRows,
   getDataFromExtracted,
+  getUsedPicks,
   getDataFromIdea,
   getInitialData,
   getReadSourceChoice,
@@ -181,6 +182,11 @@ import {
   toRecipeLinks,
 } from '@apps/pinch/utils/recipeLinks';
 import { getFreedIngredientIds } from '@apps/pinch/utils/freeLines';
+import {
+  getReadNotice,
+  MAX_DIRECT_NOTICE_DETAILS,
+  type ReadNoticeDetail,
+} from '@apps/pinch/utils/readNotice';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
@@ -196,6 +202,15 @@ export interface RecipeRead {
 }
 
 const USAGE_READ_TIMEOUT_MS = 4000;
+
+const ReadNoticeLine = ({ detail }: { detail: ReadNoticeDetail }) => (
+  <li className='flex items-center gap-2.5'>
+    <span className='w-5 shrink-0 text-center text-base' aria-hidden='true'>
+      {detail.icon}
+    </span>
+    <span className='min-w-0 flex-1'>{detail.text}</span>
+  </li>
+);
 
 /** The first of the pictures a source offers that loads; they are tried in order so a missing large one falls back to the next. */
 const findLoadablePhoto = (photos: WebPhoto[]) =>
@@ -369,7 +384,11 @@ function RecipeForm({
   );
   const upload = useImageUpload(null, 'cover');
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
-  const { units, voice: voiceSettings } = useAppSelector(selectPinchSettings);
+  const {
+    units,
+    voice: voiceSettings,
+    ingredientPicks,
+  } = useAppSelector(selectPinchSettings);
   const formRootRef = useRef<HTMLDivElement>(null);
   const changeFinder = useChangeFinder(formRootRef, '.ai-changed');
   const [readStart] = useState(() => {
@@ -378,10 +397,16 @@ function RecipeForm({
       initialRead.recipe,
       ingredients,
       initialRead.extras,
+      ingredientPicks,
     );
     const adapted = adaptRows(read.ingredients, units);
     return { data: { ...read, ingredients: adapted.rows }, ids: adapted.ids };
   });
+  const [usedPicks] = useState(() =>
+    initialRead
+      ? getUsedPicks(initialRead.recipe, ingredients, ingredientPicks)
+      : [],
+  );
   const [adaptedIds, setAdaptedIds] = useState<string[]>(readStart?.ids ?? []);
   const [initialData] = useState(() =>
     initialRead && readStart
@@ -542,6 +567,13 @@ function RecipeForm({
       JSON.stringify(data) !== JSON.stringify(initialData);
   };
   const [isNoteClosed, setIsNoteClosed] = useState(false);
+  const [isReadDetailOpen, setIsReadDetailOpen] = useState(false);
+  const readNotice = initialRead
+    ? getReadNotice(initialRead.recipe, usedPicks)
+    : null;
+  const isReadNoticeFolded =
+    readNotice !== null &&
+    readNotice.details.length > MAX_DIRECT_NOTICE_DETAILS;
   const [isAllChangesShown, setIsAllChangesShown] = useState(false);
   const [tickedIds, setTickedIds] = useState(() =>
     initialChanges.map((change) => change.id),
@@ -1424,7 +1456,7 @@ function RecipeForm({
   };
 
   const sendToPepper = async (askText: string) => {
-    const context = { sources, collections };
+    const context = { sources, collections, picks: ingredientPicks };
     const { input, refMap } = toRevisionInput(
       latestData.current,
       ingredientsById,
@@ -1664,43 +1696,69 @@ function RecipeForm({
           )}
         </div>
       )}
-      {initialRead && !isNoteClosed && (
-        <div
-          className='bg-accent mb-4 flex items-start gap-2 rounded-2xl p-3 text-sm'
-          role='status'
-        >
-          <div className='min-w-0 flex-1 space-y-0.5'>
-            <p>
-              Filled in from {initialRead.label}. Take a look before you save.
-            </p>
-            {initialRead.recipe.isServingsEstimate &&
-              initialRead.recipe.servings !== null && (
-                <p className='text-muted-foreground text-xs'>
-                  The recipe didn&apos;t say how many it serves, so we guessed{' '}
-                  {initialRead.recipe.servings} from the amounts.
-                </p>
-              )}
-            {initialRead.recipe.unread.length > 0 && (
-              <p className='text-muted-foreground text-xs'>
-                We couldn&apos;t read: {initialRead.recipe.unread.join(', ')}.
-              </p>
-            )}
-            {initialRead.recipe.guided.length > 0 && (
-              <p className='text-muted-foreground text-xs'>
-                Followed your guidance: {formatList(initialRead.recipe.guided)}.
-              </p>
-            )}
+      {readNotice && !isNoteClosed && (
+        <div className='bg-accent mb-4 rounded-2xl p-3 text-sm' role='status'>
+          <div className='flex items-center gap-3'>
+            <span
+              className='bg-background text-primary flex size-9 shrink-0 items-center justify-center rounded-full'
+              aria-hidden='true'
+            >
+              <Sparkles className='h-4 w-4' />
+            </span>
+            <p className='min-w-0 flex-1 font-medium'>{readNotice.headline}</p>
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              aria-label='Dismiss'
+              className='-m-1 size-8 shrink-0'
+              onClick={() => setIsNoteClosed(true)}
+            >
+              <X className='h-4 w-4' aria-hidden='true' />
+            </Button>
           </div>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='icon'
-            aria-label='Dismiss'
-            className='-m-1 size-8 shrink-0'
-            onClick={() => setIsNoteClosed(true)}
+          {readNotice.details.length > 0 && (
+            <ul className='mt-2.5 space-y-2'>
+              {readNotice.details
+                .slice(0, MAX_DIRECT_NOTICE_DETAILS)
+                .map((detail) => (
+                  <ReadNoticeLine key={detail.text} detail={detail} />
+                ))}
+            </ul>
+          )}
+          {isReadNoticeFolded ? (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className='bg-background! border-border mt-3 rounded-full border'
+              onClick={() => setIsReadDetailOpen(true)}
+            >
+              {`See all ${readNotice.details.length}`}
+            </Button>
+          ) : (
+            readNotice.footer !== null && (
+              <p className='text-muted-foreground mt-2.5 text-xs'>
+                {readNotice.footer}
+              </p>
+            )
+          )}
+          <DetailSheet
+            isOpen={isReadDetailOpen}
+            onClose={() => setIsReadDetailOpen(false)}
+            title='What we did'
           >
-            <X className='h-4 w-4' aria-hidden='true' />
-          </Button>
+            <ul className='space-y-3 text-sm'>
+              {readNotice.details.map((detail) => (
+                <ReadNoticeLine key={detail.text} detail={detail} />
+              ))}
+            </ul>
+            {readNotice.footer !== null && (
+              <p className='text-muted-foreground mt-4 text-xs'>
+                {readNotice.footer}
+              </p>
+            )}
+          </DetailSheet>
         </div>
       )}
       <Form

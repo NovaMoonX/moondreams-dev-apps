@@ -168,7 +168,7 @@ const getPublished = (
   key: string,
 ) => nodes?.map((node) => node[key]).find((value) => value != null) ?? null;
 
-/** Fills what the reader left empty from the page's own: a title or description, and the prep time, cook time and servings its Recipe data publishes (servings from the page replace an estimate). The site's name after a bar or dash is dropped from the title. */
+/** Fills what the reader left empty from the page's own: a title or description, and the prep time, cook time and servings its Recipe data publishes (servings and times from the page replace an estimate). The site's name after a bar or dash is dropped from the title. */
 export const withPageFallbacks = (
   recipe: ExtractedRecipe,
   page: Pick<PageContent, 'title' | 'meta' | 'structuredData'>,
@@ -190,14 +190,25 @@ export const withPageFallbacks = (
     (page.meta?.description ?? '').trim(),
     MAX_RECIPE_DESCRIPTION_LENGTH,
   );
+  const publishedPrep = readIsoMinutes(getPublished(nodes, 'prepTime'));
+  const publishedCook = readIsoMinutes(getPublished(nodes, 'cookTime'));
+  const isPrepEstimated = recipe.estimated.includes('PREP');
+  const isCookEstimated = recipe.estimated.includes('COOK');
   const result = {
     ...recipe,
     title: readPageTitle(recipe.title) ?? (pageTitle || null),
     description: recipe.description ?? (pageDescription || null),
-    prepMinutes:
-      recipe.prepMinutes ?? readIsoMinutes(getPublished(nodes, 'prepTime')),
-    cookMinutes:
-      recipe.cookMinutes ?? readIsoMinutes(getPublished(nodes, 'cookTime')),
+    prepMinutes: isPrepEstimated
+      ? (publishedPrep ?? recipe.prepMinutes)
+      : (recipe.prepMinutes ?? publishedPrep),
+    cookMinutes: isCookEstimated
+      ? (publishedCook ?? recipe.cookMinutes)
+      : (recipe.cookMinutes ?? publishedCook),
+    estimated: recipe.estimated.filter(
+      (field) =>
+        !(field === 'PREP' && publishedPrep !== null) &&
+        !(field === 'COOK' && publishedCook !== null),
+    ),
     servings: hasPublishedServings ? publishedServings : recipe.servings,
     isServingsEstimate: hasPublishedServings
       ? false

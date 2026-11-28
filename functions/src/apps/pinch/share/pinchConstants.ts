@@ -166,6 +166,9 @@ export const MAX_PASTE_CHARS = 20_000;
 export const MAX_GUIDANCE_CHARS = 300;
 export const MAX_GUIDED_ITEMS = 5;
 export const MAX_GUIDED_LENGTH = 80;
+/** How much of what finishing a recipe added the form tells back. */
+export const MAX_FINISHED_ITEMS = 8;
+export const MAX_FINISHED_LENGTH = 80;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 /** How many photos, screenshots or PDFs one reading takes, read together as one recipe. */
 export const MAX_RECIPE_FILES = 3;

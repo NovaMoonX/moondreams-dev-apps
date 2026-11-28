@@ -55,7 +55,7 @@ const collections: Collection[] = [
   { id: 'col-weeknight', label: 'Weeknight', createdAt: 1, updatedAt: 1 },
   { id: 'col-bulk', label: 'Bulk', createdAt: 1, updatedAt: 1 },
 ];
-const context = { sources, collections };
+const context = { sources, collections, picks: {} };
 
 const row = (
   id: string,
@@ -570,5 +570,33 @@ assert.equal(
   )!.droppedLinks,
   0,
 );
+
+const pickedLine = {
+  ref: null,
+  name: 'Gochujang',
+  amount: 1,
+  unit: 'TBSP' as const,
+  amountText: null,
+  note: null,
+  group: null,
+};
+const withPick = applyRevision(
+  base,
+  { ...same, ingredients: [...same.ingredients, pickedLine] },
+  refMap,
+  catalog,
+  {
+    ...context,
+    picks: {
+      gochujang: { name: 'Gochujang', ingredientId: 'garlic', pickedAt: 1 },
+    },
+  },
+);
+assert.equal(
+  withPick.data.ingredients[3].ingredientId,
+  'garlic',
+  'a line Pepper adds links to the ingredient the person picked for that name',
+);
+assert.equal(withPick.data.ingredients[3].newName, null);
 
 console.log('pinch pepper revision checks passed');

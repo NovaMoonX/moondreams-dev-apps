@@ -7,6 +7,7 @@ import FormSection from '@/components/FormSection';
 import IntroCard from '@/components/IntroCard';
 import MethodPicker from '@/components/MethodPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { useAppSelector } from '@/store';
 import { storage } from '@/lib/firebase/config';
 import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import { SavedIdeaPhotoTile } from '@apps/pinch/components/ideas/IdeaPhotosField';
@@ -15,6 +16,7 @@ import {
   extractRecipeFromFiles,
   type ExtractedRecipe,
 } from '@apps/pinch/lib/extractRecipe';
+import { selectPinchSettings } from '@apps/pinch/store/selectors';
 import type { Idea } from '@apps/pinch/types';
 import { getIdeaPhotoPaths } from '@apps/pinch/utils/ideas';
 
@@ -44,6 +46,7 @@ function IdeaPhotoReading({
   onManual,
 }: IdeaPhotoReadingProps) {
   const paths = getIdeaPhotoPaths(idea);
+  const isFinishing = useAppSelector(selectPinchSettings).isFinishingRecipes;
   const isMountedRef = useRef(true);
   const [isReading, setIsReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +63,7 @@ function IdeaPhotoReading({
     setError(null);
     try {
       const files = await Promise.all(paths.map(toFile));
-      const recipe = await extractRecipeFromFiles(files, null);
+      const recipe = await extractRecipeFromFiles(files, null, isFinishing);
       if (!isMountedRef.current) return;
       if (recipe.ingredients.length === 0) {
         setError(

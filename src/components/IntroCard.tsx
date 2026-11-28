@@ -13,7 +13,7 @@ interface IntroCardProps {
 /** A tinted block at the top of a screen that says what will happen to what the person brings, before they paste or choose anything. */
 function IntroCard({ icon, lead, children, action }: IntroCardProps) {
   return (
-    <div className='bg-accent/60 border-border flex items-start gap-2.5 rounded-2xl border p-3'>
+    <div className='bg-accent/60 border-border flex items-center gap-2.5 rounded-2xl border p-3'>
       <span className='text-xl leading-none' aria-hidden='true'>
         {icon}
       </span>

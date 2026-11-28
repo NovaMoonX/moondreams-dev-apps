@@ -7,12 +7,12 @@ interface PhotosSectionProps {
   uid: string;
 }
 
-/** Whether a new recipe's Photo drawer looks for pictures on the web. Off, the title is never sent anywhere. */
+/** What the AI may add to a new recipe that the source doesn't give: pictures from the web for its title, and a cookbook's missing steps, times and keeping. Off, nothing is sent and nothing is added. */
 function PhotosSection({ uid }: PhotosSectionProps) {
   const { settings, save } = usePinchSettings(uid);
 
   return (
-    <SettingsGroup title='Photos'>
+    <SettingsGroup title='Adding recipes'>
       <SettingsRow
         icon='🖼️'
         title='Suggest photos for new recipes'
@@ -23,6 +23,20 @@ function PhotosSection({ uid }: PhotosSectionProps) {
             checked={settings.suggestPhotos}
             onCheckedChange={(isChecked) =>
               void save({ suggestPhotos: isChecked })
+            }
+          />
+        }
+      />
+      <SettingsRow
+        icon='📖'
+        title='Finish recipes like a cookbook'
+        description='Adds the steps a recipe leaves out, like melting the butter, realistic prep and cook times, and how long it keeps.'
+        control={
+          <AppToggle
+            aria-label='Finish recipes like a cookbook'
+            checked={settings.isFinishingRecipes}
+            onCheckedChange={(isChecked) =>
+              void save({ isFinishingRecipes: isChecked })
             }
           />
         }

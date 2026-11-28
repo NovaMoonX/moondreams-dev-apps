@@ -106,6 +106,7 @@ export const CATALOG_NUTRITION_IDS: ReadonlySet<string> = new Set([
   "cat-olive-oil",
   "cat-vegetable-oil",
   "cat-canola-oil",
+  "cat-cooking-spray",
   "cat-coconut-oil",
   "cat-sesame-oil",
   "cat-shortening",

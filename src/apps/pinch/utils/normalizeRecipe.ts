@@ -2,6 +2,8 @@ import { toComparable } from '@/utils/optionMatchUtils';
 import { clipAtWord } from '@/utils/stringUtils';
 import {
   MAX_AMOUNT_TEXT_LENGTH,
+  MAX_FINISHED_ITEMS,
+  MAX_FINISHED_LENGTH,
   MAX_GUIDED_ITEMS,
   MAX_GUIDED_LENGTH,
   MAX_MINUTES,
@@ -43,11 +45,23 @@ export interface ExtractedIngredient {
   group: string | null;
 }
 
+export const ESTIMATED_FIELDS = [
+  'PREP',
+  'COOK',
+  'FRIDGE',
+  'FREEZER',
+  'REHEAT',
+] as const;
+
+export type EstimatedField = (typeof ESTIMATED_FIELDS)[number];
+
 /** What the reader found. It only ever fills the form; nothing is saved from it. */
 export interface ExtractedRecipe {
   title: string | null;
   servings: number | null;
   isServingsEstimate: boolean;
+  /** The time and keeping fields the reader worked out rather than read, each only while it has a value. */
+  estimated: EstimatedField[];
   categories: DishCategory[];
   prepMinutes: number | null;
   cookMinutes: number | null;
@@ -58,12 +72,14 @@ export interface ExtractedRecipe {
   steps: string[];
   /** The section each step sits under, index for index with `steps`; the reader groups the steps into sections when the source doesn't. */
   stepSections: (string | null)[];
-  /** Only what the source says, never a guess. */
+  /** What the source says, or an estimate for the dish when FRIDGE, FREEZER or REHEAT is in `estimated`. */
   care: RecipeCare | null;
   /** Parts of the recipe the reader could not make out. */
   unread: string[];
   /** Changes the person's guidance made to the reading, in a few words each; empty without guidance. */
   guided: string[];
+  /** What the reader added beyond the source (a step to melt the butter, longer times), in a few words each; empty when finishing was off or nothing was added. */
+  finished: string[];
 }
 
 const asString = (value: unknown) =>
@@ -223,14 +239,23 @@ const readUnmeasured = (line: ExtractedIngredient): ExtractedIngredient[] => {
       (SEASONING.test(pair[1].trim()) && SEASONING.test(pair[2].trim())));
   const names = isSplit ? [pair[1], pair[2]] : [name];
 
+  const isMisplaced = amountText !== null && isDescription(amountText);
+
   return names.map((part) => ({
     ...line,
     name: part.trim(),
     alsoCalled: names.length > 1 ? null : line.alsoCalled,
     unit: null,
-    amountText,
+    note: isMisplaced ? joinNotes([line.note, amountText]) : line.note,
+    amountText: isMisplaced ? null : amountText,
   }));
 };
+
+const DESCRIPTION_LEAD =
+  /\b(?:whatever|whichever|which ?ever|your (?:favou?rite|choice)|of your choice|any (?:kind|type|sort)|depending on|you(?:'|’)?re (?:cooking|using|like|prefer)|you are (?:cooking|using)|the kind)\b/i;
+
+/** Words that say which ingredient or what kind ("whatever meat you're cooking"), never how much, belong in the note. */
+const isDescription = (text: string) => DESCRIPTION_LEAD.test(text);
 
 const SAME_AMOUNT_RATIO = 0.8;
 
@@ -283,26 +308,60 @@ const mergeOtherMeasures = (
   ];
 };
 
-/** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real, and a line with no amount keeps its words ("to taste") as its amount text. */
-export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
+const toShortList = (value: unknown, length: number, max: number) =>
+  [
+    ...new Set(
+      (Array.isArray(value) ? value : [])
+        .map(asString)
+        .filter((entry): entry is string => entry !== null)
+        .map((entry) => entry.slice(0, length)),
+    ),
+  ].slice(0, max);
+
+/** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real, and a line with no amount keeps its words ("to taste") as its amount text. With `isFinishing` false, nothing the model estimated or added beyond the source survives: no estimated times or keeping days and no finishing notes. */
+export function normalizeExtractedRecipe(
+  raw: unknown,
+  isFinishing = true,
+): ExtractedRecipe {
   const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<
     string,
     unknown
   >;
   const list = (value: unknown) => (Array.isArray(value) ? value : []);
+  const listed = ESTIMATED_FIELDS.filter((field) =>
+    list(parsed.estimated).includes(field),
+  );
+  const kept = (field: EstimatedField) =>
+    isFinishing || !listed.includes(field);
+  const care = toCare({
+    fridgeDays: kept('FRIDGE') ? asWholeDays(parsed.fridgeDays) : null,
+    freezerDays: kept('FREEZER') ? asWholeDays(parsed.freezerDays) : null,
+    reheat: kept('REHEAT') ? parsed.reheat : null,
+    tip: parsed.tip,
+  });
+  const prepMinutes = kept('PREP') ? asMinutes(parsed.prepMinutes) : null;
+  const cookMinutes = kept('COOK') ? asMinutes(parsed.cookMinutes) : null;
+  const hasValue: Record<EstimatedField, boolean> = {
+    PREP: prepMinutes !== null,
+    COOK: cookMinutes !== null,
+    FRIDGE: (care?.fridgeDays ?? null) !== null,
+    FREEZER: (care?.freezerDays ?? null) !== null,
+    REHEAT: (care?.reheat ?? null) !== null,
+  };
 
   return {
     title: asString(parsed.title)?.slice(0, MAX_RECIPE_TITLE_LENGTH) ?? null,
     servings: asNumber(parsed.servings),
     isServingsEstimate:
       parsed.servingsEstimated === true && asNumber(parsed.servings) !== null,
+    estimated: isFinishing ? listed.filter((field) => hasValue[field]) : [],
     categories: getCategories({
       categories: list(parsed.categories).filter(
         (value): value is string => typeof value === 'string',
       ),
     }),
-    prepMinutes: asMinutes(parsed.prepMinutes),
-    cookMinutes: asMinutes(parsed.cookMinutes),
+    prepMinutes,
+    cookMinutes,
     description:
       asString(parsed.description)?.slice(0, MAX_RECIPE_DESCRIPTION_LENGTH) ??
       null,
@@ -329,7 +388,10 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
               amountText:
                 asString(item.amountText) === null
                   ? null
-                  : clipAtWord(asString(item.amountText)!, MAX_AMOUNT_TEXT_LENGTH),
+                  : clipAtWord(
+                      asString(item.amountText)!,
+                      MAX_AMOUNT_TEXT_LENGTH,
+                    ),
               group: asGroup(item.group),
             })
           : [];
@@ -337,12 +399,7 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
       .reduce<ExtractedIngredient[]>(mergeOtherMeasures, [])
       .slice(0, MAX_RECIPE_INGREDIENTS),
     ...readSteps(list(parsed.steps)),
-    care: toCare({
-      fridgeDays: asWholeDays(parsed.fridgeDays),
-      freezerDays: asWholeDays(parsed.freezerDays),
-      reheat: parsed.reheat,
-      tip: parsed.tip,
-    }),
+    care,
     unread: list(parsed.unread)
       .flatMap((entry) =>
         asString(entry) ? [asString(entry)!.slice(0, 200)] : [],
@@ -353,5 +410,8 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
       .filter((entry): entry is string => entry !== null)
       .map((entry) => entry.slice(0, MAX_GUIDED_LENGTH))
       .slice(0, MAX_GUIDED_ITEMS),
+    finished: isFinishing
+      ? toShortList(parsed.finished, MAX_FINISHED_LENGTH, MAX_FINISHED_ITEMS)
+      : [],
   };
 }

@@ -3283,6 +3283,8 @@ const reading: ExtractedRecipe = {
   title: 'Chicken adobo',
   servings: 4,
   isServingsEstimate: false,
+  estimated: [],
+  finished: [],
   categories: [],
   prepMinutes: 10,
   cookMinutes: 40,
@@ -9073,6 +9075,8 @@ assert.equal(
       title: 'Shakshuka',
       servings: 3,
       isServingsEstimate: false,
+      estimated: [],
+      finished: [],
       categories: [],
       prepMinutes: null,
       cookMinutes: null,
@@ -10647,6 +10651,8 @@ assert.equal(
       title: 'Adobo',
       servings: 4,
       isServingsEstimate: false,
+      estimated: [],
+      finished: [],
       categories: [],
       prepMinutes: null,
       cookMinutes: null,
@@ -10886,6 +10892,7 @@ assert.equal(
       fridgeDays: 5,
       freezerDays: null,
       suggestPhotos: true,
+      isFinishingRecipes: true,
       calendarStats: false,
       defaultTab: 'recipes',
       voice: {
@@ -10906,6 +10913,7 @@ assert.equal(
       },
       updatedAt: 1000,
       lastDigestDay: null,
+      ingredientPicks: {},
     },
     'a first change writes the whole document, the defaults under it',
   );
@@ -10936,6 +10944,11 @@ assert.equal(
     'the defaults are never written as they are',
   );
   assert.equal(stgDefaults.suggestPhotos, true, 'photo suggestions start on');
+  assert.equal(
+    stgDefaults.isFinishingRecipes,
+    true,
+    'finishing a recipe like a cookbook starts on',
+  );
   assert.deepEqual(
     [
       stgDefaults.reminders.eatSoon,
@@ -11060,6 +11073,11 @@ assert.equal(
     stgWithDefaults(olderDocument)?.suggestPhotos,
     true,
     'and a document written before photo suggestions reads them as on',
+  );
+  assert.equal(
+    stgWithDefaults(olderDocument)?.isFinishingRecipes,
+    true,
+    'and a document written before finishing reads it as on',
   );
   assert.equal(
     stgWithDefaults(olderDocument)?.calendarStats,
