@@ -15,7 +15,8 @@ import {
   emailEventsPath,
   planPath,
 } from './emailShared.js';
-import { readAlertWithAi } from './readAlertWithAi.js';
+import { ANTHROPIC_API_KEY } from './askClaude.js';
+import { AI_UNAVAILABLE, readAlertWithAi } from './readAlertWithAi.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -28,8 +29,8 @@ export const addRunwayEmailPurchase = onCall(
   {
     region: 'us-central1',
     maxInstances: 5,
-    timeoutSeconds: 30,
-    secrets: [RUNWAY_MASTER_KEYS],
+    timeoutSeconds: 45,
+    secrets: [RUNWAY_MASTER_KEYS, ANTHROPIC_API_KEY],
     cors: [
       'https://apps.moondreams.dev',
       /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
@@ -72,12 +73,20 @@ export const addRunwayEmailPurchase = onCall(
         ? event.bodyText
         : String(event.snippet ?? '');
     const alert = await readAlertWithAi({
+      firestore,
+      uid,
       from: String(event.from ?? ''),
       subject: String(event.subject ?? ''),
       text,
       receivedAt: stored.receivedAt as number,
       isKnownPurchase: true,
     });
+    if (alert === AI_UNAVAILABLE) {
+      throw new HttpsError(
+        'unavailable',
+        'Runway couldn’t reach its reader just now. Try again in a moment.',
+      );
+    }
     if (alert !== null && !alert.isPurchase) {
       throw new HttpsError(
         'failed-precondition',
@@ -87,7 +96,7 @@ export const addRunwayEmailPurchase = onCall(
     if (alert === null || alert.amountCents === null) {
       throw new HttpsError(
         'failed-precondition',
-        'Runway couldn’t find an amount in this email. Add it from Add a purchase instead.',
+        'Runway couldn’t find a total in this email. Use Add a purchase to enter it yourself.',
       );
     }
     const now = Date.now();
@@ -125,6 +134,7 @@ export const addRunwayEmailPurchase = onCall(
       transaction.update(eventRef, {
         outcome: 'purchase',
         purchaseId: purchase.ref.id,
+        addedByPersonAt: now,
       });
     });
     await markWithRetry(firestore, uid, alert.date as number, now);

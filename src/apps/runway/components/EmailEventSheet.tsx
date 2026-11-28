@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
 import {
   CircleSlash,
   FileText,
@@ -17,9 +19,12 @@ import {
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import DebugDetails from '@/components/DebugDetails';
 import FormSheet from '@/components/FormSheet';
+import InlineNotice from '@/components/InlineNotice';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useSteadyBusy } from '@/hooks/useSteadyBusy';
 import { useCanSeeDebugDetails } from '@/lib/debugProfiles/useCanSeeDebugDetails';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinal } from '@/utils/formatUtils';
@@ -40,15 +45,31 @@ import type { EmailOutcome } from '@apps/runway/types';
 
 const ADDABLE_OUTCOMES: EmailOutcome[] = ['notPurchase', 'unread'];
 
+// These carry a sentence written for the person; anything else is a crash and gets the plain retry line.
 const PLAIN_FAILURE_CODES = [
   'functions/failed-precondition',
   'functions/not-found',
+  'functions/unavailable',
+  'functions/permission-denied',
 ];
 
-const readAddFailure = (error: unknown) =>
-  PLAIN_FAILURE_CODES.includes((error as { code?: string })?.code ?? '')
-    ? (error as Error).message
-    : EMAIL_WORDS.addAsPurchaseFailed;
+interface AddFailure {
+  line: string;
+  raw: string;
+  code: string | null;
+}
+
+const readAddFailure = (error: unknown): AddFailure => {
+  const code = (error as { code?: string })?.code ?? null;
+  const raw = error instanceof Error ? error.message : String(error);
+  return {
+    line: PLAIN_FAILURE_CODES.includes(code ?? '')
+      ? raw
+      : EMAIL_WORDS.addAsPurchaseFailed,
+    raw,
+    code,
+  };
+};
 
 const OUTCOME_ICONS: Record<EmailOutcome, LucideIcon> = {
   purchase: ShoppingBag,
@@ -103,10 +124,12 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
   const [isFiltering, setIsFiltering] = useState(false);
   const [isWholeShown, setIsWholeShown] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const [addFailure, setAddFailure] = useState<string | null>(null);
+  const [addFailure, setAddFailure] = useState<AddFailure | null>(null);
   const actions = useEmailActions();
   const { closeMoreEntry, showTab, openPurchase } = useRunwayUrlState();
   const purchaseIds = useAppSelector(selectPurchaseIds);
+  const { addToast } = useToast();
+  const isAddShown = useSteadyBusy(isAdding) || isAdding;
 
   if (isFiltering) {
     return (
@@ -146,10 +169,13 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
     if (isAdding) return;
     setIsAdding(true);
     setAddFailure(null);
-    actions.addAsPurchase(event.id).catch((error: unknown) => {
-      setAddFailure(readAddFailure(error));
-      setIsAdding(false);
-    });
+    actions
+      .addAsPurchase(event.id)
+      .then(() =>
+        addToast({ title: EMAIL_WORDS.addedAsPurchase, type: 'success' }),
+      )
+      .catch((error: unknown) => setAddFailure(readAddFailure(error)))
+      .finally(() => setIsAdding(false));
   };
 
   return (
@@ -188,9 +214,17 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
           </blockquote>
         )}
         {addFailure !== null && canAdd && (
-          <p className='text-destructive text-sm' role='alert'>
-            {addFailure}
-          </p>
+          <div role='alert'>
+            <InlineNotice tone='warning'>{addFailure.line}</InlineNotice>
+            <DebugDetails
+              className='mt-2'
+              message={addFailure.raw}
+              facts={[
+                `Code: ${addFailure.code ?? 'none'}`,
+                `Outcome: ${event.outcome}`,
+              ]}
+            />
+          </div>
         )}
         {(hasPurchase || hasWholeEmail || event.outcome !== 'filtered') && (
           <ActionGroup isRoomy>
@@ -198,21 +232,20 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
               <ActionRow
                 isGrouped
                 isRoomy
-                icon={<PlusCircle />}
+                icon={
+                  isAddShown ? (
+                    <LoaderCircle className='animate-spin motion-reduce:[animation-duration:2.5s]' />
+                  ) : (
+                    <PlusCircle />
+                  )
+                }
                 label={EMAIL_WORDS.addAsPurchase}
                 subtitle={
-                  isAdding
+                  isAddShown
                     ? EMAIL_WORDS.addingAsPurchase
                     : EMAIL_WORDS.addAsPurchaseSub
                 }
-                trailing={
-                  isAdding ? (
-                    <LoaderCircle
-                      className='h-4 w-4 animate-spin motion-reduce:[animation-duration:2.5s]'
-                      aria-hidden='true'
-                    />
-                  ) : undefined
-                }
+                isDisabled={isAddShown}
                 onClick={addAsPurchase}
               />
             )}

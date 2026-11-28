@@ -44,7 +44,12 @@ import {
   type ParsedAlert,
   type SenderKind,
 } from './parseAlert.js';
-import { readAlertWithAi, type StoreEmail } from './readAlertWithAi.js';
+import { ANTHROPIC_API_KEY } from './askClaude.js';
+import {
+  AI_UNAVAILABLE,
+  readAlertWithAi,
+  type StoreEmail,
+} from './readAlertWithAi.js';
 import {
   buildEmailPurchase,
   isInsideTracking,
@@ -240,10 +245,16 @@ async function handleMail(
     }
     const isStore = isStoreLike(mail);
     const firstPattern = isStore ? null : parseAlertEmail(mail);
-    const byAi =
+    const aiAnswer =
       firstPattern === null
-        ? await readAlertWithAi({ ...mail, from: toAddress(mail.from) })
+        ? await readAlertWithAi({
+            ...mail,
+            firestore,
+            uid,
+            from: toAddress(mail.from),
+          })
         : null;
+    const byAi = aiAnswer === AI_UNAVAILABLE ? null : aiAnswer;
     // A bank the sender list doesn't know can still write "refund"; its alert falls back to the patterns.
     const byPattern =
       firstPattern ??
@@ -379,6 +390,7 @@ async function handleMail(
     senderKind: result.senderKind,
     purchaseId: result.purchase?.ref.id ?? null,
     savedAt: Date.now(),
+    addedByPersonAt: null,
     expiresAt: Timestamp.fromMillis(now + EMAIL_EVENT_KEEP_DAYS * DAY_MS),
     sealed: sealWithKey(
       planKey,
@@ -412,7 +424,7 @@ export const ingestRunwayEmail = onRequest(
     region: 'us-central1',
     maxInstances: 5,
     timeoutSeconds: 60,
-    secrets: [RUNWAY_MASTER_KEYS],
+    secrets: [RUNWAY_MASTER_KEYS, ANTHROPIC_API_KEY],
   },
   createEmailIngest({
     app: 'runway',

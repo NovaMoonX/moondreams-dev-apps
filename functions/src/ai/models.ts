@@ -8,7 +8,8 @@ export type ModelRole =
   | 'reflect'
   | 'research'
   | 'converse'
-  | 'revise';
+  | 'revise'
+  | 'readEmail';
 
 export interface ModelUsage {
   inputTokens: number;
@@ -94,6 +95,12 @@ const MODELS: Record<ModelRole, ModelSpec> = {
     effort: 'low',
     hasServerFallback: false,
     webSearchTool: 'web_search_20250305',
+    price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  },
+  readEmail: {
+    id: 'claude-haiku-5-5',
+    effort: 'low',
+    hasServerFallback: false,
     price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
   },
 };

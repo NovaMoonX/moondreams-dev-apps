@@ -1,4 +1,6 @@
-import { askGemini } from './askGemini.js';
+import type { Firestore } from 'firebase-admin/firestore';
+
+import { askClaude } from './askClaude.js';
 import {
   arrivalDay,
   companyFromAddress,
@@ -17,31 +19,50 @@ const INSTRUCTION =
 const KNOWN_PURCHASE =
   ' The person has said this email is a purchase they made, so isPurchase is true: give the total they paid or the order total as the amount, and the merchant.';
 
-const SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    sender: {
-      type: 'STRING',
-      format: 'enum',
-      enum: ['bank', 'store', 'other'],
+const nullable = (type: string) => ({ type: [type, 'null'] });
+
+const READ_TOOL = {
+  name: 'submit_reading',
+  description: 'Give your reading of the email.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sender: { type: 'string', enum: ['bank', 'store', 'other'] },
+      isPurchase: { type: 'boolean' },
+      amountCents: nullable('integer'),
+      merchant: nullable('string'),
+      lastFour: nullable('string'),
+      date: { ...nullable('string'), description: 'YYYY-MM-DD' },
+      institution: nullable('string'),
+      storeAction: {
+        type: ['string', 'null'],
+        enum: ['order', 'refund', 'cancel', 'shipping', 'none', null],
+      },
+      orderNumber: nullable('string'),
+      isWholeOrder: nullable('boolean'),
     },
-    isPurchase: { type: 'BOOLEAN' },
-    amountCents: { type: 'INTEGER', nullable: true },
-    merchant: { type: 'STRING', nullable: true },
-    lastFour: { type: 'STRING', nullable: true },
-    date: { type: 'STRING', nullable: true },
-    institution: { type: 'STRING', nullable: true },
-    storeAction: {
-      type: 'STRING',
-      format: 'enum',
-      enum: ['order', 'refund', 'cancel', 'shipping', 'none'],
-      nullable: true,
-    },
-    orderNumber: { type: 'STRING', nullable: true },
-    isWholeOrder: { type: 'BOOLEAN', nullable: true },
+    required: ['sender', 'isPurchase'],
   },
-  required: ['isPurchase', 'sender'],
 };
+
+const DOLLARS = /\$\s?(\d{1,3}(?:,\d{3})*|\d+)\.(\d{2})/;
+
+/** The emulator's stand-in for the model: the first dollar amount, with the shop left to the sender's address. */
+const readFixture = (input: string) => {
+  const match = DOLLARS.exec(input);
+  return {
+    sender: 'other',
+    isPurchase: match !== null,
+    amountCents:
+      match === null
+        ? null
+        : Number(match[1].replace(/,/g, '')) * 100 + Number(match[2]),
+    merchant: null,
+  };
+};
+
+/** The model could not be reached or gave no answer, as opposed to reading the email and finding no purchase. */
+export const AI_UNAVAILABLE = 'unavailable' as const;
 
 /** What a store's email does to an order: places it, returns money for it, or cancels some or all of it. */
 export interface StoreEmail {
@@ -108,26 +129,35 @@ const asDate = (value: unknown, receivedAt: number) => {
     : null;
 };
 
-/** Asks the AI to read an alert the patterns could not. `null` when unreadable; never throws. `isKnownPurchase` when the person said it is one. */
+/** Asks the AI to read an alert the patterns could not. `null` when read but unusable, `AI_UNAVAILABLE` when the model didn't answer; never throws. `isKnownPurchase` when the person said it is one. */
 export async function readAlertWithAi({
+  firestore,
+  uid,
   from,
   subject,
   text,
   receivedAt,
   isKnownPurchase = false,
 }: {
+  firestore: Firestore;
+  uid: string;
   from: string;
   subject: string;
   text: string;
   receivedAt: number;
   isKnownPurchase?: boolean;
-}): Promise<AiReading | null> {
-  const answer = (await askGemini(
-    isKnownPurchase ? `${INSTRUCTION}${KNOWN_PURCHASE}` : INSTRUCTION,
-    `From: ${from.slice(0, 200)}\nSubject: ${subject.slice(0, 300)}\n\n${text.slice(0, MAX_TEXT)}`,
-    SCHEMA,
-  )) as Record<string, unknown> | null;
-  if (answer === null || typeof answer !== 'object') return null;
+}): Promise<AiReading | typeof AI_UNAVAILABLE | null> {
+  const answer = await askClaude({
+    firestore,
+    uid,
+    instruction: isKnownPurchase
+      ? `${INSTRUCTION}${KNOWN_PURCHASE}`
+      : INSTRUCTION,
+    input: `From: ${from.slice(0, 200)}\nSubject: ${subject.slice(0, 300)}\n\n${text.slice(0, MAX_TEXT)}`,
+    tool: READ_TOOL,
+    fixture: readFixture,
+  });
+  if (answer === null) return AI_UNAVAILABLE;
   const senderKind = asSender(answer.sender);
   // A bank's alert names the shop it was spent at; anyone else writing about a purchase is the shop.
   const senderCompany = senderKind === 'bank' ? null : companyFromAddress(from);
