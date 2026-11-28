@@ -47,6 +47,7 @@ import {
   returnPurchaseToWaiting,
   splitBankPurchase,
   splitBankPurchases,
+  splitEmailJoin,
   unlinkDeposit,
   unpairAccountPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
@@ -74,6 +75,7 @@ import type {
 import {
   describeAccountPair,
   describeDepositLinked,
+  describeEmailJoin,
   describePurchaseMatch,
   describePurchaseReturned,
   describeSplitMatch,
@@ -252,6 +254,9 @@ const getUndoneWords = (undo: DoneForYouUndo, sorting: SortingState | null) => {
   if (isLeftInFreeToSpend(undo, sorting)) return DONE_FOR_YOU_WORDS.undoneQuiet;
   switch (undo.kind) {
     case 'merge':
+      return undo.isEmailJoin === true
+        ? DONE_FOR_YOU_WORDS.joinUndone
+        : NEEDS_HOME_WORDS.matchUndone;
     case 'mergeSplit':
       return NEEDS_HOME_WORDS.matchUndone;
     case 'deposit':
@@ -280,6 +285,15 @@ async function runUndo(uid: string, undo: DoneForYouUndo) {
     looks.get(envelopeId)?.name ?? 'An envelope';
   switch (undo.kind) {
     case 'merge':
+      if (undo.isEmailJoin === true) {
+        await splitEmailJoin(
+          uid,
+          encryption,
+          undo.merged,
+          describeEmailJoin(undo.merged.bank, undo.merged.typed, nameOf, true),
+        );
+        return;
+      }
       await splitBankPurchase(
         uid,
         encryption,

@@ -1,11 +1,19 @@
-import { deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import {
+  deleteDoc,
+  doc,
+  runTransaction,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
+import { SPEND_WORDS } from '@apps/runway/constants';
 import { sealJson } from '@apps/runway/security';
 import type {
+  DateOnly,
   EmailFilterDoc,
   EmailFilterSealed,
   RunwayEncryption,
@@ -89,5 +97,27 @@ export async function setEmailWaiting(
   await updateDoc(planRef(uid, 'purchases', purchaseId), {
     emailWaiting: isWaiting,
     updatedAt: Date.now(),
+  });
+}
+
+/** Widens how long a waiting emailed purchase waits for its bank's charge, to the day given; null goes back to its usual wait. */
+/** Sets how long an emailed purchase keeps waiting for its bank; with `expected`, only while it still holds that day, so an Undo never overwrites a later choice. */
+export async function setEmailWaitUntil(
+  uid: string,
+  purchaseId: string,
+  until: DateOnly | null,
+  expected?: DateOnly | null,
+): Promise<void> {
+  const ref = planRef(uid, 'purchases', purchaseId);
+  if (expected === undefined) {
+    await updateDoc(ref, { emailWaitUntil: until, updatedAt: Date.now() });
+    return;
+  }
+  await runTransaction(db, async (transaction) => {
+    const current = await transaction.get(ref);
+    if ((current.data()?.emailWaitUntil ?? null) !== expected) {
+      throw new Error(SPEND_WORDS.changedElsewhere);
+    }
+    transaction.update(ref, { emailWaitUntil: until, updatedAt: Date.now() });
   });
 }

@@ -47,6 +47,7 @@ const make = (
   tickedDayKey: null,
   emailEventId: null,
   emailWaiting: null,
+  emailWaitUntil: null,
   wasPending: null,
   category: null,
   ruleId: null,
@@ -245,6 +246,7 @@ assert.equal(toOrderKey('ORDER'), null);
     source: 'email',
     status: null,
     emailWaiting: true,
+    emailWaitUntil: null,
     wasPending: null,
     storeEmail: order('order', '77001'),
   });

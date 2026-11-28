@@ -3588,6 +3588,7 @@ async function writeSeedSelfPaying(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4152,6 +4153,7 @@ async function seedUnlinkedPlan(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4373,6 +4375,7 @@ async function writeSeedPurchases(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
         wasPending: null,
       } satisfies PurchaseDoc);
     }),
@@ -4685,6 +4688,7 @@ async function writeSeedPurchases(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4848,6 +4852,16 @@ async function writeSeedEmail(
       readBy: 'pattern',
       isWaitingForHome: true,
     },
+    {
+      id: 'seed-email-purchase-amazon-alert',
+      eventId: 'seed-email-event-amazon-alert',
+      daysAgo: 1,
+      receivedAt: today - DAY_MS + 11 * hour,
+      merchant: 'AMAZON MKTPL*AB12C',
+      cents: 5_689,
+      subject: 'A charge of $56.89 on your Venture X',
+      readBy: 'pattern',
+    },
   ];
   await Promise.all(
     purchases.map(async (entry) => {
@@ -4863,6 +4877,7 @@ async function writeSeedEmail(
         expenseId: null,
         emailEventId: entry.eventId,
         emailWaiting: true,
+        emailWaitUntil: null,
         wasPending: null,
         createdAt: entry.receivedAt,
         updatedAt: entry.receivedAt,
@@ -4901,6 +4916,7 @@ async function writeSeedEmail(
     dedupeKey: null,
     expenseId: null,
     emailWaiting: false,
+    emailWaitUntil: null,
     wasPending: null,
   } as const;
   const storeSealed = {
@@ -4977,6 +4993,7 @@ async function writeSeedEmail(
       needsHome: true,
       emailEventId: 'seed-email-event-walmart-refund',
       emailWaiting: false,
+      emailWaitUntil: null,
       wasPending: null,
       createdAt: today - DAY_MS + 9 * hour,
       updatedAt: today - DAY_MS + 9 * hour,
@@ -4993,6 +5010,43 @@ async function writeSeedEmail(
             orderNumber: '2000131-55180',
             isWholeOrder: false,
             merchant: 'Walmart',
+          },
+          orderLog: null,
+        } satisfies PurchaseSealed,
+        encryption,
+      ),
+    } satisfies PurchaseDoc,
+  );
+
+  // A store's order that names no card, which the app joins at load with the bank's alert for the same amount two days later.
+  const amazonOn = today - 3 * DAY_MS;
+  batch.set(
+    context.firestore.doc(`${plan}/purchases/seed-store-order-amazon`),
+    {
+      ...storeBase,
+      id: 'seed-store-order-amazon',
+      date: amazonOn,
+      source: 'email',
+      needsHome: true,
+      emailEventId: 'seed-email-event-amazon-order',
+      emailWaiting: true,
+      emailWaitUntil: null,
+      createdAt: amazonOn + 14 * hour,
+      updatedAt: amazonOn + 14 * hour,
+      sealed: await sealJson(
+        {
+          ...storeSealed,
+          paidByCardId: null,
+          amountCents: 5_689,
+          merchant: 'Amazon',
+          lines: [{ envelopeId: null, cents: 5_689, via: 'free' }],
+          refundOfId: null,
+          assignedBy: null,
+          storeEmail: {
+            kind: 'order',
+            orderNumber: '114-2213',
+            isWholeOrder: false,
+            merchant: 'Amazon',
           },
           orderLog: null,
         } satisfies PurchaseSealed,
@@ -5082,6 +5136,24 @@ async function writeSeedEmail(
         senderCompany: 'Capital One',
       },
     })),
+    {
+      id: 'seed-email-event-amazon-order',
+      receivedAt: amazonOn + 14 * hour,
+      outcome: 'purchase',
+      senderKind: 'store',
+      purchaseId: 'seed-store-order-amazon',
+      sealed: {
+        from: 'auto-confirm@amazon.com',
+        subject: 'Your Amazon.com order #114-2213',
+        subjectTemplate: 'your amazon.com order #{order}',
+        ...readEmail(
+          'Thanks for your order. Order #114-2213\nOrder total: $56.89\n\nWe’ll send a confirmation when your item ships.',
+          { amountCents: 5_689, merchant: 'Amazon' },
+        ),
+        readBy: 'ai',
+        senderCompany: 'Amazon',
+      },
+    },
     {
       id: 'seed-email-event-deposit',
       receivedAt: context.now - 5 * hour,
@@ -5268,7 +5340,7 @@ async function writeSeedEmail(
       encryption,
     ),
   } satisfies EmailFilterDoc);
-  return 1 + purchases.length + events.length + 1;
+  return 1 + purchases.length + 1 + events.length + 1;
 }
 
 /** Jamie's Done for you, one entry per kind a row can show, including one written before subjects were kept. */
@@ -5294,6 +5366,7 @@ async function seedDoneForYou(
     expenseId: null,
     emailEventId: null,
     emailWaiting: null,
+    emailWaitUntil: null,
     createdAt: placedAt,
     updatedAt: placedAt,
     amountCents: 4_725,
@@ -5654,6 +5727,7 @@ async function seedRules(
       ),
       emailEventId: null,
       emailWaiting: null,
+      emailWaitUntil: null,
     } satisfies PurchaseDoc,
   );
   await Promise.all(
@@ -5705,6 +5779,7 @@ async function seedRules(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -5750,6 +5825,7 @@ async function seedRules(
     ),
     emailEventId: null,
     emailWaiting: null,
+    emailWaitUntil: null,
     wasPending: false,
   } satisfies PurchaseDoc);
   const twice: {
@@ -5825,6 +5901,7 @@ async function seedRules(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
         wasPending: null,
       } satisfies PurchaseDoc);
     }),

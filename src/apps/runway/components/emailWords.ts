@@ -113,12 +113,27 @@ export const EMAIL_WORDS = {
     'Read from the store’s email. It merges on its own when your bank sends the same charge.',
   stopWaiting: 'Stop waiting for your bank',
   overdueNotice: (days: number) =>
-    `Your bank hasn’t sent this charge in ${days} days. Stop waiting to keep it as it is, or remove it.`,
+    `Your bank hasn’t sent this charge in ${days} days. Give your bank more time, stop waiting and keep it as it is, or remove it.`,
   overdueOrderNotice: (days: number) =>
-    `Your bank hasn’t sent this charge in ${days} days. Stores often charge when an order ships. Stop waiting to keep it as it is, or remove it.`,
+    `Your bank hasn’t sent this charge in ${days} days. Stores often charge when an order ships. Give your bank more time, stop waiting and keep it as it is, or remove it.`,
   stoppedWaiting: 'No longer waiting for your bank',
   undo: 'Undo',
   stopWaitingSub: 'Keep it as typed; your bank’s charge won’t merge with it.',
+  keepWaiting: 'Keep waiting',
+  keepWaitingSub: 'Give your bank more time to send the charge.',
+  keepWaitingTitle: 'Keep waiting for your bank',
+  keepWaitingFor: (days: number) =>
+    days === 7 ? '1 more week' : days === 14 ? '2 more weeks' : '1 more month',
+  keepWaitingUntil: (day: string) => `Until ${day}`,
+  chosenWait: 'Your current choice',
+  waitingUntil: (day: string) => `Waiting for your bank until ${day}`,
+  drawerWaitingUntil: (day: string, isStore: boolean) =>
+    `Read from ${isStore ? 'the store’s' : 'your bank’s alert'} email. You gave your bank until ${day} to send the charge; it merges on its own when it does.`,
+  keepWaitingSetSub: (day: string) => `Until ${day} · Change how long`,
+  usualWait: 'Back to the usual wait',
+  usualWaitSub: 'Stop giving it extra time.',
+  usualWaitDone: 'Back to the usual wait',
+  keepWaitingFailed: 'Couldn’t change how long it waits. Try again.',
   homeCount: (count: number) =>
     count === 1 ? '1 purchase from email' : `${count} purchases from email`,
   homeSub: 'Not from your bank yet',

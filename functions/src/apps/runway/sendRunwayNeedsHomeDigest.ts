@@ -50,6 +50,7 @@ const readPurchase = (key: Buffer, payload: unknown) => {
     pairedWithId: null,
     name: null as string | null,
     isOrder: false,
+    isStoreEmail: false,
   };
   if (!isSealed(payload)) return none;
   try {
@@ -69,6 +70,8 @@ const readPurchase = (key: Buffer, payload: unknown) => {
         typeof opened.storeEmail === 'object' &&
         opened.storeEmail !== null &&
         (opened.storeEmail as { kind?: unknown }).kind === 'order',
+      isStoreEmail:
+        typeof opened.storeEmail === 'object' && opened.storeEmail !== null,
     };
   } catch {
     return none;
@@ -122,6 +125,7 @@ async function digestForPlan(
         'source',
         'accountId',
         'emailWaiting',
+        'emailWaitUntil',
         'sealed',
       )
       .get()
@@ -136,6 +140,8 @@ async function digestForPlan(
       source: typeof data.source === 'string' ? data.source : null,
       accountId: typeof data.accountId === 'string' ? data.accountId : null,
       emailWaiting: data.emailWaiting === true,
+      emailWaitUntil:
+        typeof data.emailWaitUntil === 'number' ? data.emailWaitUntil : null,
       ...readPurchase(planKey.key, data.sealed),
     };
   });

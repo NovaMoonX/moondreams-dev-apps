@@ -171,6 +171,7 @@ export async function openPurchase(
     expenseId: entry.expenseId ?? null,
     emailEventId: entry.emailEventId ?? null,
     emailWaiting: entry.emailWaiting ?? null,
+    emailWaitUntil: entry.emailWaitUntil ?? null,
     wasPending: entry.wasPending ?? null,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,

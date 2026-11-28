@@ -38,10 +38,12 @@ import {
   isKnownInstitution,
   isKnownInstitutionSender,
   isMerchantHost,
+  isStoreLike,
   parseAlertEmail,
   readableBody,
   subjectTemplate,
   toShopName,
+  withoutInvisible,
   type ParsedAlert,
   type SenderKind,
 } from './parseAlert.js';
@@ -147,13 +149,6 @@ async function loadFilters(
   });
 }
 
-// A store's order, refund or cancellation reads to the patterns like a bank alert or nothing, so the AI reads it instead.
-const STORE_SIGNAL =
-  /\b(ordered|order (?:#|no\.?|number|confirm\w*|cancel\w*)|your order|refund(?:ed)?|return (?:received|processed)|cancel(?:led|ed|lation))\b/i;
-
-const isStoreLike = (mail: EmailMail) =>
-  !isKnownInstitutionSender(mail.from) &&
-  STORE_SIGNAL.test(`${mail.subject} ${mail.text.slice(0, 600)}`);
 
 // The patterns are written for bank alerts, so what they read is a bank's.
 const senderKindOf = (
@@ -222,6 +217,9 @@ async function handleMail(
   const eventRef = firestore.doc(`${emailEventsPath(uid)}/${eventId}`);
   const template = subjectTemplate(mail.subject);
 
+  const readMail = { ...mail, text: readableBody(mail.text) };
+  const patternMail = { ...mail, text: withoutInvisible(mail.text) };
+
   const decide = async (): Promise<Handled> => {
     if (isConfirmation) {
       return {
@@ -244,12 +242,12 @@ async function handleMail(
         senderKind: isKnownInstitutionSender(mail.from) ? 'bank' : null,
       };
     }
-    const isStore = isStoreLike(mail);
-    const firstPattern = isStore ? null : parseAlertEmail(mail);
+    const isStore = isStoreLike(readMail);
+    const firstPattern = isStore ? null : parseAlertEmail(patternMail);
     const aiAnswer =
       firstPattern === null
         ? await readAlertWithAi({
-            ...mail,
+            ...readMail,
             firestore,
             uid,
             from: toAddress(mail.from),
@@ -261,7 +259,7 @@ async function handleMail(
     const byPattern =
       firstPattern ??
       (isStore && (byAi === null || byAi.storeEmail === null)
-        ? parseAlertEmail(mail)
+        ? parseAlertEmail(patternMail)
         : null);
     const read: {
       alert: ParsedAlert | null;
@@ -366,7 +364,7 @@ async function handleMail(
     result.found,
     toAddress(mail.from),
   );
-  const readText = readableBody(mail.text);
+  const readText = readMail.text;
   const isBankEmail =
     result.outcome === 'purchase' ||
     result.outcome === 'notPurchase' ||

@@ -5,6 +5,7 @@ import {
   createEmailFilter,
   deleteEmailFilter,
   rotateEmailAddress,
+  setEmailWaitUntil,
   setEmailWaiting,
   suggestEmailFilters,
   addEmailPurchase,
@@ -24,6 +25,7 @@ import {
 import { retryEmailIntake } from '@apps/runway/store/runwaySlice';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import type {
+  DateOnly,
   EmailEventSealed,
   EmailFilterSealed,
   EmailIntakeDoc,
@@ -78,6 +80,12 @@ export interface EmailActions {
   addAsPurchase(eventId: string): Promise<string>;
   stopWaiting(purchaseId: string): Promise<void>;
   resumeWaiting(purchaseId: string): Promise<void>;
+  /** Waits for the bank's charge until the day given, or the usual wait when null. */
+  setWaitUntil(
+    purchaseId: string,
+    until: DateOnly | null,
+    expected?: DateOnly | null,
+  ): Promise<void>;
 }
 
 const NO_UID = () => Promise.reject(new Error('Sign in to change this.'));
@@ -199,6 +207,10 @@ export function useEmailActions(): EmailActions {
         uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, false),
       resumeWaiting: (purchaseId) =>
         uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, true),
+      setWaitUntil: (purchaseId, until, expected) =>
+        uid === null
+          ? NO_UID()
+          : setEmailWaitUntil(uid, purchaseId, until, expected),
     }),
     [uid],
   );

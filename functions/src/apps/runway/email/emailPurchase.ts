@@ -51,7 +51,17 @@ interface Targets {
   paidByCardId: string | null;
   accountId: string | null;
   isLinked: boolean;
+  /** Any live card or account comes from a bank link, so a store order naming no card can wait for its charge. */
+  hasAnyLink: boolean;
 }
+
+// A store order that names no card waits for a same-store charge on any card or account.
+const isWaitingForBank = (targets: Targets, storeEmail: StoreEmail | null) =>
+  targets.isLinked ||
+  (storeEmail?.kind === 'order' &&
+    targets.paidByCardId === null &&
+    targets.accountId === null &&
+    targets.hasAnyLink);
 
 async function findTargets(
   firestore: Firestore,
@@ -59,8 +69,6 @@ async function findTargets(
   key: Buffer,
   lastFour: string | null,
 ): Promise<Targets> {
-  const none = { paidByCardId: null, accountId: null, isLinked: false };
-  if (lastFour === null) return none;
   const read = async (collection: 'cards' | 'accounts') => {
     const found = await firestore
       .collection(`${planPath(uid)}/${collection}`)
@@ -68,25 +76,34 @@ async function findTargets(
     return found.docs.flatMap((entry) => {
       const data = entry.data();
       if (data.archivedAt != null) return [];
+      const isLinked = typeof data.linkId === 'string';
+      if (lastFour === null)
+        return [{ id: entry.id, isLinked, isMatch: false }];
       try {
         const sealed = openWithKey(key, data.sealed as SealedPayload);
-        return sealed.lastFour === lastFour
-          ? [{ id: entry.id, isLinked: typeof data.linkId === 'string' }]
-          : [];
+        return [
+          { id: entry.id, isLinked, isMatch: sealed.lastFour === lastFour },
+        ];
       } catch {
-        return [];
+        return [{ id: entry.id, isLinked, isMatch: false }];
       }
     });
   };
-  const [cards, accounts] = await Promise.all([
+  const [allCards, allAccounts] = await Promise.all([
     read('cards'),
     read('accounts'),
   ]);
+  const hasAnyLink = [...allCards, ...allAccounts].some(
+    (entry) => entry.isLinked,
+  );
+  const cards = allCards.filter((entry) => entry.isMatch);
+  const accounts = allAccounts.filter((entry) => entry.isMatch);
   if (cards.length === 1) {
     return {
       paidByCardId: cards[0].id,
       accountId: null,
       isLinked: cards[0].isLinked,
+      hasAnyLink,
     };
   }
   if (cards.length === 0 && accounts.length === 1) {
@@ -94,9 +111,10 @@ async function findTargets(
       paidByCardId: null,
       accountId: accounts[0].id,
       isLinked: accounts[0].isLinked,
+      hasAnyLink,
     };
   }
-  return none;
+  return { paidByCardId: null, accountId: null, isLinked: false, hasAnyLink };
 }
 
 /** Whether a day falls inside the open tracking period. */
@@ -174,7 +192,9 @@ export async function buildEmailPurchase({
     dedupeKey: null,
     expenseId: null,
     emailEventId: eventId,
-    emailWaiting: returnOutcome === null ? targets.isLinked : false,
+    emailWaiting:
+      returnOutcome === null && isWaitingForBank(targets, storeEmail),
+    emailWaitUntil: null,
     createdAt: now,
     updatedAt: now,
     sealed: sealWithKey(

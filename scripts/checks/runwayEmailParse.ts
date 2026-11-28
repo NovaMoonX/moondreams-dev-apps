@@ -21,6 +21,7 @@ import {
   isKnownInstitution,
   isMerchantHost,
   isProtonInvitation,
+  isStoreLike,
   parseAlertEmail,
   readableBody,
   readProtonLink,
@@ -411,6 +412,71 @@ assert.equal(
   readableBody('a\n\n\n  b  \nsee https://secure.chase.com/x?y'),
   'a\n\nb\nsee secure.chase.com',
 );
+
+// A store's order email forwarded by hand: the hidden preheader filler and long tracking links fill the top of the text part.
+const FILLER = '\u034F\u200C\u00A0\u2007\u00AD'.repeat(300);
+const TRACK = `https://www.amazon.com/gp/f.html?C=1ABCDEF&K=2GHIJ&M=urn:rtn:msg:20261126&R=3KLMN&T=C&U=${'x'.repeat(400)}`;
+const amazonText = (lines: string) =>
+  `${FILLER}\nAmazon.com <${TRACK}>\nYour Orders <${TRACK}>\n${lines}\n${`View or edit order <${TRACK}>\n`.repeat(12)}`;
+const amazonOrder = amazonText(
+  'Thanks for your order, Jamie!\nOrdered\nArriving Tuesday\nOrder # 114-0899359-3849845\nGrand Total:\n45.7 USD',
+);
+const amazonRead = readableBody(amazonOrder);
+assert.ok(
+  !/[\u034F\u200C\u00AD]/.test(amazonRead),
+  'hidden preheader filler is removed',
+);
+assert.ok(
+  amazonRead.slice(0, 1500).includes('Order # 114-0899359-3849845') &&
+    amazonRead.slice(0, 1500).includes('45.7 USD'),
+  'the order number and total reach the top of what is read',
+);
+[
+  ['Ordered 2 items: Watches, Clothing Accessories', amazonOrder],
+  ['Fwd: Ordered: "Casio Men\'s Watch"', amazonOrder],
+  [
+    "Your refund for Casio Men's Watch",
+    amazonText('Your refund of $22.85 has been issued.'),
+  ],
+  [
+    'Item cancelled successfully',
+    amazonText('We have cancelled the item from your order.'),
+  ],
+  [
+    'Your Amazon.com order #114-0899359-3849845 has been canceled',
+    amazonText('Order canceled.'),
+  ],
+].forEach(([subject, text]) =>
+  assert.ok(
+    isStoreLike({
+      from: 'auto-confirm@amazon.com',
+      subject,
+      text: readableBody(text),
+    }),
+    `store-like: ${subject}`,
+  ),
+);
+assert.ok(
+  !isStoreLike({
+    from: 'no.reply.alerts@chase.com',
+    subject: 'Your refund from AMAZON was posted',
+    text: 'Account ending in 1234',
+  }),
+  'a known bank writing about a refund is not a store',
+);
+
+{
+  const late = parseAlertEmail({
+    from: 'no.reply.alerts@chase.com',
+    subject: 'Your transaction alert',
+    text: `${'Example Bank footer and links. '.repeat(160)}\nYou made a $24.50 transaction with CHIPOTLE 2041\nAccount ending in 1234`,
+    receivedAt: RECEIVED,
+  });
+  assert.ok(
+    late !== null && 'amountCents' in late && late.amountCents === 2450,
+    'an alert past the first 4,000 characters is still read by the patterns',
+  );
+}
 
 // Hand-forwards of a Chase-style alert, each client's own block wording.
 const ALERT_BODY =
