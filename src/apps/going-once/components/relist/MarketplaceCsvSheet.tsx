@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { FileSpreadsheet } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -20,11 +21,8 @@ import {
   toMarketplaceSheets,
 } from '@apps/going-once/utils/marketplaceCsv';
 
-const countThings = (count: number, verb?: string) =>
-  `${count} ${count === 1 ? 'thing' : 'things'} ${verb ?? (count === 1 ? 'has' : 'have')}`;
-
-const describeThings = (count: number) =>
-  `${count} available ${count === 1 ? 'thing' : 'things'}`;
+const plural = (count: number, one: string, many: string) =>
+  `${count} ${count === 1 ? one : many}`;
 
 interface MarketplaceCsvSheetProps {
   saleId: string;
@@ -44,11 +42,11 @@ function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
   const { noCondition, wellUsed, withCents } = getMarketplaceCaveats(things);
   const caveats = [
     noCondition > 0 &&
-      `${countThings(noCondition)} no condition yet. Facebook asks for one, so pick it there.`,
+      `${plural(noCondition, 'thing needs', 'things need')} a condition picked on Facebook.`,
     wellUsed > 0 &&
-      `${countThings(wellUsed, 'marked')} Well used. Facebook's closest is Used - Fair, so ${wellUsed === 1 ? 'it goes' : 'they go'} in as that.`,
+      `${plural(wellUsed, 'Well used thing goes', 'Well used things go')} in as Used - Fair.`,
     withCents > 0 &&
-      `${countThings(withCents)} a price with cents. Facebook takes whole dollars, so ${withCents === 1 ? 'it is' : 'they are'} rounded to the nearest dollar.`,
+      `${plural(withCents, 'price rounds', 'prices round')} to the whole dollar.`,
   ].filter((line) => line !== false);
 
   const save = async () => {
@@ -71,35 +69,30 @@ function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
   };
 
   const getSummary = () => {
-    if (things.length === 0)
-      return 'Nothing to put in it yet. Available things with a photo, name and price land here.';
     const files =
       sheets.length > 1
-        ? ` · ${sheets.length} files, since Facebook takes ${MARKETPLACE_ROWS_PER_FILE} at a time`
-        : '';
-    return `${describeThings(things.length)}${files}`;
+        ? `${sheets.length} files of up to ${MARKETPLACE_ROWS_PER_FILE}`
+        : '1 CSV file';
+    return `${plural(things.length, 'thing', 'things')} · ${files}`;
   };
 
   return (
     <FormSheet isOpen onClose={onClose} title='Marketplace spreadsheet'>
       <div className='space-y-3 pb-4'>
-        <p className='text-foreground font-medium text-pretty'>
+        <p className='text-foreground flex items-center gap-2 font-medium'>
+          <FileSpreadsheet className='size-4 shrink-0' aria-hidden='true' />
           {getSummary()}
         </p>
-        <p className='text-muted-foreground text-sm'>
-          A CSV in Facebook’s bulk upload layout, with each thing’s name, price,
-          condition and description: only what buyers already see. Add the
-          photos to each listing on Facebook after uploading.
+        <p className='text-foreground text-sm text-pretty'>
+          Upload it on Facebook Marketplace, then add each listing’s photos
+          there.
         </p>
-        <p className='text-muted-foreground text-sm'>
-          Drafts, Pending and Sold things, and things sold only in a bundle, are
-          left out.
+        <p className='text-muted-foreground text-sm text-pretty'>
+          {[
+            'Only what buyers already see. Drafts, Pending, Sold and bundle-only things stay out.',
+            ...caveats,
+          ].join(' ')}
         </p>
-        {caveats.map((line) => (
-          <p key={line} className='text-muted-foreground text-sm'>
-            {line}
-          </p>
-        ))}
         {outcome !== null && (
           <p className='text-foreground text-sm' role='status'>
             {outcome}

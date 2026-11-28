@@ -320,20 +320,7 @@ function ItemsSection({
     !isFinished && getMarketplaceThings(items, bundles).length > 0;
 
   const headerActions = (
-    <div className='flex items-center gap-3'>
-      {hasMarketplaceThings && (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          rounded='full'
-          aria-label='Marketplace spreadsheet'
-          className="relative size-7 min-w-7 p-0 before:absolute before:-inset-1.5 before:-inset-x-1.5! before:content-['']"
-          onClick={() => setIsExportingCsv(true)}
-        >
-          <FileSpreadsheet className='size-4' aria-hidden='true' />
-        </Button>
-      )}
+    <div className='flex items-center gap-2'>
       {hasSavablePhotos && (
         <Button
           type='button'
@@ -437,6 +424,20 @@ function ItemsSection({
             <ChevronRight className='size-4' aria-hidden='true' />
           </Button>
         ))}
+      {hasMarketplaceThings && statusView === 'AVAILABLE' && !isSearching && (
+        <Button
+          type='button'
+          variant='tertiary'
+          className='border-border text-foreground! h-10 w-full justify-between gap-2 rounded-full border px-4 text-sm'
+          onClick={() => setIsExportingCsv(true)}
+        >
+          <FileSpreadsheet className='size-4 shrink-0' aria-hidden='true' />
+          <span className='flex-1 text-left'>
+            List these on Marketplace at once
+          </span>
+          <ChevronRight className='size-4' aria-hidden='true' />
+        </Button>
+      )}
       {searched.length === 0 && items.length > 0 && (
         <p className='text-muted-foreground text-center text-sm'>
           Nothing matches that. Try another word.
