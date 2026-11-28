@@ -132,11 +132,16 @@ const isWindowDay = (email: TwinRow, bank: TwinRow) =>
   bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
   bank.date <= getWindowEnd(email);
 
-const isJoinStore = (a: string | null, b: string | null) => {
-  if (isSameStore(a, b)) return true;
-  const [first] = getMerchantWords(a);
+// A bank's alert names a store its own way ("AMAZON MKTPL*AB12C"): the store's whole name, then a processor code marked by * or #. A plain extra word ("Target Optical", "Home Goods") is another store.
+const isJoinStore = (order: string | null, alert: string | null) => {
+  if (isSameStore(order, alert)) return true;
+  const store = getMerchantWords(order);
+  const words = getMerchantWords(alert);
   return (
-    first !== undefined && first.length >= 4 && getMerchantWords(b)[0] === first
+    store.join('').length >= 4 &&
+    words.length > store.length &&
+    store.every((word, index) => words[index] === word) &&
+    /[*#]/.test(alert ?? '')
   );
 };
 

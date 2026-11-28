@@ -3583,6 +3583,7 @@ async function writeSeedSelfPaying(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4147,6 +4148,7 @@ async function seedUnlinkedPlan(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4368,6 +4370,7 @@ async function writeSeedPurchases(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
         wasPending: null,
       } satisfies PurchaseDoc);
     }),
@@ -4680,6 +4683,7 @@ async function writeSeedPurchases(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -4858,6 +4862,7 @@ async function writeSeedEmail(
         expenseId: null,
         emailEventId: entry.eventId,
         emailWaiting: true,
+        emailWaitUntil: null,
         wasPending: null,
         createdAt: entry.receivedAt,
         updatedAt: entry.receivedAt,
@@ -4896,6 +4901,7 @@ async function writeSeedEmail(
     dedupeKey: null,
     expenseId: null,
     emailWaiting: false,
+    emailWaitUntil: null,
     wasPending: null,
   } as const;
   const storeSealed = {
@@ -4972,6 +4978,7 @@ async function writeSeedEmail(
       needsHome: true,
       emailEventId: 'seed-email-event-walmart-refund',
       emailWaiting: false,
+      emailWaitUntil: null,
       wasPending: null,
       createdAt: today - DAY_MS + 9 * hour,
       updatedAt: today - DAY_MS + 9 * hour,
@@ -5254,6 +5261,7 @@ async function seedDoneForYou(
     expenseId: null,
     emailEventId: null,
     emailWaiting: null,
+    emailWaitUntil: null,
     createdAt: placedAt,
     updatedAt: placedAt,
     amountCents: 4_725,
@@ -5614,6 +5622,7 @@ async function seedRules(
       ),
       emailEventId: null,
       emailWaiting: null,
+      emailWaitUntil: null,
     } satisfies PurchaseDoc,
   );
   await Promise.all(
@@ -5665,6 +5674,7 @@ async function seedRules(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
       } satisfies PurchaseDoc);
     }),
   );
@@ -5710,6 +5720,7 @@ async function seedRules(
     ),
     emailEventId: null,
     emailWaiting: null,
+    emailWaitUntil: null,
     wasPending: false,
   } satisfies PurchaseDoc);
   const twice: {
@@ -5785,6 +5796,7 @@ async function seedRules(
         ),
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
         wasPending: null,
       } satisfies PurchaseDoc);
     }),

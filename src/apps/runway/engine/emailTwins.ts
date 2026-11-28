@@ -330,11 +330,16 @@ export const getEmailWaitEnd = (
   );
 
 // A bank's alert names the store its own way ("AMAZON MKTPL*AB12C" for an Amazon order), so a join also takes a shared first word of four letters or more.
-const isJoinStore = (a: string | null, b: string | null) => {
-  if (isSameStore(a, b)) return true;
-  const [first] = getMerchantWords(a);
+// A bank's alert names a store its own way ("AMAZON MKTPL*AB12C"): the store's whole name, then a processor code marked by * or #. A plain extra word ("Target Optical", "Home Goods") is another store.
+const isJoinStore = (order: string | null, alert: string | null) => {
+  if (isSameStore(order, alert)) return true;
+  const store = getMerchantWords(order);
+  const words = getMerchantWords(alert);
   return (
-    first !== undefined && first.length >= 4 && getMerchantWords(b)[0] === first
+    store.join('').length >= 4 &&
+    words.length > store.length &&
+    store.every((word, index) => words[index] === word) &&
+    /[*#]/.test(alert ?? '')
   );
 };
 
@@ -351,9 +356,10 @@ const isBankAlert = (purchase: TwinPurchase) =>
   (purchase.storeEmail ?? null) === null &&
   ((purchase.paidByCardId ?? null) !== null || purchase.accountId !== null);
 
-/** Pairs each waiting store order that names no card with the bank alert email that is clearly the same purchase, so the two become one that keeps both emails: the same amount, the same store, the alert dated from two days before the order to the end of the order's window, neither told it is not the other, and the only one either way. Order id → alert id. The result does not depend on the order of the input. */
+/** Pairs each waiting store order that names no card with the bank alert email that is clearly the same purchase, so the two become one that keeps both emails: the same amount, the same store, the alert dated from two days before the order to the end of the order's window, neither told it is not the other, not both already placed (the person decides between two answers), and the only one either way. Order id → alert id. The result does not depend on the order of the input. */
 export function findEmailJoins(
-  purchases: readonly TwinPurchase[],
+  purchases: readonly (TwinPurchase &
+    Pick<OpenPurchase, 'needsHome' | 'lines' | 'assignedBy' | 'ruleId'>)[],
 ): Map<string, string> {
   const orders = purchases.filter(isCardlessOrder);
   const alerts = purchases.filter(isBankAlert);
@@ -368,7 +374,8 @@ export function findEmailJoins(
             isJoinStore(getName(order), getName(alert)) &&
             isWindowDay(order, alert) &&
             !(order.notSameAs ?? []).includes(alert.id) &&
-            !(alert.notSameAs ?? []).includes(order.id),
+            !(alert.notSameAs ?? []).includes(order.id) &&
+            !(isAnsweredEmail(order) && isAnsweredEmail(alert)),
         )
         .map((alert) => alert.id),
     ]),

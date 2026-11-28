@@ -91,6 +91,7 @@ const purchase = (
   dedupeKey: null,
   emailEventId: null,
   emailWaiting: null,
+  emailWaitUntil: null,
   wasPending: false,
   createdAt: today - DAY_MS + HOUR_MS,
   updatedAt: today - DAY_MS + HOUR_MS,

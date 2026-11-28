@@ -120,12 +120,20 @@ function useJoinEmails() {
     looks.get(envelopeId)?.name ?? 'An envelope';
   return async (
     uid: string,
-    joins: readonly { order: OpenPurchase; alert: OpenPurchase }[],
-  ) => {
+    joins: readonly { order: OpenPurchase; alert: OpenPurchase; key: string }[],
+  ): Promise<string[]> => {
+    const failed: string[] = [];
+    const isFleeting = (error: unknown) => {
+      const message = error instanceof Error ? error.message : '';
+      return (
+        message !== SPEND_WORDS.changedElsewhere &&
+        message !== PURCHASE_REMOVED_WORDS
+      );
+    };
     try {
       const encryption = await getRunwayEncryption(uid);
       const joined = await joins.reduce(
-        async (done, { order, alert }) => {
+        async (done, { order, alert, key }) => {
           const list = await done;
           try {
             const entry = await joinEmailPurchases(
@@ -138,12 +146,13 @@ function useJoinEmails() {
             return [...list, entry];
           } catch (error) {
             console.error('Two emails were not joined', error);
+            if (isFleeting(error)) failed.push(key);
             return list;
           }
         },
         Promise.resolve([] as MergedPurchase[]),
       );
-      if (joined.length === 0) return;
+      if (joined.length === 0) return failed;
       recordDone(
         uid,
         joined.map((entry) => {
@@ -166,8 +175,10 @@ function useJoinEmails() {
           };
         }),
       );
+      return failed;
     } catch (error) {
       console.error('Emails about one purchase were not joined', error);
+      return joins.map(({ key }) => key);
     }
   };
 }
@@ -449,10 +460,25 @@ export function useMatchEmailPurchases(uid: string | null) {
     if (joins.length > 0) {
       joins.forEach(({ key }) => tried.current.add(key));
       isRunning.current = true;
-      void joinRef.current(uid, joins).finally(() => {
-        isRunning.current = false;
-        setRuns((count) => count + 1);
-      });
+      void joinRef
+        .current(uid, joins)
+        .then((failed) =>
+          failed.forEach((key) => {
+            const count = (attempts.current.get(key) ?? 0) + 1;
+            attempts.current.set(key, count);
+            if (count >= MAX_SPLIT_ATTEMPTS) return;
+            timers.current.add(
+              window.setTimeout(() => {
+                tried.current.delete(key);
+                setRuns((runCount) => runCount + 1);
+              }, SPLIT_RETRY_MS),
+            );
+          }),
+        )
+        .finally(() => {
+          isRunning.current = false;
+          setRuns((count) => count + 1);
+        });
       return;
     }
     const twins = findEmailTwins([...byId.values()]);

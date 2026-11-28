@@ -945,6 +945,7 @@ export async function buildRunwayScaleDocs(
         expenseId: null,
         emailEventId: null,
         emailWaiting: null,
+        emailWaitUntil: null,
         wasPending: null,
         createdAt: entry.createdAt,
         updatedAt: entry.createdAt,

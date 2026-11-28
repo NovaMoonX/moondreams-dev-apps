@@ -59,6 +59,7 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
     tickedDayKey: null,
     emailEventId: source === 'email' ? 'ev' : null,
     emailWaiting: source === 'email' ? true : null,
+    emailWaitUntil: null,
     wasPending: null,
     category: null,
     ruleId: null,
@@ -512,6 +513,7 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
       notSameAs: null,
       pairedWithId: null,
       emailWaiting: source === 'email' ? true : null,
+      emailWaitUntil: null,
       wasPending: null,
       storeEmail: null,
       ...extra,
@@ -750,6 +752,9 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
       emailWaiting: true,
       emailWaitUntil: null,
       storeEmail: null,
+      lines: [{ envelopeId: null, cents: 4_599, via: 'free' }],
+      assignedBy: null,
+      ruleId: null,
       ...extra,
     }) as unknown as OpenPurchase;
   const orderOf = (
@@ -803,6 +808,45 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
     joins([orderOf('o'), alertOf('a', 3, { merchant: 'Target' })]),
     [],
     'a different store',
+  );
+  (
+    [
+      ['Target', 'TARGET OPTICAL'],
+      ['Home Depot', 'HOME GOODS #12'],
+      ['Uber', 'Uber Eats'],
+      ['Whole Foods', 'WHOLE BODY*12'],
+    ] as const
+  ).forEach(([store, bank]) =>
+    assert.deepEqual(
+      joins([
+        orderOf('o', 0, { merchant: store }),
+        alertOf('a', 3, { merchant: bank }),
+      ]),
+      [],
+      `${store} is not ${bank}`,
+    ),
+  );
+  assert.deepEqual(
+    joins([
+      orderOf('o', 0, { merchant: 'Whole Foods' }),
+      alertOf('a', 3, { merchant: 'WHOLE FOODS*MKT 102' }),
+    ]),
+    [['o', 'a']],
+    'the whole store name then a processor code',
+  );
+  const placed = {
+    needsHome: false,
+    lines: [{ envelopeId: 'groceries', cents: 4_599, via: 'free' as const }],
+  };
+  assert.deepEqual(
+    joins([orderOf('o', 0, placed), alertOf('a', 3, placed)]),
+    [],
+    'two emails already placed are left to the person',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', 3, placed)]),
+    [['o', 'a']],
+    'one placed email still joins',
   );
   assert.deepEqual(
     joins([orderOf('o'), alertOf('a', 3, { merchant: 'Amazon' })]),
@@ -883,6 +927,7 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
       ...alertOf('b', 18),
       source: 'link',
       emailWaiting: null,
+      emailWaitUntil: null,
       emailEventId: null,
     } as OpenPurchase,
   ]);

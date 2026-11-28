@@ -343,6 +343,20 @@ assert.deepEqual(
   'an alert from another store is not joined',
 );
 assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      storeOrder('o', 10, { name: 'Target' }),
+      twin('a', 'email', 14, {
+        accountId: null,
+        paidByCardId: 'c',
+        name: 'TARGET OPTICAL',
+      }),
+    ]),
+  ),
+  ['o', 'a'],
+  'a store name with a plain extra word is another store',
+);
+assert.deepEqual(
   ids(withoutEmailTwins([twin('e', 'email', 10), twin('b', 'link', 12)])),
   ['b'],
 );
