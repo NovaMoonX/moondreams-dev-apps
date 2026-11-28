@@ -449,7 +449,7 @@ functions/src/apps/going-once/
   syncSalePublicPhotos.ts, submitSaleInterest.ts, inquiryView.ts (reading the contact, the inquiry id and the caps; mirrored by `utils/contact.ts` and `constants.ts`, kept equal by `check:going-once-share`), notifySaleInquiry.ts, buildSalePhotoArchive.ts,
   finishSale.ts, clearSaleContacts.ts, finishPlan.ts (the pure plans both run, asserted by `check:going-once-finish`), deleteSale.ts, findFirstActivityAt.ts
 src/utils/imageCompression.ts   + 'listing' use and a per-use output type (shared)
-src/utils/fileUtils.ts          + shareOrDownloadFiles: share sheet with download fallback (shared)
+src/utils/fileUtils.ts          + shareOrDownloadFiles: a touch device's share sheet, a download on a computer or when the share is refused (reported to debug viewers) (shared)
 src/components/forms/PhotoSetPicker.tsx, src/hooks/usePhotoSetUploads.ts, src/components/PhotoStrip.tsx   (design's shared components; the hook holds the uploads in the screen that owns the thing, so a photo still shrinking or saving when the person moves to the next answer finishes)
 ```
 

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { FileSpreadsheet } from 'lucide-react';
 
+import DebugDetails from '@/components/DebugDetails';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAppSelector } from '@/store';
@@ -43,7 +44,7 @@ function MarketplaceCsvSheet({
     (state) => selectSaleById(state, saleId)?.name ?? '',
   );
   const [outcome, setOutcome] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Error | null>(null);
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const things = getMarketplaceThings(items, bundles);
   const sheets = toMarketplaceSheets(things);
@@ -63,20 +64,20 @@ function MarketplaceCsvSheet({
     const files = sheets.map((rows, index) =>
       toCsvFile(rows, getMarketplaceFileName(saleName, index, sheets.length)),
     );
+    setFailure(null);
     try {
       const done = await shareOrDownloadFiles(files, {
         title: `${saleName} for Marketplace`,
       });
       if (done === 'cancelled') return;
       setSavedKey(sheetsKey);
-      setFailure(null);
       setOutcome(
         done === 'downloaded'
           ? `Saved ${files.length === 1 ? 'the file' : `${files.length} files`} to your downloads.`
           : 'Saved. Upload it on Marketplace to make the listings.',
       );
-    } catch {
-      setFailure("Couldn't open the share sheet. Tap Save to try again.");
+    } catch (error) {
+      setFailure(error instanceof Error ? error : new Error(String(error)));
     }
   };
 
@@ -108,9 +109,22 @@ function MarketplaceCsvSheet({
           ].join(' ')}
         </p>
         {failure !== null && (
-          <p className='text-destructive text-sm' role='alert'>
-            {failure}
-          </p>
+          <div className='space-y-2'>
+            <p className='text-destructive text-sm' role='alert'>
+              Couldn&rsquo;t save the file on this device.
+            </p>
+            <DebugDetails
+              message={`${failure.name}: ${failure.message}`}
+              facts={[
+                `Files: ${sheets.length}`,
+                `Touch screen: ${window.matchMedia('(pointer: coarse)').matches ? 'yes' : 'no'}`,
+                `Web Share: ${typeof navigator.canShare === 'function' ? 'yes' : 'no'}`,
+              ]}
+              trace={
+                failure.stack ? { label: 'Stack', text: failure.stack } : null
+              }
+            />
+          </div>
         )}
         {isSaved && outcome !== null && (
           <p className='text-foreground text-sm' role='status'>
