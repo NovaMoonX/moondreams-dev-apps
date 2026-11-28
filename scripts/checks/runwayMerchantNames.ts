@@ -10,6 +10,7 @@ import {
   toSafeLogo,
 } from '../../functions/src/apps/runway/institutionLogos.ts';
 import { planEmailPurchaseFill } from '../../functions/src/apps/runway/email/fillEmailPurchasesPlan.ts';
+import { toShopName } from '../../functions/src/apps/runway/email/parseAlert.ts';
 import { normalizeTransaction } from '../../functions/src/apps/runway/link/normalize.ts';
 import {
   findMerchant,
@@ -20,6 +21,12 @@ import {
   toMerchantKey,
   toMerchantWrite,
 } from '../../functions/src/apps/runway/merchantNames.ts';
+
+// A name read from an email by a model ("Amazon.com") reaches the same entry the bank's name does.
+['Amazon.com', 'amazon.com', 'www.amazon.com'].forEach((read) =>
+  assert.equal(toMerchantKey(toShopName(read)), toMerchantKey('Amazon'), read),
+);
+assert.equal(toMerchantKey(toShopName('Target.com')), toMerchantKey('Target'));
 
 // Eligibility: only a business Plaid recognised, never a transfer, loan or card payment, income or bank fee.
 const raw = {

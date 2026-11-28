@@ -3,7 +3,7 @@ import { logger } from 'firebase-functions';
 
 import { SEALED_SCHEMA_VERSION } from '../link/linkShared.js';
 import { markClosedMonths } from '../link/syncRunwayLink.js';
-import { findMerchant } from '../merchantNames.js';
+import { findMerchants } from '../merchantNames.js';
 import {
   openWithKey,
   sealWithKey,
@@ -11,7 +11,12 @@ import {
   type SealedPayload,
 } from '../planKey.js';
 import { planPath } from './emailShared.js';
-import type { ParsedAlert } from './parseAlert.js';
+import {
+  companyFromAddress,
+  isKnownInstitutionSender,
+  toShopName,
+  type ParsedAlert,
+} from './parseAlert.js';
 import type { StoreEmail } from './readAlertWithAi.js';
 
 type PlanKey = Awaited<ReturnType<typeof unwrapPlanKey>>;
@@ -103,6 +108,26 @@ export const isInsideTracking = (
   return open !== undefined && open.to === null && date >= open.from;
 };
 
+/** The shop list's entry for an email's purchase: the name as read, then without a web address, then the store that sent it (never a bank's address). */
+async function findEmailShop(
+  firestore: Firestore,
+  merchant: string | null,
+  from: string,
+) {
+  const named = merchant === null ? null : toShopName(merchant);
+  const sender = isKnownInstitutionSender(from)
+    ? null
+    : companyFromAddress(from);
+  const candidates = [merchant, named, sender];
+  const found = await findMerchants(firestore, candidates);
+  const known =
+    candidates.flatMap((text) => {
+      const entry = text === null ? undefined : found?.get(text);
+      return entry === undefined ? [] : [entry];
+    })[0] ?? null;
+  return { known, name: named };
+}
+
 /** The purchase document an email becomes: the same whether Runway read it on arrival or the person said it was one. */
 export async function buildEmailPurchase({
   firestore,
@@ -113,6 +138,7 @@ export async function buildEmailPurchase({
   returnOutcome,
   eventId,
   now,
+  from,
 }: {
   firestore: Firestore;
   uid: string;
@@ -122,6 +148,8 @@ export async function buildEmailPurchase({
   returnOutcome: 'refund' | 'cancel' | null;
   eventId: string;
   now: number;
+  /** The sender's address, naming the store when the shop list doesn't know the name as read. */
+  from: string;
 }): Promise<PurchaseWrite> {
   const date = alert.date as number;
   const targets = await findTargets(
@@ -135,7 +163,7 @@ export async function buildEmailPurchase({
     returnOutcome === null
       ? (alert.amountCents as number)
       : -(alert.amountCents as number);
-  const known = await findMerchant(firestore, alert.merchant);
+  const { known, name } = await findEmailShop(firestore, alert.merchant, from);
   const data = {
     id: purchaseRef.id,
     date,
@@ -153,7 +181,7 @@ export async function buildEmailPurchase({
       planKey,
       {
         amountCents: cents,
-        merchant: known?.name ?? alert.merchant,
+        merchant: known?.name ?? name,
         merchantLogo: known?.logo ?? null,
         bankName: alert.institution,
         category: known?.category ?? null,
