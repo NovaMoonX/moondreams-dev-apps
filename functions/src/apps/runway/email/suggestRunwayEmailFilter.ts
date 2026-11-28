@@ -5,7 +5,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { assertGateOpen } from '../../../gates/assertGateOpen.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
 import { openWithKey, unwrapPlanKey, type SealedPayload } from '../planKey.js';
-import { ANTHROPIC_API_KEY, askClaude } from './askClaude.js';
+import { AI_HELD, ANTHROPIC_API_KEY, askClaude } from './askClaude.js';
 import { EMAIL_PURCHASES_GATE_ID, emailEventsPath } from './emailShared.js';
 
 if (getApps().length === 0) {
@@ -144,6 +144,8 @@ export const suggestRunwayEmailFilter = onCall(
       tool: SUGGEST_TOOL,
       fixture: () => ({ filters: [] }),
     });
-    return { suggestions: readSuggestions(answer?.filters) };
+    return {
+      suggestions: readSuggestions(answer === AI_HELD ? null : answer?.filters),
+    };
   },
 );

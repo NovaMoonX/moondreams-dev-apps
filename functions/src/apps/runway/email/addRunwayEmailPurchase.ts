@@ -15,7 +15,7 @@ import {
   emailEventsPath,
   planPath,
 } from './emailShared.js';
-import { ANTHROPIC_API_KEY } from './askClaude.js';
+import { AI_HELD, ANTHROPIC_API_KEY } from './askClaude.js';
 import { AI_UNAVAILABLE, readAlertWithAi } from './readAlertWithAi.js';
 
 if (getApps().length === 0) {
@@ -81,6 +81,12 @@ export const addRunwayEmailPurchase = onCall(
       receivedAt: stored.receivedAt as number,
       isKnownPurchase: true,
     });
+    if (alert === AI_HELD) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'Runway has read all the emails it can for today. Use Add a purchase to enter this one yourself, or try again tomorrow.',
+      );
+    }
     if (alert === AI_UNAVAILABLE) {
       throw new HttpsError(
         'unavailable',

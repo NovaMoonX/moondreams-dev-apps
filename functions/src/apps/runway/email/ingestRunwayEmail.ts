@@ -44,7 +44,7 @@ import {
   type ParsedAlert,
   type SenderKind,
 } from './parseAlert.js';
-import { ANTHROPIC_API_KEY } from './askClaude.js';
+import { AI_HELD, ANTHROPIC_API_KEY } from './askClaude.js';
 import {
   AI_UNAVAILABLE,
   readAlertWithAi,
@@ -254,7 +254,8 @@ async function handleMail(
             from: toAddress(mail.from),
           })
         : null;
-    const byAi = aiAnswer === AI_UNAVAILABLE ? null : aiAnswer;
+    const byAi =
+      aiAnswer === AI_UNAVAILABLE || aiAnswer === AI_HELD ? null : aiAnswer;
     // A bank the sender list doesn't know can still write "refund"; its alert falls back to the patterns.
     const byPattern =
       firstPattern ??

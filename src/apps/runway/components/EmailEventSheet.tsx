@@ -51,6 +51,7 @@ const PLAIN_FAILURE_CODES = [
   'functions/not-found',
   'functions/unavailable',
   'functions/permission-denied',
+  'functions/resource-exhausted',
 ];
 
 interface AddFailure {

@@ -1,6 +1,6 @@
 import type { Firestore } from 'firebase-admin/firestore';
 
-import { askClaude } from './askClaude.js';
+import { AI_HELD, askClaude } from './askClaude.js';
 import {
   arrivalDay,
   companyFromAddress,
@@ -129,7 +129,7 @@ const asDate = (value: unknown, receivedAt: number) => {
     : null;
 };
 
-/** Asks the AI to read an alert the patterns could not. `null` when read but unusable, `AI_UNAVAILABLE` when the model didn't answer; never throws. `isKnownPurchase` when the person said it is one. */
+/** Asks the AI to read an alert the patterns could not. `null` when read but unusable, `AI_UNAVAILABLE` when the model didn't answer, `AI_HELD` when today's reads are spent; never throws. `isKnownPurchase` when the person said it is one. */
 export async function readAlertWithAi({
   firestore,
   uid,
@@ -146,7 +146,7 @@ export async function readAlertWithAi({
   text: string;
   receivedAt: number;
   isKnownPurchase?: boolean;
-}): Promise<AiReading | typeof AI_UNAVAILABLE | null> {
+}): Promise<AiReading | typeof AI_UNAVAILABLE | typeof AI_HELD | null> {
   const answer = await askClaude({
     firestore,
     uid,
@@ -157,6 +157,7 @@ export async function readAlertWithAi({
     tool: READ_TOOL,
     fixture: readFixture,
   });
+  if (answer === AI_HELD) return AI_HELD;
   if (answer === null) return AI_UNAVAILABLE;
   const senderKind = asSender(answer.sender);
   // A bank's alert names the shop it was spent at; anyone else writing about a purchase is the shop.

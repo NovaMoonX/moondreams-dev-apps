@@ -13,6 +13,9 @@ import { isForcedFixture, isRunningInEmulator } from '../../../emulator.js';
 
 export const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
+/** The person's day of reads, or the site's AI budget for the day, is spent: trying again today can't help. */
+export const AI_HELD = 'held' as const;
+
 const APP_ID = 'runway';
 const LIMITS = { maxTurns: 2, maxToolCalls: 0, maxMillis: 20_000 };
 // Every forwarded email may be read once on arrival, so the day's count is generous; the site's budget still caps spend.
@@ -37,7 +40,7 @@ const describe = (error: unknown) =>
 
 /**
  * One JSON answer from Claude Haiku through `tool`, counted against the person's day and the site's AI budget.
- * `null` when the model can't be reached, the day is spent or the answer never came; never throws. In the
+ * `AI_HELD` when the day's reads or budget are spent, `null` when the model can't be reached or the answer never came; never throws. In the
  * emulator without a key, `fixture` stands in for the model.
  */
 export async function askClaude({
@@ -54,7 +57,7 @@ export async function askClaude({
   input: string;
   tool: TerminalTool;
   fixture: (input: string) => Record<string, unknown> | null;
-}): Promise<Record<string, unknown> | null> {
+}): Promise<Record<string, unknown> | typeof AI_HELD | null> {
   const apiKey = readKey();
   if (!apiKey) return isRunningInEmulator() ? fixture(input) : null;
   const now = Date.now();
@@ -67,7 +70,7 @@ export async function askClaude({
     });
     if (reserved.held !== null) {
       logger.warn('runway.email.aiHeld', { held: reserved.held });
-      return null;
+      return AI_HELD;
     }
   } catch (error) {
     logger.error('runway.email.reserveFailed', { message: describe(error) });
