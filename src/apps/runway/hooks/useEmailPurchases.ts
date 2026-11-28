@@ -7,6 +7,7 @@ import {
   rotateEmailAddress,
   setEmailWaiting,
   suggestEmailFilters,
+  addEmailPurchase,
 } from '@apps/runway/store/actions/emailActions';
 import {
   selectEmailEvents,
@@ -58,6 +59,7 @@ export interface EmailEventRead extends EmailEventSealed {
   senderKind: EmailSenderKind | null;
   purchaseId: string | null;
   savedAt: number | null;
+  addedByPersonAt: number | null;
 }
 
 export type EmailFilterRead = {
@@ -72,6 +74,7 @@ export interface EmailActions {
   createFilter(filter: EmailFilterSealed): Promise<string>;
   deleteFilter(id: string): Promise<void>;
   suggestFilters(eventId: string): Promise<EmailFilterSuggestion[]>;
+  addAsPurchase(eventId: string): Promise<string>;
   stopWaiting(purchaseId: string): Promise<void>;
   resumeWaiting(purchaseId: string): Promise<void>;
 }
@@ -190,6 +193,7 @@ export function useEmailActions(): EmailActions {
       deleteFilter: (id) =>
         uid === null ? NO_UID() : deleteEmailFilter(uid, id),
       suggestFilters: suggestEmailFilters,
+      addAsPurchase: addEmailPurchase,
       stopWaiting: (purchaseId) =>
         uid === null ? NO_UID() : setEmailWaiting(uid, purchaseId, false),
       resumeWaiting: (purchaseId) =>

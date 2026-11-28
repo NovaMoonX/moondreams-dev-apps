@@ -5198,6 +5198,7 @@ async function writeSeedEmail(
         id: entry.id,
         receivedAt: entry.receivedAt,
         savedAt: entry.receivedAt + 6_000,
+        addedByPersonAt: null,
         outcome: entry.outcome,
         senderKind: entry.senderKind,
         purchaseId: entry.purchaseId,

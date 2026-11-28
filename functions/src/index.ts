@@ -71,6 +71,7 @@ export { reconnectRunwayLink } from './apps/runway/reconnectRunwayLink.js';
 export { syncRunwayLinks } from './apps/runway/syncRunwayLinks.js';
 export { runwayPlaidWebhook } from './apps/runway/runwayPlaidWebhook.js';
 export { ingestRunwayEmail } from './apps/runway/email/ingestRunwayEmail.js';
+export { addRunwayEmailPurchase } from './apps/runway/email/addRunwayEmailPurchase.js';
 export { rotateRunwayEmailAddress } from './apps/runway/email/rotateRunwayEmailAddress.js';
 export { suggestRunwayEmailFilter } from './apps/runway/email/suggestRunwayEmailFilter.js';
 export { syncRunwayAccounts } from './apps/runway/syncRunwayAccounts.js';
