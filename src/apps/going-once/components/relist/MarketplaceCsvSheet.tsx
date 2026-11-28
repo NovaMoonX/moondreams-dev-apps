@@ -69,6 +69,7 @@ function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
   };
 
   const getSummary = () => {
+    if (things.length === 0) return 'Nothing Available to list right now';
     const files =
       sheets.length > 1
         ? `${sheets.length} files of up to ${MARKETPLACE_ROWS_PER_FILE}`

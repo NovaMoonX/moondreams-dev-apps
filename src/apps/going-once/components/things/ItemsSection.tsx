@@ -424,20 +424,23 @@ function ItemsSection({
             <ChevronRight className='size-4' aria-hidden='true' />
           </Button>
         ))}
-      {hasMarketplaceThings && statusView === 'AVAILABLE' && !isSearching && (
-        <Button
-          type='button'
-          variant='tertiary'
-          className='border-border text-foreground! h-10 w-full justify-between gap-2 rounded-full border px-4 text-sm'
-          onClick={() => setIsExportingCsv(true)}
-        >
-          <FileSpreadsheet className='size-4 shrink-0' aria-hidden='true' />
-          <span className='flex-1 text-left'>
-            List these on Marketplace at once
-          </span>
-          <ChevronRight className='size-4' aria-hidden='true' />
-        </Button>
-      )}
+      {hasMarketplaceThings &&
+        statusView === 'AVAILABLE' &&
+        !isSearching &&
+        !isPicking && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='border-border text-foreground! h-10 w-full justify-between gap-2 rounded-full border px-4 text-sm'
+            onClick={() => setIsExportingCsv(true)}
+          >
+            <FileSpreadsheet className='size-4 shrink-0' aria-hidden='true' />
+            <span className='flex-1 text-left'>
+              List these on Marketplace at once
+            </span>
+            <ChevronRight className='size-4' aria-hidden='true' />
+          </Button>
+        )}
       {searched.length === 0 && items.length > 0 && (
         <p className='text-muted-foreground text-center text-sm'>
           Nothing matches that. Try another word.
