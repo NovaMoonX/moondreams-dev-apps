@@ -55,12 +55,20 @@ function findProblems(section: string[]): string[] {
       !isTableRule(line) &&
       !(isRow(section[index + 1]) && isTableRule(section[index + 1] ?? '')),
   );
-  const cellProblems = bodyRows.flatMap((row) => {
-    const cells = row
+  const markdownRows = bodyRows.map((row) =>
+    row
       .trim()
       .replace(/^\||\|$/g, '')
       .split('|')
-      .map((cell) => cell.trim());
+      .map((cell) => cell.trim()),
+  );
+  const htmlRows = Array.from(
+    section.join('\n').matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi),
+    (row) => Array.from(row[1].matchAll(/<(td|th)\b[^>]*>([\s\S]*?)<\/\1>/gi)),
+  )
+    .filter((cells) => cells.some((cell) => cell[1].toLowerCase() === 'td'))
+    .map((cells) => cells.map((cell) => cell[2].trim()));
+  const cellProblems = [...markdownRows, ...htmlRows].flatMap((cells) => {
     const isLabelled = cells
       .slice(1)
       .some((cell) => imageUrls(cell).length > 0);

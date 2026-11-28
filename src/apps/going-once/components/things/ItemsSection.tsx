@@ -12,6 +12,7 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SelectionBar from '@/components/SelectionBar';
 import SortControl from '@/components/SortControl';
+import WorkingRing from '@/components/WorkingRing';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useSelection } from '@/hooks/useSelection';
 import { commitDeferred, useHiddenDeferredKeys } from '@/lib/undo/deferredUndo';
@@ -21,6 +22,7 @@ import BundleRow from '@apps/going-once/components/bundles/BundleRow';
 import BundleSheet from '@apps/going-once/components/bundles/BundleSheet';
 import MarketplaceCsvSheet from '@apps/going-once/components/relist/MarketplaceCsvSheet';
 import SaveAllPhotosSheet from '@apps/going-once/components/relist/SaveAllPhotosSheet';
+import { useIsBuildingPhotos } from '@apps/going-once/hooks/usePhotoArchive';
 import NewThingFlow from '@apps/going-once/components/things/NewThingFlow';
 import OpenThing from '@apps/going-once/components/things/OpenThing';
 import ThingRow from '@apps/going-once/components/things/ThingRow';
@@ -153,6 +155,7 @@ function ItemsSection({
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
   const [isSavingPhotos, setIsSavingPhotos] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
+  const isBuildingPhotos = useIsBuildingPhotos(saleId);
   const openItem = items.find((item) => item.id === openId) ?? null;
   const openBundle =
     bundles.find((bundle) => bundle.id === openBundleId) ?? null;
@@ -316,18 +319,24 @@ function ItemsSection({
 
   const headerActions = (
     <div className='flex items-center gap-2'>
-      {hasSavablePhotos && (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          rounded='full'
-          aria-label='Save all photos'
-          className="relative size-7 min-w-7 p-0 before:absolute before:-inset-1.5 before:-inset-x-1.5! before:content-['']"
-          onClick={() => setIsSavingPhotos(true)}
-        >
-          <FolderDown className='size-4' aria-hidden='true' />
-        </Button>
+      {(hasSavablePhotos || isBuildingPhotos) && (
+        <WorkingRing isWorking={isBuildingPhotos} className='text-primary'>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            rounded='full'
+            aria-label={
+              isBuildingPhotos
+                ? 'Save all photos, building your zip'
+                : 'Save all photos'
+            }
+            className="relative size-7 min-w-7 p-0 before:absolute before:-inset-1.5 before:-inset-x-1.5! before:content-['']"
+            onClick={() => setIsSavingPhotos(true)}
+          >
+            <FolderDown className='size-4' aria-hidden='true' />
+          </Button>
+        </WorkingRing>
       )}
       {!isFinished && addButton}
     </div>
