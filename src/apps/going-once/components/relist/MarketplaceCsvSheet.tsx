@@ -27,16 +27,23 @@ const plural = (count: number, one: string, many: string) =>
 interface MarketplaceCsvSheetProps {
   saleId: string;
   onClose: () => void;
+  /** Opens the photo zip; null when no thing has a photo to save. */
+  onSavePhotos: (() => void) | null;
 }
 
-/** Marketplace spreadsheet: the Available things as CSV in Facebook's bulk upload layout, split into files of 50. */
-function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
+/** Marketplace spreadsheet: the Available things as CSV in Facebook's bulk upload layout, split into files of 50, then a step on to the photos the upload can't carry. */
+function MarketplaceCsvSheet({
+  saleId,
+  onClose,
+  onSavePhotos,
+}: MarketplaceCsvSheetProps) {
   const items = useAppSelector((state) => selectItems(state, saleId));
   const bundles = useAppSelector((state) => selectBundles(state, saleId));
   const saleName = useAppSelector(
     (state) => selectSaleById(state, saleId)?.name ?? '',
   );
   const [outcome, setOutcome] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
   const things = getMarketplaceThings(items, bundles);
   const sheets = toMarketplaceSheets(things);
   const { noCondition, wellUsed, withCents } = getMarketplaceCaveats(things);
@@ -58,6 +65,7 @@ function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
         title: `${saleName} for Marketplace`,
       });
       if (done === 'cancelled') return;
+      setIsSaved(true);
       setOutcome(
         done === 'downloaded'
           ? `Saved ${files.length === 1 ? 'the file' : `${files.length} files`} to your downloads.`
@@ -85,8 +93,9 @@ function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
           {getSummary()}
         </p>
         <p className='text-foreground text-sm text-pretty'>
-          Upload it on Facebook Marketplace, then add each listing’s photos
-          there.
+          {onSavePhotos === null
+            ? 'Upload it on Facebook Marketplace to make every listing at once.'
+            : 'Upload it on Facebook Marketplace to make every listing at once. The upload takes no photos, so save them next: a folder for each thing, named like its listing.'}
         </p>
         <p className='text-muted-foreground text-sm text-pretty'>
           {[
@@ -107,13 +116,21 @@ function MarketplaceCsvSheet({ saleId, onClose }: MarketplaceCsvSheetProps) {
           </Button>
         }
         rightActions={
-          <Button
-            type='button'
-            disabled={things.length === 0}
-            onClick={() => void save()}
-          >
-            {sheets.length > 1 ? `Save ${sheets.length} files` : 'Save the CSV'}
-          </Button>
+          isSaved && onSavePhotos !== null ? (
+            <Button type='button' onClick={onSavePhotos}>
+              Save the photos
+            </Button>
+          ) : (
+            <Button
+              type='button'
+              disabled={things.length === 0}
+              onClick={() => void save()}
+            >
+              {sheets.length > 1
+                ? `Save ${sheets.length} files`
+                : 'Save the CSV'}
+            </Button>
+          )
         }
       />
     </FormSheet>

@@ -1,14 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import {
-  ChevronRight,
-  FileSpreadsheet,
-  FolderDown,
-  Plus,
-  X,
-} from 'lucide-react';
+import { ChevronRight, FolderDown, Plus, X } from 'lucide-react';
 
+import { FacebookMark } from '@/components/BrandMarks';
 import EmptyCard from '@/components/EmptyCard';
 import LazyMount from '@/components/LazyMount';
 import { PillGroup } from '@/components/PillGroup';
@@ -434,9 +429,9 @@ function ItemsSection({
             className='border-border text-foreground! h-10 w-full justify-between gap-2 rounded-full border px-4 text-sm'
             onClick={() => setIsExportingCsv(true)}
           >
-            <FileSpreadsheet className='size-4 shrink-0' aria-hidden='true' />
+            <FacebookMark className='size-4 shrink-0' />
             <span className='flex-1 text-left'>
-              List these on Marketplace at once
+              List these on Facebook Marketplace
             </span>
             <ChevronRight className='size-4' aria-hidden='true' />
           </Button>
@@ -587,6 +582,14 @@ function ItemsSection({
         <MarketplaceCsvSheet
           saleId={saleId}
           onClose={() => setIsExportingCsv(false)}
+          onSavePhotos={
+            hasSavablePhotos
+              ? () => {
+                  setIsExportingCsv(false);
+                  setIsSavingPhotos(true);
+                }
+              : null
+          }
         />
       )}
       {isSavingPhotos && (

@@ -1,0 +1,21 @@
+name: PR screenshots
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/checks/prScreenshots.ts
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Every screenshot in the PR body is filled in and loads
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: npx --yes tsx@4 scripts/checks/prScreenshots.ts
