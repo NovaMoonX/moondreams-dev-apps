@@ -26,6 +26,7 @@ import {
   readableBody,
   readProtonLink,
   subjectTemplate,
+  toShopName,
 } from '../../functions/src/apps/runway/email/parseAlert.ts';
 import {
   isHandForwarded,
@@ -282,6 +283,15 @@ const samples: Sample[] = [
 assert.equal(companyFromAddress('auto-confirm@amazon.com'), 'Amazon');
 assert.equal(companyFromAddress('someone@gmail.com'), null);
 assert.equal(companyFromAddress('orders@shop.xyz'), null);
+assert.equal(toShopName('Amazon.com'), 'Amazon', 'a shop named by its website is named by its name');
+assert.equal(toShopName('amazon.com'), 'Amazon');
+assert.equal(toShopName('AMAZON.COM'), 'AMAZON');
+assert.equal(toShopName('www.Target.com'), 'Target');
+assert.equal(toShopName('https://bestbuy.com/'), 'Bestbuy');
+assert.equal(toShopName('Amazon.com Services'), 'Amazon Services');
+assert.equal(toShopName('Best Buy'), 'Best Buy');
+assert.equal(toShopName('Joe’s Diner'), 'Joe’s Diner');
+assert.equal(toShopName('St. Louis Bread Co'), 'St. Louis Bread Co');
 
 samples.forEach((sample) => {
   const read = parseAlertEmail({ ...sample, receivedAt: RECEIVED });
@@ -999,6 +1009,7 @@ assert.deepEqual(readSender('NO.REPLY@Chase.COM'), {
     receivedAt,
     savedAt: null,
     addedByPersonAt: null,
+    purchaseRemovedAt: null,
     outcome,
     senderKind,
     purchaseId: null,

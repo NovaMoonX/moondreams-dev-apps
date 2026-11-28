@@ -62,6 +62,7 @@ export interface EmailEventRead extends EmailEventSealed {
   purchaseId: string | null;
   savedAt: number | null;
   addedByPersonAt: number | null;
+  purchaseRemovedAt: number | null;
 }
 
 export type EmailFilterRead = {

@@ -14,6 +14,11 @@ import {
   excerptOf,
   readableBody,
 } from '../../functions/src/apps/runway/email/parseAlert.ts';
+import {
+  MERCHANT_NAMES_PATH,
+  merchantDocId,
+  toMerchantKey,
+} from '../../functions/src/apps/runway/merchantNames.ts';
 import { formatDateOrdinalUTC } from '../../src/utils/formatUtils.ts';
 import {
   AUTO_PAY_WORDS,
@@ -5185,6 +5190,23 @@ async function writeSeedEmail(
       },
     },
     {
+      id: 'seed-email-event-amazon-order',
+      receivedAt: context.now - 10 * hour,
+      outcome: 'notPurchase',
+      senderKind: 'store',
+      purchaseId: null,
+      sealed: {
+        from: 'Amazon.com <auto-confirm@amazon.com>',
+        subject: 'Ordered: 1 item',
+        subjectTemplate: 'ordered: 1 item',
+        ...readEmail(
+          'Thanks for your order, Jamie!\nOrdered 1 item: Wireless Headphones\nArriving Tuesday\nOrder total $142.01\nView or manage order',
+        ),
+        readBy: 'ai',
+        senderCompany: 'Amazon',
+      },
+    },
+    {
       id: 'seed-email-event-forwarded-receipt',
       receivedAt: context.now - 12 * hour,
       outcome: 'purchase',
@@ -5271,6 +5293,7 @@ async function writeSeedEmail(
         receivedAt: entry.receivedAt,
         savedAt: entry.receivedAt + 6_000,
         addedByPersonAt: null,
+        purchaseRemovedAt: null,
         outcome: entry.outcome,
         senderKind: entry.senderKind,
         purchaseId: entry.purchaseId,
@@ -5286,6 +5309,22 @@ async function writeSeedEmail(
       });
     }),
   );
+
+  // The shared shop list, as a bank sync leaves it, so an email's shop meets the same name and logo.
+  const amazonKey = toMerchantKey('Amazon');
+  if (amazonKey !== null) {
+    batch.set(
+      context.firestore.doc(
+        `${MERCHANT_NAMES_PATH}/${merchantDocId(amazonKey)}`,
+      ),
+      {
+        name: 'Amazon',
+        logo: 'https://plaid-merchant-logos.plaid.com/amazon_68.png',
+        category: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES',
+        seenAt: context.now,
+      },
+    );
+  }
 
   const filterId = 'seed-email-filter-chase-marketing';
   batch.set(context.firestore.doc(`${plan}/emailFilters/${filterId}`), {

@@ -2086,9 +2086,22 @@ export async function deletePurchase(
             : Promise.resolve(null),
         ]);
   const changeId = generateUuid();
+  const emailRef =
+    previous.source === 'email' && previous.emailEventId !== null
+      ? doc(
+          db,
+          'apps',
+          'runway',
+          'plans',
+          uid,
+          'emailEvents',
+          previous.emailEventId,
+        )
+      : null;
   await runHeldTransaction(uid, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
+    const email = emailRef === null ? null : await transaction.get(emailRef);
     const [isUnmarked, isReopenGone] =
       paid === null
         ? [true, false]
@@ -2108,6 +2121,9 @@ export async function deletePurchase(
       setCostUnmark(transaction, uid, paid, unmarkSealed, unmarkChange, reopen);
     }
     transaction.delete(purchaseRef(uid, previous.id));
+    if (emailRef !== null && email?.data()?.purchaseId === previous.id) {
+      transaction.update(emailRef, { purchaseRemovedAt: Date.now() });
+    }
     transaction.set(
       doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
       {

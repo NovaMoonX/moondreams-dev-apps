@@ -42,6 +42,7 @@ import {
   parseAlertEmail,
   readableBody,
   subjectTemplate,
+  toShopName,
   withoutInvisible,
   type ParsedAlert,
   type SenderKind,
@@ -188,7 +189,7 @@ async function readSenderCompany(
     if (found.merchant === null || !isMerchantHost(address, found.merchant)) {
       return none;
     }
-    const store = await findMerchant(firestore, found.merchant);
+    const store = await findMerchant(firestore, toShopName(found.merchant));
     return store === null
       ? none
       : { company: store.name, logo: toSenderLogo(store.logo) };
@@ -343,6 +344,7 @@ async function handleMail(
       returnOutcome,
       eventId: eventRef.id,
       now,
+      from: toAddress(mail.from),
     });
     return {
       outcome: returnOutcome ?? 'purchase',
@@ -390,6 +392,7 @@ async function handleMail(
     purchaseId: result.purchase?.ref.id ?? null,
     savedAt: Date.now(),
     addedByPersonAt: null,
+    purchaseRemovedAt: null,
     expiresAt: Timestamp.fromMillis(now + EMAIL_EVENT_KEEP_DAYS * DAY_MS),
     sealed: sealWithKey(
       planKey,

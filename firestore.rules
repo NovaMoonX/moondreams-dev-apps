@@ -589,7 +589,7 @@ service cloud.firestore {
     // Functions; the app deletes one once it has told the person. A `startedPayments` note (a card payment the person
     // started at their bank) is created and deleted by the app, never changed. A purchase read from an email
     // (`source` 'email', an `emailEventId`) is made only by Functions, as are `emailIntake` and `emailEvents`
-    // (the app deletes an event, and repoints its `purchaseId` when two emails about one purchase join or part); an `emailFilters` rule is created and deleted by the app, never changed (and only while the `email-purchases` switch is open for them), and
+    // (the app deletes an event, repoints its `purchaseId` when two emails about one purchase join or part, and marks `purchaseRemovedAt` on one whose purchase it removes in the same write); an `emailFilters` rule is created and deleted by the app, never changed (and only while the `email-purchases` switch is open for them), and
     // `emailWaiting` is the one email field the app updates. `emailSetup/progress` is deprecated and no longer read or written (the walkthrough is gone); older documents stay, and the owner may still update one, never delete it. `doneForYou` is what the app did on its
     // own: the app marks one undone and removes the ones older than 30 days. `figures` (the figures the server worked out) and `alertStates` (where each alert stands) are written only by Functions; the owner reads them. An `alerts` document is the person's own: created, changed and deleted by the app.
     match /apps/runway/plans/{uid}/{document=**} {
@@ -614,6 +614,12 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['purchaseId'])
         && request.resource.data.purchaseId is string;
       allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges', 'startedPayments', 'emailEvents', 'emailFilters', 'doneForYou', 'alerts'];
+      // Removing an email's purchase marks the email, so it can be added again; a merge never does. Only that mark, and only once the purchase is gone.
+      allow update: if isUser(uid) && collection == 'emailEvents'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['purchaseRemovedAt'])
+        && request.resource.data.purchaseRemovedAt is int
+        && resource.data.get('purchaseId', null) is string
+        && !existsAfter(/databases/$(database)/documents/apps/runway/plans/$(uid)/purchases/$(resource.data.purchaseId));
     }
 
     match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {

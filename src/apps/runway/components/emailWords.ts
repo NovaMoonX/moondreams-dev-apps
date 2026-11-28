@@ -66,6 +66,8 @@ export const EMAIL_WORDS = {
   addingAsPurchase: 'Reading it again…',
   addAsPurchaseFailed: 'That didn’t go through. Try again in a moment.',
   notPurchaseLine: 'Runway didn’t find a purchase in it.',
+  purchaseRemoved: 'Its purchase was removed',
+  purchaseRemovedLine: 'You can add it again whenever you like.',
   noSubject: 'No subject',
   from: 'From',
   subject: 'Subject',
