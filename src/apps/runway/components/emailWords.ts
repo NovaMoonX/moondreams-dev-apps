@@ -59,8 +59,11 @@ export const EMAIL_WORDS = {
   filterOut: 'Filter out emails like this',
   filterOutSub: 'Future ones are skipped before anything is read.',
   filterOutRowSub: 'Emails like this won’t become purchases',
-  unreadLine:
-    'Runway couldn’t find an amount and a place in this email. If it was a purchase, add it from Add a purchase.',
+  unreadLine: 'Runway couldn’t find an amount and a place in this email.',
+  addAsPurchase: 'Add it as a purchase',
+  addAsPurchaseSub: 'Runway reads the amount and the shop from it',
+  addingAsPurchase: 'Reading it again…',
+  addAsPurchaseFailed: 'That didn’t go through. Try again in a moment.',
   notPurchaseLine: 'Runway didn’t find a purchase in it.',
   noSubject: 'No subject',
   from: 'From',

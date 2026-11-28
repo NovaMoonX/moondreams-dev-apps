@@ -5,7 +5,9 @@ import {
   FileText,
   Filter,
   Info,
+  LoaderCircle,
   MailCheck,
+  PlusCircle,
   Receipt,
   ShoppingBag,
   PackageX,
@@ -29,9 +31,24 @@ import {
 } from '@apps/runway/components/emailWords';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { selectPurchaseIds } from '@apps/runway/store/selectors/emailSelectors';
-import type { EmailEventRead } from '@apps/runway/hooks/useEmailPurchases';
+import {
+  useEmailActions,
+  type EmailEventRead,
+} from '@apps/runway/hooks/useEmailPurchases';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { EmailOutcome } from '@apps/runway/types';
+
+const ADDABLE_OUTCOMES: EmailOutcome[] = ['notPurchase', 'unread'];
+
+const PLAIN_FAILURE_CODES = [
+  'functions/failed-precondition',
+  'functions/not-found',
+];
+
+const readAddFailure = (error: unknown) =>
+  PLAIN_FAILURE_CODES.includes((error as { code?: string })?.code ?? '')
+    ? (error as Error).message
+    : EMAIL_WORDS.addAsPurchaseFailed;
 
 const OUTCOME_ICONS: Record<EmailOutcome, LucideIcon> = {
   purchase: ShoppingBag,
@@ -85,6 +102,9 @@ interface EmailEventSheetProps {
 function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
   const [isFiltering, setIsFiltering] = useState(false);
   const [isWholeShown, setIsWholeShown] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addFailure, setAddFailure] = useState<string | null>(null);
+  const actions = useEmailActions();
   const { closeMoreEntry, showTab, openPurchase } = useRunwayUrlState();
   const purchaseIds = useAppSelector(selectPurchaseIds);
 
@@ -119,6 +139,18 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
       event.snippet.length > 280);
   const hasPurchase =
     event.purchaseId !== null && purchaseIds.has(event.purchaseId);
+  const canAdd =
+    ADDABLE_OUTCOMES.includes(event.outcome) && event.purchaseId === null;
+
+  const addAsPurchase = () => {
+    if (isAdding) return;
+    setIsAdding(true);
+    setAddFailure(null);
+    actions.addAsPurchase(event.id).catch((error: unknown) => {
+      setAddFailure(readAddFailure(error));
+      setIsAdding(false);
+    });
+  };
 
   return (
     <FormSheet
@@ -155,8 +187,35 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
             </p>
           </blockquote>
         )}
+        {addFailure !== null && canAdd && (
+          <p className='text-destructive text-sm' role='alert'>
+            {addFailure}
+          </p>
+        )}
         {(hasPurchase || hasWholeEmail || event.outcome !== 'filtered') && (
           <ActionGroup isRoomy>
+            {canAdd && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={<PlusCircle />}
+                label={EMAIL_WORDS.addAsPurchase}
+                subtitle={
+                  isAdding
+                    ? EMAIL_WORDS.addingAsPurchase
+                    : EMAIL_WORDS.addAsPurchaseSub
+                }
+                trailing={
+                  isAdding ? (
+                    <LoaderCircle
+                      className='h-4 w-4 animate-spin motion-reduce:[animation-duration:2.5s]'
+                      aria-hidden='true'
+                    />
+                  ) : undefined
+                }
+                onClick={addAsPurchase}
+              />
+            )}
             {hasWholeEmail && (
               <ActionRow
                 isGrouped
