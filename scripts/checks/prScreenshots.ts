@@ -95,14 +95,23 @@ function findProblems(section: string[]): string[] {
   return [...empty, ...cellProblems, ...linkProblems];
 }
 
+// GitHub answers 503 now and then when many images are fetched at once.
+async function fetchWithRetry(url: string, triesLeft = 2): Promise<Response> {
+  const response = await fetch(url, {
+    redirect: 'follow',
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (response.status < 500 || triesLeft <= 1) return response;
+  await response.body?.cancel();
+  await new Promise((resolve) => setTimeout(resolve, 2_000));
+  return fetchWithRetry(url, triesLeft - 1);
+}
+
 async function findDeadImages(urls: string[]): Promise<string[]> {
   const results = await Promise.all(
     urls.map(async (url) => {
       try {
-        const response = await fetch(url, {
-          redirect: 'follow',
-          signal: AbortSignal.timeout(15_000),
-        });
+        const response = await fetchWithRetry(url);
         await response.body?.cancel();
         const type = response.headers.get('content-type') ?? '';
         if (!response.ok)
