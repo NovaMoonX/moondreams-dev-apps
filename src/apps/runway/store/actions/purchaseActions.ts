@@ -4,7 +4,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  query,
   type Transaction,
+  where,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -2051,6 +2054,31 @@ export async function markNotSamePurchase(
   });
 }
 
+// A purchase brought back by undoing an email join is a typed one whose email still points at it, so it is found by that link.
+async function findPurchaseEmailRef(uid: string, previous: OpenPurchase) {
+  if (previous.source === 'email') {
+    return previous.emailEventId === null
+      ? null
+      : doc(
+          db,
+          'apps',
+          'runway',
+          'plans',
+          uid,
+          'emailEvents',
+          previous.emailEventId,
+        );
+  }
+  const linked = await getDocs(
+    query(
+      collection(db, 'apps', 'runway', 'plans', uid, 'emailEvents'),
+      where('purchaseId', '==', previous.id),
+      limit(1),
+    ),
+  );
+  return linked.docs[0]?.ref ?? null;
+}
+
 /** Removes a purchase (its lines go with it, so the envelopes and Free to Spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. A purchase that pays a cost takes that cost's mark back in the same transaction (`costMark`), unless it was already taken back. */
 export async function deletePurchase(
   uid: string,
@@ -2086,18 +2114,7 @@ export async function deletePurchase(
             : Promise.resolve(null),
         ]);
   const changeId = generateUuid();
-  const emailRef =
-    previous.source === 'email' && previous.emailEventId !== null
-      ? doc(
-          db,
-          'apps',
-          'runway',
-          'plans',
-          uid,
-          'emailEvents',
-          previous.emailEventId,
-        )
-      : null;
+  const emailRef = await findPurchaseEmailRef(uid, previous);
   await runHeldTransaction(uid, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
