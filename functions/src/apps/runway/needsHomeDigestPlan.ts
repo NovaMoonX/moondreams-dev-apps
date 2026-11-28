@@ -1,5 +1,5 @@
 import { getLocalClock } from '../../notifications/localClock.js';
-import { isSameStore } from './engine/storeNames.js';
+import { getMerchantWords, isSameStore } from './engine/storeNames.js';
 
 export const DEFAULT_NOTIFY_HOUR = 19;
 
@@ -85,9 +85,10 @@ export function countWaiting(
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** Mirror `EMAIL_MATCH_DAYS_BEFORE` and `EMAIL_MATCH_DAYS_AFTER` in the app's constants; `check:runway-notify-text` fails when they drift. */
+/** Mirror `EMAIL_MATCH_DAYS_BEFORE`, `EMAIL_MATCH_DAYS_AFTER` and `EMAIL_ORDER_MATCH_DAYS_AFTER` in the app's constants; `check:runway-notify-text` fails when they drift. */
 export const EMAIL_MATCH_DAYS_BEFORE = 2;
 export const EMAIL_MATCH_DAYS_AFTER = 7;
+export const EMAIL_ORDER_MATCH_DAYS_AFTER = 30;
 /** Mirror `MAX_SPLIT_CHARGES` and `MAX_SPLIT_POOL` in the app's `engine/emailTwins.ts`; `check:runway-notify-text` fails when they drift. */
 export const MAX_SPLIT_CHARGES = 4;
 export const MAX_SPLIT_POOL = 8;
@@ -106,6 +107,10 @@ export interface TwinRow {
   name: string | null;
   /** The email was read from a store's order confirmation. */
   isOrder: boolean;
+  /** The email was read from a store (an order, a cancellation, a refund) rather than a bank's alert. */
+  isStoreEmail: boolean;
+  /** The day the person chose to keep waiting until, or null. */
+  emailWaitUntil: number | null;
 }
 
 const isSameSide = (email: TwinRow, bank: TwinRow) =>
@@ -115,9 +120,62 @@ const isSameSide = (email: TwinRow, bank: TwinRow) =>
       ? email.accountId === bank.accountId && bank.paidByCardId === null
       : email.isOrder && isSameStore(email.name, bank.name);
 
+const getWindowEnd = (email: TwinRow) =>
+  Math.max(
+    email.date +
+      (email.isOrder ? EMAIL_ORDER_MATCH_DAYS_AFTER : EMAIL_MATCH_DAYS_AFTER) *
+        DAY_MS,
+    email.emailWaitUntil ?? 0,
+  );
+
 const isWindowDay = (email: TwinRow, bank: TwinRow) =>
   bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
-  bank.date <= email.date + EMAIL_MATCH_DAYS_AFTER * DAY_MS;
+  bank.date <= getWindowEnd(email);
+
+const isJoinStore = (a: string | null, b: string | null) => {
+  if (isSameStore(a, b)) return true;
+  const [first] = getMerchantWords(a);
+  return (
+    first !== undefined && first.length >= 4 && getMerchantWords(b)[0] === first
+  );
+};
+
+/** Each waiting store order naming no card paired with the bank alert email that is clearly the same purchase, as `findEmailJoins` in the app decides. Order id → alert id. */
+function findJoins(emails: readonly TwinRow[]): Map<string, string> {
+  const orders = emails.filter(
+    (row) => row.isOrder && row.paidByCardId === null && row.accountId === null,
+  );
+  const alerts = emails.filter(
+    (row) =>
+      !row.isStoreEmail &&
+      (row.paidByCardId !== null || row.accountId !== null),
+  );
+  const candidates = orders.map((order): [string, string[]] => [
+    order.id,
+    alerts
+      .filter(
+        (alert) =>
+          alert.amountCents === order.amountCents &&
+          order.amountCents > 0 &&
+          isJoinStore(order.name, alert.name) &&
+          isWindowDay(order, alert) &&
+          !order.notSameAs.includes(alert.id) &&
+          !alert.notSameAs.includes(order.id),
+      )
+      .map((alert) => alert.id),
+  ]);
+  const claims = candidates
+    .flatMap(([, ids]) => ids)
+    .reduce(
+      (counts, id) => counts.set(id, (counts.get(id) ?? 0) + 1),
+      new Map<string, number>(),
+    );
+  return new Map(
+    candidates.flatMap(([orderId, ids]): [string, string][] =>
+      ids.length === 1 && claims.get(ids[0]) === 1 ? [[orderId, ids[0]]] : [],
+    ),
+  );
+}
 
 const getCombinations = <T>(items: readonly T[], size: number): T[][] =>
   size === 0
@@ -191,8 +249,26 @@ function findSplitChargeIds(
   );
 }
 
-/** Drops each waiting emailed purchase that is clearly a bank charge also waiting, so the pair counts once (the bank's side stays): the same amount on the same card (or the same account for money out of an account, or any charge from the same store for a store order that names neither), the bank dated from two days before to seven days after the email, and the only candidate both ways, as `findEmailTwins` in the app decides. An ambiguous email stays counted. A store order that posted as several charges stays and its charges are dropped, as the screen hides them; skipped: the screen shows those charges again when one is link history or the merge's tries are spent, which the push cannot see, so it drops them anyway. */
-export function withoutEmailTwins<T extends TwinRow>(rows: readonly T[]) {
+/** First counts a store order and the bank's alert email that are clearly one purchase as one, as the app joins them (the order takes the alert's card or account). Then drops each waiting emailed purchase that is clearly a bank charge also waiting, so the pair counts once (the bank's side stays): the same amount on the same card (or the same account for money out of an account, or any charge from the same store for a store order that names neither), the bank dated from two days before the email to the end of its window (seven days, thirty for a store order, or the day the person chose to keep waiting until when later), and the only candidate both ways, as `findEmailTwins` in the app decides. An ambiguous email stays counted. A store order that posted as several charges stays and its charges are dropped, as the screen hides them; skipped: the screen shows those charges again when one is link history or the merge's tries are spent, which the push cannot see, so it drops them anyway. */
+export function withoutEmailTwins<T extends TwinRow>(given: readonly T[]) {
+  const joins = findJoins(
+    given.filter((row) => row.source === 'email' && row.emailWaiting),
+  );
+  const joined = new Set(joins.values());
+  const byId = new Map(given.map((row) => [row.id, row]));
+  const rows = given
+    .filter((row) => !joined.has(row.id))
+    .map((row): T => {
+      const alert = byId.get(joins.get(row.id) ?? '');
+      return alert
+        ? {
+            ...row,
+            paidByCardId: alert.paidByCardId,
+            accountId: alert.accountId,
+            notSameAs: [...row.notSameAs, ...alert.notSameAs],
+          }
+        : row;
+    });
   const emails = rows.filter(
     (row) => row.source === 'email' && row.emailWaiting,
   );
@@ -207,8 +283,7 @@ export function withoutEmailTwins<T extends TwinRow>(rows: readonly T[]) {
           (bank) =>
             bank.amountCents === email.amountCents &&
             isSameSide(email, bank) &&
-            bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
-            bank.date <= email.date + EMAIL_MATCH_DAYS_AFTER * DAY_MS &&
+            isWindowDay(email, bank) &&
             !email.notSameAs.includes(bank.id),
         )
         .map((bank) => bank.id),

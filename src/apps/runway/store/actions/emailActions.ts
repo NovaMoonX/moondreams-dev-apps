@@ -6,6 +6,7 @@ import { db, functions } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { sealJson } from '@apps/runway/security';
 import type {
+  DateOnly,
   EmailFilterDoc,
   EmailFilterSealed,
   RunwayEncryption,
@@ -77,6 +78,18 @@ export async function setEmailWaiting(
 ): Promise<void> {
   await updateDoc(planRef(uid, 'purchases', purchaseId), {
     emailWaiting: isWaiting,
+    updatedAt: Date.now(),
+  });
+}
+
+/** Widens how long a waiting emailed purchase waits for its bank's charge, to the day given; null goes back to its usual wait. */
+export async function setEmailWaitUntil(
+  uid: string,
+  purchaseId: string,
+  until: DateOnly | null,
+): Promise<void> {
+  await updateDoc(planRef(uid, 'purchases', purchaseId), {
+    emailWaitUntil: until,
     updatedAt: Date.now(),
   });
 }

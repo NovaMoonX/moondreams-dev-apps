@@ -9,6 +9,7 @@ import {
   readDigestSettings,
   readSorting,
   EMAIL_MATCH_DAYS_AFTER,
+  EMAIL_ORDER_MATCH_DAYS_AFTER,
   EMAIL_MATCH_DAYS_BEFORE,
   MAX_SPLIT_CHARGES,
   MAX_SPLIT_POOL,
@@ -186,6 +187,10 @@ assert.equal(
   EMAIL_MATCH_DAYS_AFTER,
   Number(/EMAIL_MATCH_DAYS_AFTER = (\d+)/.exec(appConstants)?.[1]),
 );
+assert.equal(
+  EMAIL_ORDER_MATCH_DAYS_AFTER,
+  Number(/EMAIL_ORDER_MATCH_DAYS_AFTER = (\d+)/.exec(appConstants)?.[1]),
+);
 const appTwins = readFileSync(
   new URL('../../src/apps/runway/engine/emailTwins.ts', import.meta.url),
   'utf8',
@@ -215,9 +220,128 @@ const twin = (
   pairedWithId: null as string | null,
   name: 'Target' as string | null,
   isOrder: false,
+  isStoreEmail: false,
+  emailWaitUntil: null as number | null,
   ...extra,
 });
 const ids = (list: { id: string }[]) => list.map((entry) => entry.id);
+const storeOrder = (id: string, day: number, extra = {}) =>
+  twin(id, 'email', day, {
+    accountId: null,
+    isOrder: true,
+    isStoreEmail: true,
+    name: 'Amazon',
+    ...extra,
+  });
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      storeOrder('o', 10),
+      twin('b', 'link', 35, {
+        accountId: null,
+        paidByCardId: 'c',
+        name: 'Amazon',
+      }),
+    ]),
+  ),
+  ['b'],
+  'a store order waits 30 days for its charge',
+);
+assert.deepEqual(
+  ids(withoutEmailTwins([twin('e', 'email', 10), twin('b', 'link', 18)])),
+  ['e', 'b'],
+  'a bank alert waits 7 days',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      twin('e', 'email', 10, { emailWaitUntil: 24 * DAY }),
+      twin('b', 'link', 22),
+    ]),
+  ),
+  ['b'],
+  'Keep waiting widens the window',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      storeOrder('o', 10),
+      twin('a', 'email', 14, {
+        accountId: null,
+        paidByCardId: 'c',
+        name: 'AMAZON MKTPL*AB12C',
+      }),
+    ]),
+  ),
+  ['o'],
+  'a store order and the bank alert for it count once',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      storeOrder('o', 10),
+      twin('a', 'email', 14, {
+        accountId: null,
+        paidByCardId: 'c',
+        name: 'AMAZON MKTPL*AB12C',
+      }),
+      twin('b', 'link', 15, {
+        accountId: null,
+        paidByCardId: 'c',
+        name: 'AMAZON MKTPL*AB12C',
+      }),
+    ]),
+  ),
+  ['b'],
+  'a joined order and alert pair with the bank charge on the alert card',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      storeOrder('o', 10),
+      twin('a', 'email', 14, {
+        accountId: null,
+        paidByCardId: 'c',
+        name: 'Amazon',
+      }),
+      twin('a2', 'email', 15, {
+        accountId: null,
+        paidByCardId: 'd',
+        name: 'Amazon',
+      }),
+    ]),
+  ),
+  ['o', 'a', 'a2'],
+  'two alerts that could be the order are left apart',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      storeOrder('o', 10, { notSameAs: ['a'] }),
+      twin('a', 'email', 14, {
+        accountId: null,
+        paidByCardId: 'c',
+        name: 'Amazon',
+      }),
+    ]),
+  ),
+  ['o', 'a'],
+  'an alert the person kept apart is not joined',
+);
+assert.deepEqual(
+  ids(
+    withoutEmailTwins([
+      storeOrder('o', 10),
+      twin('a', 'email', 14, {
+        accountId: null,
+        paidByCardId: 'c',
+        name: 'Target',
+      }),
+    ]),
+  ),
+  ['o', 'a'],
+  'an alert from another store is not joined',
+);
 assert.deepEqual(
   ids(withoutEmailTwins([twin('e', 'email', 10), twin('b', 'link', 12)])),
   ['b'],

@@ -13,7 +13,11 @@ import {
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
-import { findEmailTwins, getSplitKey } from '@apps/runway/engine/emailTwins';
+import {
+  findEmailJoins,
+  findEmailTwins,
+  getSplitKey,
+} from '@apps/runway/engine/emailTwins';
 import { toMerchantKey } from '@apps/runway/engine/rules';
 import {
   findAccountPairs,
@@ -33,6 +37,7 @@ import {
   linkDepositToDay,
   mergeBankPurchase,
   mergeEmailPurchase,
+  joinEmailPurchases,
   mergeEmailSplit,
   PURCHASE_REMOVED_WORDS,
   pairAccountPurchases,
@@ -79,6 +84,7 @@ import { toPurchaseSubject } from '@apps/runway/utils/doneForYouSubject';
 import {
   describeAccountPair,
   describeDepositLinked,
+  describeEmailJoin,
   describePayDay,
   describePurchaseMatch,
   describeSplitMatch,
@@ -99,12 +105,72 @@ interface SplitPair {
 }
 
 const EMAIL_MATCH_WORDS = {
+  joined: 'Joined two emails about one purchase',
   one: 'Matched a purchase from your email with your bank',
   split: (count: number) =>
     `Matched an order from your email with its ${count} charges from your bank`,
   many: (count: number) =>
     `Matched ${count} purchases from your email with your bank`,
 };
+
+/** Joins each store order email with the bank alert email that is clearly the same purchase, one after another, recording each in Done for you with its Undo; a pair another device changed first is skipped. */
+function useJoinEmails() {
+  const looks = useAppSelector(selectItemLooks);
+  const nameOf = (envelopeId: string) =>
+    looks.get(envelopeId)?.name ?? 'An envelope';
+  return async (
+    uid: string,
+    joins: readonly { order: OpenPurchase; alert: OpenPurchase }[],
+  ) => {
+    try {
+      const encryption = await getRunwayEncryption(uid);
+      const joined = await joins.reduce(
+        async (done, { order, alert }) => {
+          const list = await done;
+          try {
+            const entry = await joinEmailPurchases(
+              uid,
+              encryption,
+              order,
+              alert,
+              describeEmailJoin(order, alert, nameOf, false),
+            );
+            return [...list, entry];
+          } catch (error) {
+            console.error('Two emails were not joined', error);
+            return list;
+          }
+        },
+        Promise.resolve([] as MergedPurchase[]),
+      );
+      if (joined.length === 0) return;
+      recordDone(
+        uid,
+        joined.map((entry) => {
+          const envelopeId =
+            entry.bank.lines.find((line) => line.envelopeId !== null)
+              ?.envelopeId ?? null;
+          const look = envelopeId ? (looks.get(envelopeId) ?? null) : null;
+          return {
+            kind: 'merge' as const,
+            title: EMAIL_MATCH_WORDS.joined,
+            detail: getPurchaseTitle(entry.bank, nameOf),
+            why: null,
+            undo: { kind: 'emailJoin' as const, merged: entry },
+            subject: toPurchaseSubject(entry.bank, {
+              merchant: entry.bank.merchant ?? entry.typed.merchant ?? null,
+              itemId: envelopeId,
+              toName: look?.name ?? null,
+              toEmoji: look?.emoji ?? null,
+            }),
+          };
+        }),
+      );
+    } catch (error) {
+      console.error('Emails about one purchase were not joined', error);
+    }
+  };
+}
 
 /** Merges bank purchases with the ones typed by hand for them, one after another, and says so in one toast with an Undo that splits them all again; an automatic pass records each one in Done for you instead and shows no toast. `splits` are emailed orders that posted as several charges: each is merged the same way and always recorded in Done for you, and `onSplitFailed` hears one that did not merge. Resolves with how many merged; a pair another device changed first is skipped. */
 export function useMergeWithUndo() {
@@ -331,7 +397,7 @@ export function useMatchBankPurchases(uid: string | null) {
   }, [uid, waiting, purchases, isWaitingLoaded, isPurchasesLoaded, runs]);
 }
 
-/** Once both lists are read, merges each bank charge with the purchase read from its email that it clearly is, however old the charge is, unless it is from before the bank was linked. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
+/** Once both lists are read, joins a store order email with its bank alert email (`findEmailJoins`) first, then merges each bank charge with the purchase read from its email that it clearly is, however old the charge is, unless it is from before the bank was linked. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
 export function useMatchEmailPurchases(uid: string | null) {
   const dispatch = useAppDispatch();
   const attempts = useRef(new Map<string, number>());
@@ -345,6 +411,8 @@ export function useMatchEmailPurchases(uid: string | null) {
   );
   const merge = useMergeWithUndo();
   const mergeRef = useRef(merge);
+  const join = useJoinEmails();
+  const joinRef = useRef(join);
   const tried = useRef(new Set<string>());
   const isRunning = useRef(false);
   const isWaitingToRun = useRef(false);
@@ -352,6 +420,7 @@ export function useMatchEmailPurchases(uid: string | null) {
 
   useEffect(() => {
     mergeRef.current = merge;
+    joinRef.current = join;
   });
 
   useEffect(() => {
@@ -368,6 +437,24 @@ export function useMatchEmailPurchases(uid: string | null) {
     const byId = new Map(
       [...needsHome, ...purchases].map((purchase) => [purchase.id, purchase]),
     );
+    const joins = [...findEmailJoins([...byId.values()])].flatMap(
+      ([orderId, alertId]) => {
+        const order = byId.get(orderId);
+        const alert = byId.get(alertId);
+        if (!order || !alert) return [];
+        const key = `join:${order.id}:${order.updatedAt}:${alert.id}:${alert.updatedAt}`;
+        return tried.current.has(key) ? [] : [{ order, alert, key }];
+      },
+    );
+    if (joins.length > 0) {
+      joins.forEach(({ key }) => tried.current.add(key));
+      isRunning.current = true;
+      void joinRef.current(uid, joins).finally(() => {
+        isRunning.current = false;
+        setRuns((count) => count + 1);
+      });
+      return;
+    }
     const twins = findEmailTwins([...byId.values()]);
     const pairs = [...twins.clear].flatMap(([emailId, bankId]) => {
       const typed = byId.get(emailId);

@@ -1,14 +1,18 @@
 import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Filter, Hourglass, Mail } from 'lucide-react';
+import { CalendarClock, Filter, Hourglass, Mail } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import DetailSheet from '@/components/DetailSheet';
 import InlineNotice from '@/components/InlineNotice';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EmailFilterSheet from '@apps/runway/components/EmailFilterSheet';
 import { EMAIL_WORDS } from '@apps/runway/components/emailWords';
+import { EMAIL_KEEP_WAITING_DAYS } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   isOverdueEmail,
@@ -74,7 +78,7 @@ interface EmailPurchaseRowsProps extends EmailPurchaseProps {
   onFailed: (message: string) => void;
 }
 
-/** The action rows an emailed purchase adds: filter out emails like it, and stop waiting for its bank's charge. */
+/** The action rows an emailed purchase adds: filter out emails like it, keep waiting longer once it is overdue, and stop waiting for its bank's charge. */
 export function EmailPurchaseRows({
   purchase,
   onFailed,
@@ -82,8 +86,13 @@ export function EmailPurchaseRows({
   const events = useEmailEvents();
   const actions = useEmailActions();
   const { addToast } = useToast();
+  const twinned = useAppSelector(selectTwinnedEmailIds);
+  const postedOnly = useAppSelector(selectPostedOnlySides);
   const [isFiltering, setIsFiltering] = useState(false);
+  const [isPickingWait, setIsPickingWait] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const today = todayAsUtcDate();
+  const isOverdue = isOverdueEmail(purchase, twinned, postedOnly, today);
   const event =
     purchase.emailEventId === null
       ? null
@@ -117,6 +126,32 @@ export function EmailPurchaseRows({
     }
   };
 
+  const keepWaiting = async (days: number) => {
+    const before = purchase.emailWaitUntil;
+    const until = today + days * DAY_MS;
+    setIsPickingWait(false);
+    try {
+      await actions.setWaitUntil(purchase.id, until);
+      addToast({
+        title: EMAIL_WORDS.waitingUntil(formatDateOrdinalUTC(until)),
+        type: 'success',
+        duration: UNDO_WINDOW_MS,
+        action: {
+          label: EMAIL_WORDS.undo,
+          onClick: () =>
+            void actions.setWaitUntil(purchase.id, before).catch((error) =>
+              addToast({
+                title: getErrorMessage(error, EMAIL_WORDS.keepWaitingFailed),
+                type: 'error',
+              }),
+            ),
+        },
+      });
+    } catch (error) {
+      onFailed(getErrorMessage(error, EMAIL_WORDS.keepWaitingFailed));
+    }
+  };
+
   return (
     <>
       {event !== null && (
@@ -130,6 +165,17 @@ export function EmailPurchaseRows({
           onClick={() => setIsFiltering(true)}
         />
       )}
+      {isOverdue && (
+        <ActionRow
+          isGrouped
+          isRoomy
+          hasChevron
+          icon={<CalendarClock />}
+          label={EMAIL_WORDS.keepWaiting}
+          subtitle={EMAIL_WORDS.keepWaitingSub}
+          onClick={() => setIsPickingWait(true)}
+        />
+      )}
       {purchase.emailWaiting === true && (
         <ActionRow
           isGrouped
@@ -141,6 +187,27 @@ export function EmailPurchaseRows({
           onClick={() => void stopWaiting()}
         />
       )}
+      <DetailSheet
+        isOpen={isPickingWait}
+        onClose={() => setIsPickingWait(false)}
+        title={EMAIL_WORDS.keepWaitingTitle}
+      >
+        <ActionGroup isRoomy>
+          {EMAIL_KEEP_WAITING_DAYS.map((days) => (
+            <ActionRow
+              key={days}
+              isGrouped
+              isRoomy
+              icon={<CalendarClock />}
+              label={EMAIL_WORDS.keepWaitingFor(days)}
+              subtitle={EMAIL_WORDS.keepWaitingUntil(
+                formatDateOrdinalUTC(today + days * DAY_MS),
+              )}
+              onClick={() => void keepWaiting(days)}
+            />
+          ))}
+        </ActionGroup>
+      </DetailSheet>
       {isFiltering && event !== null && (
         <EmailFilterSheet event={event} onClose={() => setIsFiltering(false)} />
       )}

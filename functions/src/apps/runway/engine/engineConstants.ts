@@ -155,6 +155,12 @@ export const PURCHASE_SOURCES = ['manual', 'csv', 'link', 'email'] as const;
 /** How many days after an emailed purchase a bank charge can still be it (a hold can post days later). */
 export const EMAIL_MATCH_DAYS_AFTER = 7;
 
+/** How many days after a store's order email its bank charge can still be it: a store charges when the order ships, which can be weeks. */
+export const EMAIL_ORDER_MATCH_DAYS_AFTER = 30;
+
+/** The ways "Keep waiting" can widen an overdue emailed purchase's wait, in days. */
+export const EMAIL_KEEP_WAITING_DAYS = [7, 14, 30] as const;
+
 /** How many days before the email a bank charge can be dated and still be it (the bank dates a charge by when it happened). */
 export const EMAIL_MATCH_DAYS_BEFORE = 2;
 

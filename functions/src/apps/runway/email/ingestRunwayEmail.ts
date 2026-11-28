@@ -447,6 +447,7 @@ async function handleMail(
       emailEventId: eventRef.id,
       emailWaiting:
         returnOutcome === null && isWaitingForBank(targets, storeEmail),
+      emailWaitUntil: null,
       createdAt: now,
       updatedAt: now,
       sealed: sealWithKey(

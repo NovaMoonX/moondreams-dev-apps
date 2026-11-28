@@ -1284,6 +1284,8 @@ export interface PurchaseDoc {
   emailEventId: string | null;
   /** On a purchase read from an email: true while Runway waits for its bank to send the same charge, false once there is nothing to wait for (its card or account isn't linked, or the person stopped waiting); null on every other purchase (and missing on an older one). */
   emailWaiting: boolean | null;
+  /** On a waiting emailed purchase: the day the person chose to keep waiting until ("Keep waiting"), which widens the days its bank charge may be dated; null otherwise (and missing on an older one). */
+  emailWaitUntil: DateOnly | null;
   /** On a purchase from a linked bank, written by Functions: true once the bank has shown it as pending (or its posted charge named a pending one), false when it only ever arrived posted; null on any other purchase, and missing on an older one (read as null). */
   wasPending: boolean | null;
   createdAt: number;
@@ -1456,6 +1458,7 @@ export interface OpenPurchase extends PurchaseSealed {
   expenseId: string | null;
   emailEventId: string | null;
   emailWaiting: boolean | null;
+  emailWaitUntil: DateOnly | null;
   wasPending: boolean | null;
   createdAt: number;
   updatedAt: number;
@@ -1531,6 +1534,8 @@ export type DoneForYouKind =
 export type DoneForYouUndo =
   | { kind: 'merge'; merged: MergedPurchase }
   | { kind: 'mergeSplit'; merged: MergedSplit }
+  /** A store's order email and its bank's alert email joined: `bank` is the one kept, `typed` the one removed. */
+  | { kind: 'emailJoin'; merged: MergedPurchase }
   | {
       kind: 'deposit';
       deposit: OpenPurchase;
@@ -1583,13 +1588,11 @@ export interface DoneForYouSealed {
 
 /** What an alert watches: Free to Spend, or one envelope's figure. */
 export type AlertTarget =
-  | { kind: 'freeToSpend' }
-  | { kind: 'envelope'; itemId: string };
+  { kind: 'freeToSpend' } | { kind: 'envelope'; itemId: string };
 
 /** Where an alert goes off: a set amount, or a share (in basis points) of what its envelope gets each time. */
 export type AlertLine =
-  | { kind: 'cents'; cents: Cents }
-  | { kind: 'share'; bps: number };
+  { kind: 'cents'; cents: Cents } | { kind: 'share'; bps: number };
 
 export interface AlertSealed {
   target: AlertTarget;

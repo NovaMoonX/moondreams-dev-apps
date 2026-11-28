@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { getBankOwedByCard } from '../../src/apps/runway/engine/cards.ts';
 import { getCashPosition } from '../../src/apps/runway/engine/cash.ts';
 import {
+  findEmailJoins,
   findEmailTwins,
   findPostedOnlySides,
+  getEmailWaitEnd,
+  getEmailWindowEnd,
   getEmailOffers,
   getEmailWaitDays,
   getSideKey,
@@ -578,8 +581,8 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
   );
   assert.equal(
     getEmailWaitDays({ ...typedEmail, storeEmail: order }, new Set()),
-    7,
-    'seven for a store order, charged when it ships',
+    30,
+    'thirty for a store order, charged when it ships',
   );
 
   const bankOf = (id: string, cents: number, offset = 1, extra = {}) =>
@@ -648,7 +651,7 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
     'two different sets are not clear',
   );
   assert.equal(
-    splitOf([email, bankOf('b1', 6_000), bankOf('b2', 4_000, 9)]),
+    splitOf([email, bankOf('b1', 6_000), bankOf('b2', 4_000, 31)]),
     0,
     'a charge outside the window is not in it',
   );
@@ -712,6 +715,181 @@ import type { OpenPurchase, StoreEmail } from '../../src/apps/runway/types.ts';
     splitOf([email, bankOf('b1', 10_000), bankOf('b2', 6_000)]),
     0,
     'an order with a single charge of its amount is not split',
+  );
+}
+
+// A store order naming no card joins the bank alert email for the same purchase; an order waits 30 days, and Keep waiting widens any window.
+{
+  const day = 86_400_000;
+  const base = 20_000 * day;
+  const amazon: StoreEmail = {
+    kind: 'order',
+    orderNumber: '114-1',
+    isWholeOrder: false,
+    merchant: 'Amazon',
+  };
+  const make = (
+    id: string,
+    dayOffset: number,
+    extra: Partial<OpenPurchase> = {},
+  ) =>
+    ({
+      id,
+      date: base + dayOffset * day,
+      source: 'email',
+      status: null,
+      accountId: null,
+      needsHome: true,
+      amountCents: 4_599,
+      merchant: 'Amazon',
+      label: null,
+      paidByCardId: null,
+      notSameAs: null,
+      pairedWithId: null,
+      emailEventId: `ev-${id}`,
+      emailWaiting: true,
+      emailWaitUntil: null,
+      storeEmail: null,
+      ...extra,
+    }) as unknown as OpenPurchase;
+  const orderOf = (
+    id: string,
+    dayOffset = 0,
+    extra: Partial<OpenPurchase> = {},
+  ) => make(id, dayOffset, { storeEmail: amazon, ...extra });
+  const alertOf = (
+    id: string,
+    dayOffset = 3,
+    extra: Partial<OpenPurchase> = {},
+  ) =>
+    make(id, dayOffset, {
+      paidByCardId: 'chase',
+      merchant: 'AMAZON MKTPL*AB12C',
+      ...extra,
+    });
+  const joins = (list: OpenPurchase[]) => [...findEmailJoins(list)];
+
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a')]),
+    [['o', 'a']],
+    'an order and its alert join',
+  );
+  assert.deepEqual(
+    joins([alertOf('a'), orderOf('o')]),
+    [['o', 'a']],
+    'the input order does not matter',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', 25)]),
+    [['o', 'a']],
+    'within the order’s 30 days',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', 31)]),
+    [],
+    'past the order’s 30 days',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', -3)]),
+    [],
+    'more than two days before the order',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', 3, { amountCents: 4_600 })]),
+    [],
+    'a different amount',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', 3, { merchant: 'Target' })]),
+    [],
+    'a different store',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', 3, { merchant: 'Amazon' })]),
+    [['o', 'a']],
+    'the same store spelled the same',
+  );
+  assert.deepEqual(
+    joins([
+      orderOf('o'),
+      alertOf('a'),
+      alertOf('a2', 4, { paidByCardId: 'amex' }),
+    ]),
+    [],
+    'two alerts that could be it are left apart',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), orderOf('o2', 1), alertOf('a')]),
+    [],
+    'two orders that could be it are left apart',
+  );
+  assert.deepEqual(
+    joins([orderOf('o', 0, { notSameAs: ['a'] }), alertOf('a')]),
+    [],
+    'kept apart on the order',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', 3, { notSameAs: ['o'] })]),
+    [],
+    'kept apart on the alert',
+  );
+  assert.deepEqual(
+    joins([orderOf('o', 0, { paidByCardId: 'chase' }), alertOf('a')]),
+    [],
+    'an order that names its card waits for the bank charge instead',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', 3, { paidByCardId: null })]),
+    [],
+    'an alert must name a card or account',
+  );
+  assert.deepEqual(
+    joins([orderOf('o'), alertOf('a', 3, { emailWaiting: false })]),
+    [],
+    'an alert the person stopped waiting on is not joined',
+  );
+
+  assert.equal(
+    getEmailWindowEnd(orderOf('o')),
+    base + 30 * day,
+    'an order’s window is 30 days',
+  );
+  assert.equal(
+    getEmailWindowEnd(alertOf('a', 0)),
+    base + 7 * day,
+    'an alert’s window is 7 days',
+  );
+  assert.equal(
+    getEmailWindowEnd(alertOf('a', 0, { emailWaitUntil: base + 14 * day })),
+    base + 14 * day,
+    'Keep waiting widens the window',
+  );
+  assert.equal(
+    getEmailWindowEnd(orderOf('o', 0, { emailWaitUntil: base + 7 * day })),
+    base + 30 * day,
+    'a shorter wait never narrows it',
+  );
+  assert.equal(
+    getEmailWaitEnd(
+      alertOf('a', 0, { emailWaitUntil: base + 30 * day }),
+      new Set(),
+    ),
+    base + 30 * day,
+    'the overdue day follows Keep waiting',
+  );
+  const twins = findEmailTwins([
+    alertOf('a', 0, { emailWaitUntil: base + 20 * day }),
+    {
+      ...alertOf('b', 18),
+      source: 'link',
+      emailWaiting: null,
+      emailEventId: null,
+    } as OpenPurchase,
+  ]);
+  assert.deepEqual(
+    [...twins.clear],
+    [['a', 'b']],
+    'a charge inside the kept-waiting window pairs',
   );
 }
 

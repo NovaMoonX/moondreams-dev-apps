@@ -1,11 +1,11 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   findEmailTwins,
   findPostedOnlySides,
-  getEmailWaitDays,
+  getEmailWaitEnd,
   getSideKey,
   getTwinHeldIds,
   isWaitingEmail,
@@ -97,7 +97,7 @@ export const selectEmailWaitingIds = createSelector(
     new Set(purchases.filter(isWaitingEmail).map((purchase) => purchase.id)),
 );
 
-/** Whether an emailed purchase is still waiting, has no bank twin and is older than `getEmailWaitDays` says. */
+/** Whether an emailed purchase is still waiting, has no bank twin and is past the end of its wait (`getEmailWaitEnd`). */
 export const isOverdueEmail = (
   purchase: OpenPurchase,
   twinned: ReadonlySet<string>,
@@ -106,7 +106,7 @@ export const isOverdueEmail = (
 ) =>
   isWaitingEmail(purchase) &&
   !twinned.has(purchase.id) &&
-  purchase.date < today - getEmailWaitDays(purchase, postedOnly) * DAY_MS;
+  today > getEmailWaitEnd(purchase, postedOnly);
 
 /** Emailed purchases still waiting, with no clear bank twin, dated more than their wait before today and already answered (one still in Needs a home is asked about there), oldest first: what Home asks about once. */
 export const selectEmailOverdue = createSelector(

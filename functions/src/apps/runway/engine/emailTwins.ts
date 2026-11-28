@@ -2,10 +2,11 @@
 import {
   EMAIL_MATCH_DAYS_AFTER,
   EMAIL_MATCH_DAYS_BEFORE,
+  EMAIL_ORDER_MATCH_DAYS_AFTER,
   EMAIL_WAIT_DAYS,
 } from './engineConstants.js';
 import { DAY_MS } from './dates.js';
-import { isSameStore } from './storeNames.js';
+import { getMerchantWords, isSameStore } from './storeNames.js';
 import type { OpenPurchase } from '../runwayTypes.js';
 
 export interface EmailTwins {
@@ -37,6 +38,7 @@ type TwinPurchase = Pick<
   | 'merchant'
   | 'label'
   | 'storeEmail'
+  | 'emailWaitUntil'
 >;
 
 /** An emailed purchase still waiting for its bank. */
@@ -57,9 +59,25 @@ const isSameSide = (email: TwinPurchase, bank: TwinPurchase) =>
       : email.storeEmail?.kind === 'order' &&
         isSameStore(getName(email), getName(bank));
 
-const isWindowDay = (email: TwinPurchase, bank: TwinPurchase) =>
+/** The last day a bank charge may be dated and still be this emailed purchase: seven days on, thirty for a store's order (charged when it ships), or the day the person chose to keep waiting until, whichever is later. */
+export const getEmailWindowEnd = (
+  email: Pick<OpenPurchase, 'date' | 'storeEmail' | 'emailWaitUntil'>,
+) =>
+  Math.max(
+    email.date +
+      (email.storeEmail?.kind === 'order'
+        ? EMAIL_ORDER_MATCH_DAYS_AFTER
+        : EMAIL_MATCH_DAYS_AFTER) *
+        DAY_MS,
+    email.emailWaitUntil ?? 0,
+  );
+
+const isWindowDay = (
+  email: Pick<OpenPurchase, 'date' | 'storeEmail' | 'emailWaitUntil'>,
+  bank: Pick<OpenPurchase, 'date'>,
+) =>
   bank.date >= email.date - EMAIL_MATCH_DAYS_BEFORE * DAY_MS &&
-  bank.date <= email.date + EMAIL_MATCH_DAYS_AFTER * DAY_MS;
+  bank.date <= getEmailWindowEnd(email);
 
 const getCombinations = <T>(items: readonly T[], size: number): T[][] =>
   size === 0
@@ -97,7 +115,7 @@ function findSplitSets(
     .map((set) => set.map((bank) => bank.id).sort());
 }
 
-/** Pairs each emailed purchase still waiting with the bank charge it clearly is: the same amount on the same card (or the same account for money out of an account, or for a store order that names neither, any charge from the same store), dated from two days before to seven days after the emailed day, and the only one either way. A charge the person said is not it, or one paired as a move between accounts, is never a candidate. The result does not depend on the order of the input. */
+/** Pairs each emailed purchase still waiting with the bank charge it clearly is: the same amount on the same card (or the same account for money out of an account, or for a store order that names neither, any charge from the same store), dated from two days before the emailed day to the end of its window (`getEmailWindowEnd`), and the only one either way. A charge the person said is not it, or one paired as a move between accounts, is never a candidate. The result does not depend on the order of the input. */
 export function findEmailTwins(purchases: readonly TwinPurchase[]): EmailTwins {
   const emails = purchases.filter(isWaitingEmail);
   const banks = purchases.filter(
@@ -292,8 +310,79 @@ export const getEmailWaitDays = (
   postedOnly: ReadonlySet<string>,
 ) => {
   const key = getSideKey(purchase);
-  return purchase.storeEmail?.kind === 'order' ||
-    (key !== null && postedOnly.has(key))
-    ? EMAIL_MATCH_DAYS_AFTER
-    : EMAIL_WAIT_DAYS;
+  return purchase.storeEmail?.kind === 'order'
+    ? EMAIL_ORDER_MATCH_DAYS_AFTER
+    : key !== null && postedOnly.has(key)
+      ? EMAIL_MATCH_DAYS_AFTER
+      : EMAIL_WAIT_DAYS;
 };
+
+/** The last day a waiting emailed purchase is not yet overdue: its wait (`getEmailWaitDays`) after the emailed day, or the day the person chose to keep waiting until, whichever is later. */
+export const getEmailWaitEnd = (
+  purchase: Pick<
+    OpenPurchase,
+    'date' | 'accountId' | 'paidByCardId' | 'storeEmail' | 'emailWaitUntil'
+  >,
+  postedOnly: ReadonlySet<string>,
+) =>
+  Math.max(
+    purchase.date + getEmailWaitDays(purchase, postedOnly) * DAY_MS,
+    purchase.emailWaitUntil ?? 0,
+  );
+
+// A bank's alert names the store its own way ("AMAZON MKTPL*AB12C" for an Amazon order), so a join also takes a shared first word of four letters or more.
+const isJoinStore = (a: string | null, b: string | null) => {
+  if (isSameStore(a, b)) return true;
+  const [first] = getMerchantWords(a);
+  return (
+    first !== undefined && first.length >= 4 && getMerchantWords(b)[0] === first
+  );
+};
+
+/** A waiting store order that names no card or account (a virtual card, a gift balance). */
+const isCardlessOrder = (purchase: TwinPurchase) =>
+  isWaitingEmail(purchase) &&
+  purchase.storeEmail?.kind === 'order' &&
+  (purchase.paidByCardId ?? null) === null &&
+  purchase.accountId === null;
+
+/** A waiting purchase read from a bank's alert, on a known card or account. */
+const isBankAlert = (purchase: TwinPurchase) =>
+  isWaitingEmail(purchase) &&
+  (purchase.storeEmail ?? null) === null &&
+  ((purchase.paidByCardId ?? null) !== null || purchase.accountId !== null);
+
+/** Pairs each waiting store order that names no card with the bank alert email that is clearly the same purchase, so the two become one that keeps both emails: the same amount, the same store, the alert dated from two days before the order to the end of the order's window, neither told it is not the other, and the only one either way. Order id → alert id. The result does not depend on the order of the input. */
+export function findEmailJoins(
+  purchases: readonly TwinPurchase[],
+): Map<string, string> {
+  const orders = purchases.filter(isCardlessOrder);
+  const alerts = purchases.filter(isBankAlert);
+  const candidates = new Map(
+    orders.map((order) => [
+      order.id,
+      alerts
+        .filter(
+          (alert) =>
+            alert.amountCents === order.amountCents &&
+            order.amountCents > 0 &&
+            isJoinStore(getName(order), getName(alert)) &&
+            isWindowDay(order, alert) &&
+            !(order.notSameAs ?? []).includes(alert.id) &&
+            !(alert.notSameAs ?? []).includes(order.id),
+        )
+        .map((alert) => alert.id),
+    ]),
+  );
+  const claims = [...candidates.values()]
+    .flat()
+    .reduce(
+      (counts, id) => counts.set(id, (counts.get(id) ?? 0) + 1),
+      new Map<string, number>(),
+    );
+  return new Map(
+    [...candidates].flatMap(([orderId, ids]): [string, string][] =>
+      ids.length === 1 && claims.get(ids[0]) === 1 ? [[orderId, ids[0]]] : [],
+    ),
+  );
+}

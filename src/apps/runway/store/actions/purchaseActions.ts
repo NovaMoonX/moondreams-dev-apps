@@ -310,6 +310,7 @@ export async function addPurchase(
       expenseId: input.expenseId,
       emailEventId: null,
       emailWaiting: null,
+      emailWaitUntil: null,
       wasPending: null,
       createdAt: now,
       updatedAt: now,
@@ -330,6 +331,7 @@ export async function addPurchase(
       expenseId: input.expenseId,
       emailEventId: null,
       emailWaiting: null,
+      emailWaitUntil: null,
       wasPending: null,
       createdAt: written.now,
       updatedAt: written.now,
@@ -1586,6 +1588,7 @@ export async function splitBankPurchase(
       expenseId: typed.expenseId,
       emailEventId: null,
       emailWaiting: null,
+      emailWaitUntil: null,
       wasPending: null,
       createdAt: typed.createdAt,
       updatedAt: now,
@@ -1606,6 +1609,197 @@ export async function splitBankPurchase(
         createdAt: now,
         effectiveFrom: null,
         itemIds: getChangeItemIds(bank.lines, typed.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+}
+
+/** Makes a store's order email and the bank's alert email for the same purchase one purchase that keeps both emails: the order stays (unless only the alert was answered, then the alert does) and takes the other's card or account, the store's order and name, and any note, link, receipt, group and photos it lacks; the other is removed and its email now points at the one kept. Both kept waiting for the bank's charge, which the joined purchase now finds on its card. Refused when another device changed either first. Undo with `splitEmailJoin`. */
+export async function joinEmailPurchases(
+  uid: string,
+  encryption: RunwayEncryption,
+  order: OpenPurchase,
+  alert: OpenPurchase,
+  summary: string,
+): Promise<MergedPurchase> {
+  const [kept, dropped] =
+    isAnsweredEmail(alert) && !isAnsweredEmail(order)
+      ? [alert, order]
+      : [order, alert];
+  const [sealed, changeSealed, images] = await Promise.all([
+    sealJson(
+      {
+        ...toSealedPayload(kept),
+        merchant: order.merchant ?? alert.merchant,
+        merchantLogo: order.merchantLogo ?? alert.merchantLogo ?? null,
+        bankName: alert.bankName ?? null,
+        label: kept.label ?? dropped.label,
+        note: kept.note ?? dropped.note,
+        link: kept.link ?? dropped.link,
+        receiptText: kept.receiptText ?? dropped.receiptText,
+        paidByCardId: alert.paidByCardId ?? null,
+        storeEmail: order.storeEmail ?? null,
+        orderLog: order.orderLog ?? null,
+        notSameAs: [
+          ...new Set([...(kept.notSameAs ?? []), ...(dropped.notSameAs ?? [])]),
+        ].filter((id) => id !== kept.id && id !== dropped.id),
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+    readImages(uid, dropped.id),
+  ]);
+  const changeId = generateUuid();
+  const now = Math.max(Date.now(), kept.updatedAt + 1);
+  const eventRef =
+    dropped.emailEventId === null
+      ? null
+      : doc(
+          db,
+          'apps',
+          'runway',
+          'plans',
+          uid,
+          'emailEvents',
+          dropped.emailEventId,
+        );
+
+  await runHeldTransaction(uid, async (transaction) => {
+    await readUnchanged(transaction, uid, kept);
+    await readUnchanged(transaction, uid, dropped);
+    const [plan, event] = await Promise.all([
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+      eventRef === null ? null : transaction.get(eventRef),
+    ]);
+    markLedgerWrite(transaction, uid, plan.data(), [kept.date, dropped.date]);
+    transaction.update(purchaseRef(uid, kept.id), {
+      accountId: alert.accountId,
+      expenseId: kept.expenseId ?? dropped.expenseId,
+      emailWaitUntil:
+        Math.max(kept.emailWaitUntil ?? 0, dropped.emailWaitUntil ?? 0) || null,
+      updatedAt: now,
+      sealed,
+    });
+    transaction.delete(purchaseRef(uid, dropped.id));
+    moveImages(transaction, uid, images, dropped.id, kept.id);
+    if (eventRef !== null && event?.exists()) {
+      transaction.update(eventRef, { purchaseId: kept.id });
+    }
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(kept.lines, dropped.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+  return { bank: kept, typed: dropped, images, updatedAt: now };
+}
+
+/** Undoes a join of two emails: the one removed comes back as its own purchase, typed by hand since only Functions make an emailed one, marked as not the other so they are never joined again, with its email pointing at it; the one kept goes back to how it was. Refused when the joined purchase changed since. */
+export async function splitEmailJoin(
+  uid: string,
+  encryption: RunwayEncryption,
+  merged: MergedPurchase,
+  summary: string,
+): Promise<void> {
+  const { bank: kept, typed: dropped, images } = merged;
+  const [droppedSealed, keptSealed, changeSealed] = await Promise.all([
+    sealJson(
+      {
+        ...toSealedPayload(dropped),
+        notSameAs: [...(dropped.notSameAs ?? []), kept.id],
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson(
+      {
+        ...toSealedPayload(kept),
+        notSameAs: [...(kept.notSameAs ?? []), dropped.id],
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+  ]);
+  const changeId = generateUuid();
+  const eventRef =
+    dropped.emailEventId === null
+      ? null
+      : doc(
+          db,
+          'apps',
+          'runway',
+          'plans',
+          uid,
+          'emailEvents',
+          dropped.emailEventId,
+        );
+
+  await runHeldTransaction(uid, async (transaction) => {
+    const [stored, droppedStored, plan, event] = await Promise.all([
+      transaction.get(purchaseRef(uid, kept.id)),
+      transaction.get(purchaseRef(uid, dropped.id)),
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+      eventRef === null ? null : transaction.get(eventRef),
+    ]);
+    if (
+      !stored.exists() ||
+      droppedStored.exists() ||
+      (stored.data() as PurchaseDoc).updatedAt !== merged.updatedAt
+    ) {
+      throw new Error(SPEND_WORDS.changedElsewhere);
+    }
+    const found = await Promise.all(
+      images.map((image) => transaction.get(imageRef(uid, kept.id, image.id))),
+    );
+    const stillThere = images.filter((_, index) => found[index].exists());
+    const now = Math.max(Date.now(), merged.updatedAt + 1);
+    markLedgerWrite(transaction, uid, plan.data(), [kept.date, dropped.date]);
+    transaction.set(purchaseRef(uid, dropped.id), {
+      id: dropped.id,
+      date: dropped.date,
+      source: 'manual',
+      status: null,
+      needsHome: dropped.needsHome,
+      accountId: dropped.accountId,
+      dedupeKey: null,
+      expenseId: dropped.expenseId,
+      emailEventId: null,
+      emailWaiting: null,
+      emailWaitUntil: null,
+      wasPending: null,
+      createdAt: dropped.createdAt,
+      updatedAt: now,
+      sealed: droppedSealed,
+    } satisfies PurchaseDoc);
+    transaction.update(purchaseRef(uid, kept.id), {
+      accountId: kept.accountId,
+      expenseId: kept.expenseId,
+      emailWaitUntil: kept.emailWaitUntil,
+      updatedAt: now,
+      sealed: keptSealed,
+    });
+    moveImages(transaction, uid, stillThere, kept.id, dropped.id);
+    if (
+      eventRef !== null &&
+      event?.exists() &&
+      event.data().purchaseId === kept.id
+    ) {
+      transaction.update(eventRef, { purchaseId: dropped.id });
+    }
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(kept.lines, dropped.lines),
         sealed: changeSealed,
       } satisfies ChangeDoc,
     );
@@ -1802,6 +1996,7 @@ export async function splitBankPurchases(
       expenseId: typed.expenseId,
       emailEventId: null,
       emailWaiting: null,
+      emailWaitUntil: null,
       wasPending: null,
       createdAt: typed.createdAt,
       updatedAt: now,
