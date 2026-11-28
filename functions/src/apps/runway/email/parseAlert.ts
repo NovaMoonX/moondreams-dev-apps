@@ -406,3 +406,16 @@ export function parseAlertEmail({
     institution: readInstitution(from, subject, body),
   };
 }
+
+const WEB_ADDRESS =
+  /^\s*(?:https?:\/\/)?(?:www\.)?([^\s.]+)\.(?:com|net|org|co|io|shop|store|us|ca|co\.uk|com\.au)\b\/?/i;
+
+/** A shop named by its website ("Amazon.com") is shown by its name ("Amazon"); any words after the address stay. */
+export const toShopName = (merchant: string) =>
+  merchant
+    .replace(WEB_ADDRESS, (_, label: string) =>
+      label === label.toLowerCase()
+        ? label.charAt(0).toUpperCase() + label.slice(1)
+        : label,
+    )
+    .trim() || merchant;

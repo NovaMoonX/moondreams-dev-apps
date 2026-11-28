@@ -1388,6 +1388,8 @@ export interface EmailEventDoc {
   savedAt: number | null;
   /** When the person added it as a purchase themselves ("Add it as a purchase"), epoch ms; null when it was read on arrival or on an older event. */
   addedByPersonAt: number | null;
+  /** When the person removed the purchase it became, epoch ms, so it can be added again; null otherwise (a merge into the bank's charge never sets it) and on an older event. */
+  purchaseRemovedAt: number | null;
   /** A Firestore Timestamp in the document (the TTL field); read as epoch ms. */
   expiresAt: number;
   sealed: Sealed;

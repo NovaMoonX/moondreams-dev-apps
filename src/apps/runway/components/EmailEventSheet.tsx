@@ -163,8 +163,11 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
       event.snippet.length > 280);
   const hasPurchase =
     event.purchaseId !== null && purchaseIds.has(event.purchaseId);
+  const isPurchaseRemoved =
+    event.outcome === 'purchase' && event.purchaseRemovedAt !== null;
   const canAdd =
-    ADDABLE_OUTCOMES.includes(event.outcome) && event.purchaseId === null;
+    (ADDABLE_OUTCOMES.includes(event.outcome) && event.purchaseId === null) ||
+    isPurchaseRemoved;
 
   const addAsPurchase = () => {
     if (isAdding) return;
@@ -196,14 +199,20 @@ function EmailEventSheet({ event, onClose }: EmailEventSheetProps) {
               aria-hidden='true'
             />
             <span className='min-w-0 break-words'>
-              {describeEmailOutcome(event.outcome)}
+              {isPurchaseRemoved
+                ? EMAIL_WORDS.purchaseRemoved
+                : describeEmailOutcome(event.outcome)}
             </span>
           </p>
-          {(event.outcome === 'unread' || event.outcome === 'notPurchase') && (
+          {(event.outcome === 'unread' ||
+            event.outcome === 'notPurchase' ||
+            isPurchaseRemoved) && (
             <p className='text-muted-foreground pl-6 text-sm'>
-              {event.outcome === 'unread'
-                ? EMAIL_WORDS.unreadLine
-                : EMAIL_WORDS.notPurchaseLine}
+              {isPurchaseRemoved
+                ? EMAIL_WORDS.purchaseRemovedLine
+                : event.outcome === 'unread'
+                  ? EMAIL_WORDS.unreadLine
+                  : EMAIL_WORDS.notPurchaseLine}
             </p>
           )}
         </div>

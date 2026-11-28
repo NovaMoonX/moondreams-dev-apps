@@ -24,6 +24,21 @@ if (getApps().length === 0) {
 
 const ADDABLE = new Set(['notPurchase', 'unread']);
 
+/** Whether an email can become a purchase now: one read as no purchase, or one whose purchase the person removed (a merge into the bank's charge leaves no mark, so it stays closed). */
+const isAddable = (
+  stored: {
+    outcome?: unknown;
+    purchaseId?: unknown;
+    purchaseRemovedAt?: unknown;
+  },
+  hasPurchase: boolean,
+) =>
+  stored.purchaseId == null
+    ? ADDABLE.has(String(stored.outcome))
+    : stored.outcome === 'purchase' &&
+      typeof stored.purchaseRemovedAt === 'number' &&
+      !hasPurchase;
+
 /** Turns an email Runway didn't take as a purchase into one, at the person's word: the AI reads its kept text for the amount and the shop, and the purchase is the same one an email read on arrival makes. */
 export const addRunwayEmailPurchase = onCall(
   {
@@ -60,7 +75,14 @@ export const addRunwayEmailPurchase = onCall(
     if (stored === undefined) {
       throw new HttpsError('not-found', 'That email is no longer kept.');
     }
-    if (!ADDABLE.has(stored.outcome) || stored.purchaseId != null) {
+    const purchaseRefOf = (id: unknown) =>
+      typeof id === 'string' && id !== '' && !id.includes('/')
+        ? firestore.doc(`${planPath(uid)}/purchases/${id}`)
+        : null;
+    const storedPurchaseRef = purchaseRefOf(stored.purchaseId);
+    const hasStoredPurchase =
+      storedPurchaseRef !== null && (await storedPurchaseRef.get()).exists;
+    if (!isAddable(stored, hasStoredPurchase)) {
       throw new HttpsError(
         'failed-precondition',
         'This email is already a purchase.',
@@ -127,10 +149,16 @@ export const addRunwayEmailPurchase = onCall(
       returnOutcome: null,
       eventId,
       now,
+      from: String(event.from ?? ''),
     });
     await firestore.runTransaction(async (transaction) => {
       const latest = (await transaction.get(eventRef)).data();
-      if (latest === undefined || latest.purchaseId != null) {
+      const latestPurchaseRef =
+        latest === undefined ? null : purchaseRefOf(latest.purchaseId);
+      const hasLatestPurchase =
+        latestPurchaseRef !== null &&
+        (await transaction.get(latestPurchaseRef)).exists;
+      if (latest === undefined || !isAddable(latest, hasLatestPurchase)) {
         throw new HttpsError(
           'failed-precondition',
           'This email is already a purchase.',
@@ -141,6 +169,7 @@ export const addRunwayEmailPurchase = onCall(
         outcome: 'purchase',
         purchaseId: purchase.ref.id,
         addedByPersonAt: now,
+        purchaseRemovedAt: null,
       });
     });
     await markWithRetry(firestore, uid, alert.date as number, now);
