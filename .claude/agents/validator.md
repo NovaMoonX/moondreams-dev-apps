@@ -26,7 +26,7 @@ The brief gives you a base (default `origin/main`). Run, from the repo root:
    - `Toggle` imported from Dreamer UI (use `AppToggle`), `Callout` (use `InlineNotice`);
    - `?:` on a Firestore document type;
    - an edit to `SITE_VERSION`;
-   - a `catch {`, `catch (` or `.catch(` in `src/` whose block or handler neither rethrows nor passes the error to `reportFallback`, `recordSpeechEvent`, `DebugDetails` (through state the file renders it from) or `console.error`, and any failure line a screen shows (`setFailure`, `setError`, an error toast) in a file with no `DebugDetails` or `reportFallback` (owner, Going Once Marketplace: "Couldn't open the share sheet" said nothing of why, and two reviews passed it);
+   - a `catch {`, `catch (` or `.catch(` in `src/` whose block or handler neither rethrows nor passes the error to `reportFallback`, `recordSpeechEvent`, `DebugDetails` (through state the file renders it from) or `console.error`, and any failure line a screen shows (`setFailure`, `setError`, a subtitle or outcome setter given a "Couldn't…" line, an error toast) in a file with no `DebugDetails` or `reportFallback` (owner, Going Once Marketplace: "Couldn't open the share sheet" said nothing of why, and two reviews passed it);
    - a Markdown file reformatted by Prettier (a hunk that only reflows table padding).
 
 Report: one line per check ("tsc: pass"), then each failure as `file:line: what` with at most the first 20 of each kind and a count. A grep hit that is clearly a false positive (a `let` in a retry loop) is listed under "probably fine" with one reason. Nothing else.

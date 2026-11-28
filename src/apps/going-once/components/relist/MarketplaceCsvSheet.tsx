@@ -64,13 +64,13 @@ function MarketplaceCsvSheet({
     const files = sheets.map((rows, index) =>
       toCsvFile(rows, getMarketplaceFileName(saleName, index, sheets.length)),
     );
+    setFailure(null);
     try {
       const done = await shareOrDownloadFiles(files, {
         title: `${saleName} for Marketplace`,
       });
       if (done === 'cancelled') return;
       setSavedKey(sheetsKey);
-      setFailure(null);
       setOutcome(
         done === 'downloaded'
           ? `Saved ${files.length === 1 ? 'the file' : `${files.length} files`} to your downloads.`

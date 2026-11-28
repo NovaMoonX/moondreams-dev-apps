@@ -81,7 +81,8 @@ export async function shareOrDownloadFiles(
         reason: 'The browser refused to share these files.',
         cause: { stage: 'navigator.share', detail: describeError(error) },
         facts: [
-          `Files: ${files.map((file) => `${file.name} (${file.type || 'no type'}, ${file.size} bytes)`).join('; ')}`,
+          `Files: ${files.length}, ${files.reduce((total, file) => total + file.size, 0)} bytes`,
+          `Types: ${Array.from(new Set(files.map((file) => file.type || 'none'))).join(', ')}`,
           `User agent: ${navigator.userAgent}`,
         ],
         trace: error instanceof Error ? (error.stack ?? null) : null,
@@ -94,7 +95,10 @@ export async function shareOrDownloadFiles(
 }
 
 /** Opens a file input's chooser, or the phone's rear camera when `isCamera` (the input's `capture`), so one input serves both buttons. */
-export function openFileChooser(input: HTMLInputElement | null, { isCamera = false } = {}) {
+export function openFileChooser(
+  input: HTMLInputElement | null,
+  { isCamera = false } = {},
+) {
   if (!input) return;
   if (isCamera) input.setAttribute('capture', 'environment');
   else input.removeAttribute('capture');
