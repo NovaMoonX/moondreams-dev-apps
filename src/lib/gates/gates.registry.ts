@@ -100,7 +100,7 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     defaultRollout: 'off',
     isServerEnforced: true,
     warning:
-      'Each alert the patterns cannot read is sent to Gemini to read. Give it to people who track purchases in Runway.',
+      'Each alert the patterns cannot read is sent to Claude (Anthropic) to read, and so is an email the person adds as a purchase. Give it to people who track purchases in Runway.',
   },
   {
     id: 'google-mail-and-drive',
