@@ -4,6 +4,7 @@ import { getBlob, ref } from 'firebase/storage';
 import { Download, ImageDown } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
+import DebugDetails from '@/components/DebugDetails';
 import { storage } from '@/lib/firebase/config';
 import { canShareFiles, shareOrDownloadFiles } from '@/utils/fileUtils';
 import type { Item } from '@apps/going-once/types';
@@ -68,6 +69,7 @@ function SavePhotosRow({ item }: SavePhotosRowProps) {
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [failure, setFailure] = useState<Error | null>(null);
   const paths = item.photos.map((photo) => photo.path);
   const { result, loadedCount } = useFetchedPhotos(paths, attempt);
   const base = toFileBase(getItemName(item));
@@ -100,26 +102,41 @@ function SavePhotosRow({ item }: SavePhotosRowProps) {
       return;
     }
     setIsSaving(true);
+    setFailure(null);
     try {
       const done = await shareOrDownloadFiles(files, { title: base });
       setOutcome(done === 'downloaded' ? `Downloaded ${plural(count)}` : null);
-    } catch {
-      setOutcome("Couldn't open the share sheet. Tap to try again.");
+    } catch (error) {
+      setFailure(error instanceof Error ? error : new Error(String(error)));
+      setOutcome("Couldn't save the photos on this device. Tap to try again.");
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <ActionRow
-      isGrouped
-      isRoomy
-      icon={canShare ? <ImageDown /> : <Download />}
-      label={canShare || result === null ? 'Save photos' : 'Download photos'}
-      subtitle={getSubtitle()}
-      isDisabled={result === null}
-      onClick={() => void save()}
-    />
+    <>
+      <ActionRow
+        isGrouped
+        isRoomy
+        icon={canShare ? <ImageDown /> : <Download />}
+        label={canShare || result === null ? 'Save photos' : 'Download photos'}
+        subtitle={getSubtitle()}
+        isDisabled={result === null}
+        onClick={() => void save()}
+      />
+      {failure !== null && (
+        <DebugDetails
+          className='px-4 pb-3'
+          message={`${failure.name}: ${failure.message}`}
+          facts={[
+            `Photos: ${files.length}`,
+            `Share sheet: ${canShare ? 'yes' : 'no'}`,
+          ]}
+          trace={failure.stack ? { label: 'Stack', text: failure.stack } : null}
+        />
+      )}
+    </>
   );
 }
 
