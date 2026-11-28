@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react';
 
 import { FirebaseError } from 'firebase/app';
-import { httpsCallable } from 'firebase/functions';
-import { getDownloadURL, ref } from 'firebase/storage';
 import { Loader2 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { functions, storage } from '@/lib/firebase/config';
 import { useAppSelector } from '@/store';
+import {
+  type Built,
+  findBuild,
+  startBuild,
+} from '@apps/going-once/hooks/usePhotoArchive';
 import { selectItems } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
 
 const MAX_PHOTOS = 1500;
 const PHOTOS_PER_THING = 12;
-const BUILD_TIMEOUT_MS = 560_000;
 const MEGABYTE = 1024 * 1024;
 const CANT_BUILD =
   "We couldn't build the zip. Check your connection and try again.";
@@ -33,41 +34,6 @@ type Phase =
   | { name: 'building' }
   | { name: 'ready'; built: Built }
   | { name: 'failed'; reason: string; canRetry: boolean };
-
-interface Built {
-  url: string;
-  photoCount: number;
-  sizeBytes: number;
-}
-
-const buildCallable = httpsCallable<
-  { saleId: string },
-  { path: string; photoCount: number; sizeBytes: number }
->(functions, 'buildSalePhotoArchive', { timeout: BUILD_TIMEOUT_MS });
-
-/** How long a finished zip is offered again on reopening before the sheet asks for a fresh build. */
-const KEEP_BUILT_MS = 10 * 60_000;
-
-/** A build keeps running when the sheet closes, and a finished one is kept a while, so reopening finds it by sale. */
-const builds = new Map<string, { build: Promise<Built>; startedAt: number }>();
-
-const findBuild = (saleId: string) => {
-  const found = builds.get(saleId);
-  return found !== undefined && Date.now() - found.startedAt < KEEP_BUILT_MS
-    ? found.build
-    : null;
-};
-
-const startBuild = (saleId: string) => {
-  const build = buildCallable({ saleId }).then(async ({ data }) => ({
-    url: await getDownloadURL(ref(storage, data.path)),
-    photoCount: data.photoCount,
-    sizeBytes: data.sizeBytes,
-  }));
-  build.catch(() => builds.delete(saleId));
-  builds.set(saleId, { build, startedAt: Date.now() });
-  return build;
-};
 
 const toFailure = (error: unknown): Phase => {
   const code = error instanceof FirebaseError ? error.code : '';
@@ -146,7 +112,8 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
       return (
         <p className='text-muted-foreground flex items-center gap-2 text-sm'>
           <Loader2 className='size-4 animate-spin' aria-hidden='true' />
-          Building your zip. You can close this and it keeps going.
+          Building your zip. You can close this: it keeps going, and the photos
+          icon turns until it’s ready.
         </p>
       );
     if (phase.name === 'ready')
